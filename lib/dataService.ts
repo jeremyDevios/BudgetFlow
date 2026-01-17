@@ -90,7 +90,7 @@ export async function addExpense(categoryId: string, amount: number, description
   const updatedProfile = {
     ...userProfile,
     categories: updatedCategories,
-    expenses: [...userProfile.expenses, expense],
+    expenses: userProfile.expenses.concat(expense),
   };
 
   if (isFirebaseConfigured && db) {

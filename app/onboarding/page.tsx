@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { OnboardingData } from '@/types';
-import { localStorageService } from '@/lib/dataService';
+import { createUserProfile } from '@/lib/dataService';
 
 const DEFAULT_CATEGORIES = [
   { name: 'Alimentation', icon: '🍔', limit: 0, color: '#10b981' },
@@ -31,28 +31,15 @@ export default function OnboardingPage() {
     setCategories(updated);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const data: OnboardingData = {
       salary,
       fixedCosts,
       categories,
     };
 
-    // Create user profile with local storage
-    const userProfile = {
-      id: 'default-user',
-      salary: data.salary,
-      fixedCosts: data.fixedCosts,
-      categories: data.categories.map((cat, index) => ({
-        ...cat,
-        id: `cat-${index}-${Date.now()}`,
-        spent: 0,
-      })),
-      expenses: [],
-      createdAt: new Date(),
-    };
-
-    localStorageService.save(userProfile);
+    // Create user profile using the data service
+    await createUserProfile(data);
     router.push('/dashboard');
   };
 
