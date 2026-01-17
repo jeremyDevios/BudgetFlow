@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { db, isFirebaseConfigured } from './firebase';
 import { 
   collection, 
   doc, 
@@ -27,31 +27,47 @@ export async function createUserProfile(data: OnboardingData): Promise<UserProfi
     createdAt: new Date(),
   };
 
-  await setDoc(doc(db, USERS_COLLECTION, DEFAULT_USER_ID), {
-    ...userProfile,
-    createdAt: Timestamp.fromDate(userProfile.createdAt),
-  });
+  if (isFirebaseConfigured && db) {
+    try {
+      await setDoc(doc(db, USERS_COLLECTION, DEFAULT_USER_ID), {
+        ...userProfile,
+        createdAt: Timestamp.fromDate(userProfile.createdAt),
+      });
+    } catch (error) {
+      console.warn('Firebase save failed, using localStorage fallback:', error);
+      localStorageService.save(userProfile);
+    }
+  } else {
+    localStorageService.save(userProfile);
+  }
 
   return userProfile;
 }
 
 export async function getUserProfile(): Promise<UserProfile | null> {
-  const docRef = doc(db, USERS_COLLECTION, DEFAULT_USER_ID);
-  const docSnap = await getDoc(docRef);
+  if (isFirebaseConfigured && db) {
+    try {
+      const docRef = doc(db, USERS_COLLECTION, DEFAULT_USER_ID);
+      const docSnap = await getDoc(docRef);
 
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    return {
-      ...data,
-      createdAt: data.createdAt.toDate(),
-      expenses: data.expenses.map((exp: any) => ({
-        ...exp,
-        date: exp.date.toDate(),
-      })),
-    } as UserProfile;
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+          ...data,
+          createdAt: data.createdAt.toDate(),
+          expenses: data.expenses.map((exp: any) => ({
+            ...exp,
+            date: exp.date.toDate(),
+          })),
+        } as UserProfile;
+      }
+    } catch (error) {
+      console.warn('Firebase fetch failed, using localStorage fallback:', error);
+      return localStorageService.load();
+    }
   }
 
-  return null;
+  return localStorageService.load();
 }
 
 export async function addExpense(categoryId: string, amount: number, description?: string): Promise<void> {
@@ -71,13 +87,28 @@ export async function addExpense(categoryId: string, amount: number, description
     cat.id === categoryId ? { ...cat, spent: cat.spent + amount } : cat
   );
 
-  await updateDoc(doc(db, USERS_COLLECTION, DEFAULT_USER_ID), {
+  const updatedProfile = {
+    ...userProfile,
     categories: updatedCategories,
-    expenses: arrayUnion({
-      ...expense,
-      date: Timestamp.fromDate(expense.date),
-    }),
-  });
+    expenses: [...userProfile.expenses, expense],
+  };
+
+  if (isFirebaseConfigured && db) {
+    try {
+      await updateDoc(doc(db, USERS_COLLECTION, DEFAULT_USER_ID), {
+        categories: updatedCategories,
+        expenses: arrayUnion({
+          ...expense,
+          date: Timestamp.fromDate(expense.date),
+        }),
+      });
+    } catch (error) {
+      console.warn('Firebase update failed, using localStorage fallback:', error);
+      localStorageService.save(updatedProfile);
+    }
+  } else {
+    localStorageService.save(updatedProfile);
+  }
 }
 
 // Local storage fallback for development without Firebase

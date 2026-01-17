@@ -10,7 +10,18 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
+// Check if Firebase is configured
+const isFirebaseConfigured = firebaseConfig.apiKey && firebaseConfig.projectId;
 
-export { db };
+let db: ReturnType<typeof getFirestore> | null = null;
+
+if (isFirebaseConfigured) {
+  try {
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    db = getFirestore(app);
+  } catch (error) {
+    console.warn('Firebase initialization failed, falling back to localStorage:', error);
+  }
+}
+
+export { db, isFirebaseConfigured };

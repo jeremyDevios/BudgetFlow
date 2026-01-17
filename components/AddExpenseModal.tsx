@@ -61,7 +61,7 @@ export default function AddExpenseModal({ categories, onClose, onSubmit }: AddEx
             <div className="relative">
               <input
                 type="number"
-                value={amount || ''}
+                value={amount === 0 ? '' : amount}
                 onChange={(e) => setAmount(Number(e.target.value))}
                 className="w-full px-4 py-3 text-xl border-2 border-gray-300 rounded-lg focus:outline-none focus:border-indigo-600"
                 placeholder="0"

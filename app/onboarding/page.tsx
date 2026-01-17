@@ -160,7 +160,7 @@ export default function OnboardingPage() {
                 </button>
                 <button
                   onClick={() => setStep(3)}
-                  disabled={fixedCosts < 0 || fixedCosts >= salary}
+                  disabled={fixedCosts < 0 || fixedCosts > salary}
                   className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
                 >
                   Continuer
