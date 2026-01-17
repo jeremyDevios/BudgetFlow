@@ -56,11 +56,16 @@ export default function Home() {
 
   const handleOnboardingComplete = async (newUser: User) => {
     try {
-      await saveUser(newUser);
+      // Try Firebase with a timeout
+      await Promise.race([
+        saveUser(newUser),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 3000))
+      ]);
       localStorage.setItem('budgetFlowUserId', newUser.id);
+      localStorage.setItem('budgetFlowUser', JSON.stringify(newUser));
       setUser(newUser);
     } catch (error) {
-      console.error('Error saving user:', error);
+      console.error('Error saving user, using localStorage:', error);
       // Fallback to localStorage if Firebase fails
       localStorage.setItem('budgetFlowUserId', newUser.id);
       localStorage.setItem('budgetFlowUser', JSON.stringify(newUser));
@@ -72,10 +77,15 @@ export default function Home() {
     if (!user) return;
 
     try {
-      const newExpense = await addExpense(user.id, expense);
+      // Try Firebase with a timeout
+      const newExpense = await Promise.race([
+        addExpense(user.id, expense),
+        new Promise<Expense>((_, reject) => setTimeout(() => reject(new Error('Firebase timeout')), 3000))
+      ]);
       setExpenses([...expenses, newExpense]);
+      localStorage.setItem('budgetFlowExpenses', JSON.stringify([...expenses, newExpense]));
     } catch (error) {
-      console.error('Error adding expense:', error);
+      console.error('Error adding expense, using localStorage:', error);
       // Fallback to localStorage if Firebase fails
       const newExpense: Expense = {
         id: Date.now().toString(),
