@@ -49,6 +49,8 @@ export default function AuthPage() {
         setError("Cet email est déjà utilisé.");
       } else if (err.code === "auth/weak-password") {
         setError("Le mot de passe doit faire au moins 6 caractères.");
+      } else if (err.code === "auth/network-request-failed") {
+        setError("Erreur de connexion réseau. Vérifiez votre connexion internet ou les paramètres de votre pare-feu.");
       } else {
         setError("Une erreur est survenue. Réessayez.");
       }

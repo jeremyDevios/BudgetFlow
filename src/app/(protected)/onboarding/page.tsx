@@ -270,7 +270,8 @@ export default function OnboardingPage() {
                 <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">€</span>
                     <input 
-                        type="number" 
+                        type="number"
+                        inputMode="decimal"
                         value={income}
                         onChange={(e) => setIncome(e.target.value)}
                         className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
@@ -294,10 +295,12 @@ export default function OnboardingPage() {
                 <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">€</span>
                     <input 
-                        type="number" 
+                        type="number"
+                        inputMode="decimal"
                         value={fixedCosts}
                         onChange={(e) => setFixedCosts(e.target.value)}
                         className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
+
                         placeholder="1200"
                     />
                 </div>
@@ -313,7 +316,8 @@ export default function OnboardingPage() {
                 <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">€</span>
                     <input 
-                        type="number" 
+                        type="number"
+                        inputMode="decimal"
                         value={savings}
                         onChange={(e) => setSavings(e.target.value)}
                         className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
@@ -372,7 +376,8 @@ export default function OnboardingPage() {
                             
                             <div className="flex gap-2 text-sm text-zinc-400">Montant (€)</div>
                             <input 
-                                type="number" 
+                                type="number"
+                                inputMode="decimal"
                                 value={editEnvelopeAmount}
                                 onChange={(e) => setEditEnvelopeAmount(e.target.value)}
                                 className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-right focus:border-amber-500 focus:outline-none"
@@ -431,7 +436,8 @@ export default function OnboardingPage() {
                   <div className="relative w-32">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">€</span>
                     <input 
-                        type="number" 
+                        type="number"
+                        inputMode="decimal"
                         value={env.amount}
                         onChange={(e) => updateEnvelopeAmount(env.id, e.target.value)}
                         className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-2 pl-8 pr-2 text-right focus:ring-1 focus:ring-amber-500 focus:outline-none"

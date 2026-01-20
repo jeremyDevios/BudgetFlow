@@ -117,7 +117,7 @@ export default function HistoryPage() {
                         className="bg-zinc-900/40 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60 p-4 rounded-xl transition-all flex items-center justify-between group cursor-pointer"
                     >
                          <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl bg-zinc-950/50 ${env.color ? env.color.replace('bg-', 'text-') : 'text-zinc-500'}`}>
+                            <div className={`p-3 rounded-xl ${env.color || 'bg-zinc-800'} text-white`}>
                                 <Icon className="h-5 w-5" />
                             </div>
                             <div>

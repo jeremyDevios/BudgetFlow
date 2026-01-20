@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
 import { collection, doc, getDoc, getDocs, orderBy, query, where, deleteDoc } from "firebase/firestore";
-import { MoveLeft, Trash2, Calendar, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon } from "lucide-react";
+import { MoveLeft, Trash2, Calendar, Plus, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, use } from "react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
@@ -137,6 +137,11 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
     setTransactionToEdit(null);
   };
 
+  const handleOpenCreateModal = () => {
+    setTransactionToEdit(null);
+    setIsEditModalOpen(true);
+  };
+
   if (loading) return <div className="min-h-screen bg-black text-white p-8">Chargement...</div>;
   if (!envelope) return null;
 
@@ -144,19 +149,29 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
 
   return (
     <div className="min-h-screen bg-black text-white p-4 pb-20">
-      <header className="flex items-center gap-4 mb-8">
-        <button onClick={() => router.back()} className="p-2 bg-zinc-900 rounded-full hover:bg-zinc-800 transition-colors">
-            <MoveLeft className="h-6 w-6" />
+      <header className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-4">
+            <button onClick={() => router.back()} className="p-2 bg-zinc-900 rounded-full hover:bg-zinc-800 transition-colors">
+                <MoveLeft className="h-6 w-6" />
+            </button>
+            <div className={`p-3 rounded-xl ${envelope.color} text-white border border-zinc-800`}>
+                <Icon className="h-6 w-6" />
+            </div>
+            <div>
+                <h1 className="text-2xl font-bold">{envelope.name}</h1>
+                <p className="text-zinc-500">
+                    {contextDate ? `Dépenses de ${formatMonthYear(contextDate)}` : "Historique récent"}
+                </p>
+            </div>
+        </div>
+        
+        <button 
+            onClick={handleOpenCreateModal}
+            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-5 rounded-xl transition-transform active:scale-95 shadow-lg shadow-amber-900/20"
+        >
+            <Plus className="h-5 w-5" />
+            <span className="hidden sm:inline">Nouvelle Dépense</span>
         </button>
-        <div className={`p-3 rounded-xl ${envelope.color.replace('bg-', 'text-')} bg-zinc-900 border border-zinc-800`}>
-            <Icon className="h-6 w-6" />
-        </div>
-        <div>
-            <h1 className="text-2xl font-bold">{envelope.name}</h1>
-            <p className="text-zinc-500">
-                {contextDate ? `Dépenses de ${formatMonthYear(contextDate)}` : "Historique récent"}
-            </p>
-        </div>
       </header>
       
       <div className="space-y-4 max-w-3xl mx-auto">
@@ -200,6 +215,7 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
         envelopes={allEnvelopes}
         refreshData={fetchData} 
         transactionToEdit={transactionToEdit}
+        defaultEnvelopeId={envelope.id}
       />
     </div>
   );

@@ -72,6 +72,8 @@ export default function DashboardPage() {
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [defaultEnvelopeId, setDefaultEnvelopeId] = useState<string | undefined>(undefined);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   
   // Gestion de la date sélectionnée (Mois)
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -115,7 +117,7 @@ export default function DashboardPage() {
       
       txSnap.forEach((doc) => {
         const data = doc.data();
-        txList.push(data);
+        txList.push({ id: doc.id, ...data });
         
         // Ajouter au 'spent' de l'enveloppe correspondante
         const envIndex = envList.findIndex(e => e.id === data.envelopeId);
@@ -199,7 +201,10 @@ export default function DashboardPage() {
             >
                 <TrendingUp className="h-5 w-5" />
             </button>
-            <button className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors">
+            <button 
+                onClick={() => router.push('/settings')}
+                className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+            >
                 <Settings className="h-5 w-5" />
             </button>
             <button onClick={handleLogout} className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-red-500 transition-colors">
@@ -269,38 +274,79 @@ export default function DashboardPage() {
                         <div 
                             key={env.id} 
                             onClick={() => router.push(`/envelopes/${env.id}?date=${currentDate.toISOString()}`)}
-                            className="bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700 p-5 rounded-2xl transition-all group relative overflow-hidden cursor-pointer active:scale-95"
+                            className="bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700 p-5 rounded-2xl transition-all group relative cursor-pointer active:scale-95 z-0"
                         >
-                            {/* Background progress hint */}
-                            <div className={`absolute bottom-0 left-0 h-1 ${env.color} transition-all duration-700`} style={{ width: `${Math.min(progress, 100)}%`}} />
+                            <div className="relative z-10">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className={`p-3 rounded-xl border border-zinc-800 ${env.color} text-white`}>
+                                        <Icon className="h-6 w-6" />
+                                    </div>
+                                    
+                                    {/* Menu des enveloppes */}
+                                    <div className="relative">
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOpenMenuId(openMenuId === env.id ? null : env.id);
+                                            }}
+                                            className={`p-2 rounded-lg transition-colors ${openMenuId === env.id ? 'bg-zinc-800 text-white' : 'text-zinc-600 hover:text-white hover:bg-zinc-800/50'}`}
+                                            title="Options"
+                                        >
+                                            <MoreHorizontal className="h-5 w-5" />
+                                        </button>
 
-                            <div className="flex justify-between items-start mb-4">
-                                <div className={`p-3 rounded-xl bg-zinc-950 border border-zinc-800 ${env.color.replace('bg-', 'text-')}`}>
-                                    <Icon className="h-6 w-6" />
+                                        {openMenuId === env.id && (
+                                            <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col p-1">
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDefaultEnvelopeId(env.id);
+                                                        setIsTxModalOpen(true);
+                                                        setOpenMenuId(null);
+                                                    }}
+                                                    className="flex items-center gap-3 px-3 py-3 text-sm font-bold text-amber-500 hover:bg-zinc-800 rounded-lg transition-colors text-left"
+                                                >
+                                                    <Plus className="h-4 w-4" /> Nouvelle Dépense
+                                                </button>
+                                                <button 
+                                                     onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        router.push(`/envelopes/${env.id}?date=${currentDate.toISOString()}`);
+                                                     }}
+                                                    className="flex items-center gap-3 px-3 py-3 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors text-left"
+                                                >
+                                                    <TrendingUp className="h-4 w-4" /> Détails & Historique
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                                <button className="text-zinc-600 hover:text-white">
-                                    <MoreHorizontal className="h-5 w-5" />
-                                </button>
-                            </div>
 
-                            <div className="space-y-1">
-                                <h4 className="font-semibold text-lg">{env.name}</h4>
-                                <div className="flex justify-between items-baseline">
-                                    <span className={`text-2xl font-bold ${remaining < 0 ? 'text-red-500' : 'text-zinc-200'}`}>
-                                        {remaining.toFixed(0)}€
-                                    </span>
-                                    <span className="text-xs text-zinc-500">
-                                        sur {env.budget}€
-                                    </span>
+                                <div className="space-y-1">
+                                    <h4 className="font-semibold text-lg">{env.name}</h4>
+                                    <div className="flex justify-between items-baseline">
+                                        <span className={`text-2xl font-bold ${remaining < 0 ? 'text-red-500' : 'text-zinc-200'}`}>
+                                            {remaining.toFixed(2)}€
+                                        </span>
+                                        <span className="text-xs text-zinc-500">
+                                            sur {env.budget.toFixed(2)}€
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            {/* Mini Progress Bar interne */}
-                            <div className="mt-3 h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-                                <div 
-                                    className={`h-full rounded-full ${env.color}`} 
-                                    style={{ width: `${Math.min(progress, 100)}%` }}
-                                />
+                                
+                                {/* Mini Progress Bar interne */}
+                                <div className="mt-3 flex h-2 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                     {transactions
+                                        .filter(t => t.envelopeId === env.id)
+                                        .map((tx) => (
+                                            <div 
+                                                key={tx.id}
+                                                className={`h-full ${env.color} border-r-2 border-zinc-900/80 box-border`}
+                                                style={{ width: `${(tx.amount / env.budget) * 100}%` }}
+                                                title={`${tx.description || 'Dépense'}: ${Number(tx.amount).toFixed(2)}€`}
+                                            />
+                                        ))}
+                                </div>
                             </div>
                         </div>
                     );
@@ -321,9 +367,13 @@ export default function DashboardPage() {
       {/* Modale d'ajout transaction */}
       <TransactionModal 
         isOpen={isTxModalOpen} 
-        onClose={() => setIsTxModalOpen(false)}
+        onClose={() => {
+            setIsTxModalOpen(false);
+            setDefaultEnvelopeId(undefined);
+        }}
         envelopes={envelopes}
         refreshData={fetchData}
+        defaultEnvelopeId={defaultEnvelopeId}
       />
 
     </div>

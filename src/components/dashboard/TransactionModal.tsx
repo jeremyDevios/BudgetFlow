@@ -34,9 +34,10 @@ interface TransactionModalProps {
   envelopes: Envelope[];
   refreshData: () => void;
   transactionToEdit?: Transaction | null;
+  defaultEnvelopeId?: string;
 }
 
-export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit }: TransactionModalProps) {
+export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId }: TransactionModalProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   
@@ -56,11 +57,11 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         } else {
             setAmount("");
             setDescription("");
-            setSelectedEnvelopeId(envelopes[0]?.id || "");
+            setSelectedEnvelopeId(defaultEnvelopeId || envelopes[0]?.id || "");
             setDate(new Date().toISOString().split('T')[0]);
         }
     }
-  }, [isOpen, transactionToEdit, envelopes]);
+  }, [isOpen, transactionToEdit, envelopes, defaultEnvelopeId]);
 
   if (!isOpen) return null;
 
@@ -153,6 +154,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold text-xl">€</span>
                 <input
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     required
                     value={amount}
