@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
 
@@ -18,8 +19,26 @@ export default function AuthPage() {
     setError("");
     setLoading(true);
     try {
+      await setPersistence(auth, browserLocalPersistence);
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const userCredential = await signInWithPopup(auth, provider);
+      
+      // Assurer que le document utilisateur existe
+      const user = userCredential.user;
+      await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          lastLogin: new Date().toISOString()
+      }, { merge: true });
+      
+      // Initialiser les settings si nécessaire (ne pas écraser s'ils existent)
+      await setDoc(doc(db, "users", user.uid, "settings", "general"), {
+          // On met juste un champ dummy pour s'assurer que le doc existe, 
+          // sans écraser les vrais settings s'ils sont là (merge: true)
+          updatedAt: new Date().toISOString()
+      }, { merge: true });
+
       router.push("/dashboard");
     } catch (err: any) {
       console.error(err);
@@ -35,11 +54,42 @@ export default function AuthPage() {
     setLoading(true);
 
     try {
+      await setPersistence(auth, browserLocalPersistence);
+      let userCredential;
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        userCredential = await signInWithEmailAndPassword(auth, email, password);
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
       }
+      
+      // Assurer que le document utilisateur existe
+      const user = userCredential.user;
+      await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          lastLogin: new Date().toISOString()
+      }, { merge: true });
+      
+      // Initialiser les settings par défaut (surtout important pour la création de compte)
+      // Utilisation de merge: true pour éviter d'écraser si le compte existait déjà (cas Login)
+      await setDoc(doc(db, "users", user.uid, "settings", "general"), {
+           // Valeurs par défaut uniquement si le doc est créé ?
+           // Avec merge: true, ça ajoute/écrase ces champs. On veut éviter d'écraser isOnboarded si existe.
+           // Firestore ne permet pas "create if missing" atomique simple sans transaction ou read.
+           // Mais pour un MVP, on peut supposer que login = merge simple, signup = defaults.
+           updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      if (!isLogin) {
+          // Vrais defaults pour nouveau compte
+           await setDoc(doc(db, "users", user.uid, "settings", "general"), {
+             isOnboarded: false,
+             monthlyIncome: 0,
+             fixedCosts: 0,
+             monthlySavings: 0,
+             currency: "EUR"
+          }, { merge: true });
+      }
+
       router.push("/dashboard");
     } catch (err: any) {
       console.error(err);

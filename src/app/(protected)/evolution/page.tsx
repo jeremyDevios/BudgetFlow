@@ -1,0 +1,354 @@
+"use client";
+
+import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase";
+import { collection, query, getDocs, where, doc, getDoc } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, addMonths, isSameMonth } from "date-fns";
+import { fr } from "date-fns/locale";
+import { ChevronLeft, TrendingUp, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+
+interface UserSettings {
+  monthlyIncome: number;
+  fixedCosts: number;
+  monthlySavings: number;
+}
+
+interface MonthlyData {
+  date: Date;
+  totalSpent: number;
+  income: number;
+  fixedCosts: number;
+  savingsObjective: number;
+  remaining: number; // calculated: income - fixed - spent
+}
+
+export default function EvolutionPage() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<MonthlyData[]>([]);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user) return;
+      
+      try {
+        // 1. Get Settings
+        let income = 0;
+        let fixedCosts = 0;
+        let savingsObjective = 0;
+
+        const settingsRef = doc(db, "users", user.uid, "settings", "general");
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists()) {
+            const s = settingsSnap.data() as UserSettings;
+            income = s.monthlyIncome || 0;
+            fixedCosts = s.fixedCosts || 0;
+            savingsObjective = s.monthlySavings || 0;
+        }
+
+        // 2. Determine Date Range (Last 6 months)
+        const today = new Date();
+        const end = endOfMonth(today);
+        const start = startOfMonth(subMonths(today, 5));
+
+        // 3. Get Transactions
+        const txRef = collection(db, "users", user.uid, "transactions");
+        // Note: Simple query, client-side filtering for simplicity and to avoid complex composite indexes
+        // In a real large app, you'd want composite index on [date, type]
+        const q = query(txRef); 
+        const querySnapshot = await getDocs(q);
+
+        // 4. Aggregate by Month
+        const months = eachMonthOfInterval({ start, end });
+        
+        const monthlyData = months.map(month => {
+            const monthStart = startOfMonth(month);
+            const monthEnd = endOfMonth(month);
+            
+            let totalSpent = 0;
+
+            querySnapshot.forEach((doc) => {
+                const tx = doc.data();
+                // Handle Firestore Timestamp or ISO string
+                let txDate: Date;
+                if (tx.date && typeof tx.date.toDate === 'function') {
+                     txDate = tx.date.toDate();
+                } else {
+                     txDate = new Date(tx.date);
+                }
+
+                if (txDate >= monthStart && txDate <= monthEnd) {
+                    totalSpent += parseFloat(tx.amount);
+                }
+            });
+
+            // Logic: Remaining = (Income - FixedCosts - Savings) - Spent
+            // Correspond au "Reste disponible" du Dashboard
+            const remaining = (income - fixedCosts - savingsObjective) - totalSpent;
+
+            return {
+                date: month,
+                totalSpent,
+                income,
+                fixedCosts,
+                savingsObjective,
+                remaining
+            };
+        });
+        
+        // Filter out months with 0 expenses (likely no data) so we don't show flat lines
+        const filteredData = monthlyData.filter(d => d.totalSpent > 0);
+        setData(filteredData);
+
+      } catch (error) {
+        console.error("Error fetching evolution data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [user]);
+
+  // --- Graph Logic ---
+  
+  // Max / Min for scaling
+  const maxVal = Math.max(...data.map(d => d.remaining), 100); // Au moins 100 pour pas div/0
+  const minVal = Math.min(...data.map(d => d.remaining), 0);
+  
+  // Amplitude totale
+  const range = maxVal - minVal;
+  // Marge de 20% en haut et en bas pour que la courbe ne touche pas les bords
+  const paddedRange = range === 0 ? 100 : range * 1.4; 
+  const yBase = minVal - (range * 0.2); // Point le plus bas affichable (zéro visuel du graph = bas du svg)
+  
+  // Fonction pour convertir une valeur en coordonnée Y (0 = haut, height = bas /!\ SVG)
+  const height = 250;
+  const getY = (val: number) => {
+      // Inverser car Y=0 est en haut en SVG
+      return height - ((val - yBase) / paddedRange) * height;
+  };
+  
+  // Position de la ligne 0 (Axe X)
+  const zeroY = getY(0);
+
+  // Génération du Path Courbe (Smooth Bezier)
+  // Fonction simple de lissage Catmull-Rom ou Bezier cubique simplifié
+  const getPath = (points: {x: number, y: number}[], closeToZero: boolean = false) => {
+      if (points.length === 0) return "";
+      if (points.length === 1) return `M ${points[0].x},${points[0].y} Z`;
+
+      let d = `M ${points[0].x},${points[0].y}`;
+      
+      for (let i = 0; i < points.length - 1; i++) {
+          const current = points[i];
+          const next = points[i + 1];
+          
+          // Control points pour adoucir (basic smoothing)
+          const cpx1 = current.x + (next.x - current.x) * 0.5;
+          const cpy1 = current.y;
+          const cpx2 = current.x + (next.x - current.x) * 0.5;
+          const cpy2 = next.y;
+          
+          d += ` C ${cpx1},${cpy1} ${cpx2},${cpy2} ${next.x},${next.y}`;
+      }
+      
+      if (closeToZero) {
+          // Fermer vers la ligne zéro (zeroY) pour créer un remplissage correct
+          // On trace une ligne vers le dernier X à hauteur zéro
+          d += ` L ${points[points.length-1].x},${zeroY}`;
+          // On retourne au début à hauteur zéro
+          d += ` L ${points[0].x},${zeroY}`;
+          // On ferme la forme
+          d += ` Z`;
+      }
+      
+      return d;
+  };
+
+  const points = data.map((d, i) => ({
+      xInt: i, // Index simple pour calcul
+      xPct: data.length > 1 ? (i / (data.length - 1)) * 100 : 50, // Pourcentage width
+      val: d.remaining
+  }));
+
+  // On calcule les coordonnées absolues (en % pour x, en user units pour y) n'est pas idéal dans d.
+  // Astuce : On travaille en viewBox 0 0 1000 height.
+  const chartWidth = 1000;
+  const svgPoints = points.map(p => ({
+      x: data.length > 1 ? (p.xInt / (data.length - 1)) * chartWidth : chartWidth / 2,
+      y: getY(p.val)
+  }));
+
+  if (loading) {
+     return <div className="min-h-screen bg-black flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-black text-white p-4 pb-20">
+      <header className="flex items-center gap-4 mb-8">
+        <button 
+          onClick={() => router.back()}
+          className="p-2 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+            <TrendingUp className="text-amber-500" />
+            Évolution Économie
+        </h1>
+      </header>
+
+      {/* Graphique Container */}
+      <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 relative overflow-hidden">
+        
+        {data.length === 0 ? (
+            <div className="text-center text-zinc-500 py-10">Pas assez de données pour afficher l'évolution.</div>
+        ) : (
+            <div className="relative w-full mt-4 select-none" style={{ height: height }}>
+                
+                {/* Lignes horizontales (Grid Y) & Labels */}
+                {/* On affiche quelques lignes repères */}
+                <div className="absolute inset-0 pointer-events-none opacity-20 z-0">
+                    <div className="absolute w-full border-t border-zinc-100/30" style={{ top: zeroY }}></div> {/* Ligne Zéro */}
+                </div>
+
+                {/* SVG Curve et remplissage */}
+                <svg className="absolute inset-0 h-full w-full overflow-visible z-10" viewBox={`0 0 ${chartWidth} ${height}`} preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="gradientCurve" x1="0" y1="0" x2="0" y2="1">
+                            {/* Dégradé du Orange vers transparent */}
+                            <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.4" />
+                            <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    
+                    {/* Area path (Remplissage) */}
+                    <path 
+                        d={getPath(svgPoints, true)}
+                        fill="url(#gradientCurve)"
+                        className="transition-all duration-1000 ease-out"
+                    />
+
+                    {/* Line path (Contour) */}
+                    <path 
+                        d={getPath(svgPoints, false)}
+                        fill="none"
+                        stroke="#f59e0b" // Amber-500
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="drop-shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+                    />
+                    
+                    {/* Ligne Zéro visuelle dans le SVG pour référence claire */}
+                    <line x1="0" y1={zeroY} x2={chartWidth} y2={zeroY} stroke="#ffffff" strokeOpacity="0.1" strokeDasharray="5,5" />
+                </svg>
+
+                {/* Points et Tooltips (Overlay HTML pour accessibilité et facilité) */}
+                <div className="absolute inset-0 z-20 pointer-events-none">
+                     {data.map((d, i) => {
+                         const y = getY(d.remaining);
+                         // Position X en pourcentage
+                         const leftPct = data.length > 1 ? (i / (data.length - 1)) * 100 : 50; 
+                         
+                         const isFirst = i === 0;
+                         const isLast = i === data.length - 1;
+
+                         // Classes de positionnement conditionnelles
+                         let tooltipPositionClass = "bottom-full mb-3 left-1/2 -translate-x-1/2"; // Défaut : Au-dessus centré
+                         let tooltipTransformStart = "translate-y-2"; // Animation start
+                         let tooltipTransformEnd = "translate-y-0"; // Animation end
+
+                         if (isFirst) {
+                             tooltipPositionClass = "left-full ml-4 top-1/2 -translate-y-1/2"; // À droite
+                             tooltipTransformStart = "-translate-x-2";
+                             tooltipTransformEnd = "translate-x-0";
+                         } else if (isLast) {
+                             tooltipPositionClass = "right-full mr-4 top-1/2 -translate-y-1/2"; // À gauche
+                             tooltipTransformStart = "translate-x-2";
+                             tooltipTransformEnd = "translate-x-0";
+                         }
+
+                         return (
+                            <div 
+                                key={i} 
+                                className="absolute flex flex-col items-center group w-10 -ml-5 pointer-events-auto"
+                                style={{ 
+                                    top: y, // Position exacte
+                                    left: `${leftPct}%`,
+                                    transform: 'translateY(-50%)' // Centrer verticalement sur le point
+                                }}
+                            >
+                                {/* Tooltip */}
+                                <div className={`absolute ${tooltipPositionClass} bg-zinc-900/90 border border-amber-500/30 px-3 py-2 rounded-xl shadow-2xl backdrop-blur-md text-center transform transition-all duration-200 ${hoveredIndex === i ? `scale-100 opacity-100 ${tooltipTransformEnd}` : `scale-90 opacity-0 ${tooltipTransformStart}`} pointer-events-none whitespace-nowrap z-30`}>
+                                    <span className="block text-xs text-zinc-400 capitalize mb-1">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
+                                    <span className={`block text-lg font-bold ${d.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
+                                    </span>
+                                </div>
+                                
+                                {/* Point */}
+                                <div 
+                                    className={`w-3 h-3 rounded-full border-2 ${d.remaining >= 0 ? 'border-emerald-500 bg-emerald-950' : 'border-red-500 bg-red-950'} group-hover:bg-white group-hover:scale-150 transition-all cursor-pointer shadow-lg`}
+                                    onMouseEnter={() => setHoveredIndex(i)}
+                                    onMouseLeave={() => setHoveredIndex(null)}
+                                    onClick={() => setHoveredIndex(i)}
+                                />
+                                
+                                {/* Label Axe X (Mois) */}
+                                <div 
+                                    className="absolute top-6 text-xs font-medium text-zinc-500 transition-colors group-hover:text-white"
+                                    style={{ marginTop: '10px' }} // Décalage pour ne pas coller au point
+                                >
+                                    {format(d.date, "MMM", { locale: fr })}
+                                </div>
+                            </div>
+                         );
+                     })}
+                </div>
+            </div>
+        )}
+      </div>
+      
+      {/* Liste détaillée en dessous */}
+      <div className="mt-8 space-y-3">
+          <h3 className="text-lg font-semibold text-zinc-300 px-2">Détails mensuels</h3>
+          {data.slice().reverse().map((d, i) => (
+              <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60 transition-all rounded-2xl group gap-4">
+                  
+                  {/* Mois (Gauche) */}
+                  <div className="flex items-center gap-3">
+                      <div className={`w-1 h-8 rounded-full ${d.remaining >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                      <span className="capitalize font-medium text-zinc-200 text-lg">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
+                  </div>
+
+                  {/* Groupe Dépenses + Économie (Droite) */}
+                  <div className="flex flex-col sm:flex-row gap-4 sm:gap-12 w-full sm:w-auto mt-2 sm:mt-0">
+                      
+                      {/* Dépenses */}
+                      <div className="flex justify-between sm:flex-col sm:items-end sm:text-right">
+                           <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">Dépenses</span>
+                           <span className="font-bold font-mono text-amber-500 text-lg leading-none">
+                               {d.totalSpent.toFixed(2)} €
+                           </span>
+                      </div>
+
+                      {/* Économie */}
+                      <div className="flex justify-between sm:flex-col sm:items-end sm:text-right">
+                           <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">Économie</span>
+                           <span className={`font-bold font-mono text-lg leading-none ${d.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                               {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
+                           </span>
+                      </div>
+                  </div>
+              </div>
+          ))}
+      </div>
+    </div>
+  );
+}

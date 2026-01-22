@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
-import { collection, doc, getDoc, getDocs, orderBy, query, where, deleteDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, orderBy, query, where, deleteDoc, limit } from "firebase/firestore";
 import { MoveLeft, Trash2, Calendar, Plus, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, use } from "react";
@@ -63,9 +63,7 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
       if (contextDate) {
         // Filtrage par mois
         const { start, end } = getMonthBounds(contextDate);
-        // On ajuste la fin pour inclure toute la journée
-        const endOfDay = end + "T23:59:59";
-        dateFilter = { start, end: endOfDay };
+        dateFilter = { start, end };
         
         // On récupère TOUT pour cette enveloppe et on filtre en JS pour éviter 
         // l'erreur d'index Firestore (where envelopeId + where date requires composite index)
@@ -87,7 +85,7 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
       const txSnap = await getDocs(q);
       const txList: any[] = [];
       txSnap.forEach(doc => {
-        const data = doc.data();
+        const data = doc.data() as any;
         // Filtrage manuel si nécessaire
         if (dateFilter) {
             if (data.date >= dateFilter.start && data.date <= dateFilter.end) {

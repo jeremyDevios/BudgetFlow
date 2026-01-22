@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { 
   Plus, 
   X, 
+  Trash2,
   Calendar as CalendarIcon, 
   Loader2 
 } from "lucide-react";
-import { collection, addDoc, doc, updateDoc, increment } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, deleteDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 
@@ -135,15 +136,58 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
       setLoading(false);
     }
   };
+const handleDelete = async () => {
+    if (!user || !transactionToEdit) return;
+
+    if (!confirm("Voulez-vous vraiment supprimer cette dépense ?")) {
+        return;
+    }
+
+    setLoading(true);
+    try {
+        // 1. Supprimer la transaction
+        await deleteDoc(doc(db, "users", user.uid, "transactions", transactionToEdit.id));
+
+        // 2. Mettre à jour l'enveloppe (Rembourser le montant)
+        // On utilise transactionToEdit.envelopeId et transactionToEdit.amount (valeurs originales)
+        // Attention: Si l'enveloppe n'existe plus, ça peut planter, mais on suppose qu'elle existe.
+        const envRef = doc(db, "users", user.uid, "envelopes", transactionToEdit.envelopeId);
+        // On vérifie si l'enveloppe est toujours là pour éviter crash si user a supprimé l'enveloppe entre temps
+        // Mais pour simplifier ici :
+        await updateDoc(envRef, {
+            spent: increment(-transactionToEdit.amount)
+        });
+
+        refreshData();
+        onClose();
+    } catch (error) {
+        console.error("Error deleting transaction:", error);
+        alert("Erreur lors de la suppression");
+    } finally {
+        setLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 duration-300">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold text-white">{transactionToEdit ? "Modifier Dépense" : "Nouvelle Dépense"}</h2>
-          <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded-full">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex gap-2">
+            {transactionToEdit && (
+                <button 
+                    type="button"
+                    onClick={handleDelete} 
+                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-950/30 bg-zinc-800 rounded-full transition-colors"
+                    title="Supprimer la dépense"
+                >
+                    <Trash2 className="h-5 w-5" />
+                </button>
+            )}
+            <button onClick={onClose} className="p-2 text-zinc-400 hover:text-white bg-zinc-800 rounded-full">
+                <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

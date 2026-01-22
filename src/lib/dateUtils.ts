@@ -20,7 +20,7 @@ export const getMonthBounds = (date: Date) => {
 
   return {
     start: formatDate(start),
-    end: formatDate(end)
+    end: `${formatDate(end)}T23:59:59`
   };
 };
 

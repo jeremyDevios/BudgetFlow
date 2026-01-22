@@ -2,10 +2,14 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc, writeBatch } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MoveLeft, Plus, Trash2, Save, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, Edit2, AlertTriangle } from "lucide-react";
+import { MoveLeft, Plus, Trash2, Save, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, Edit2, AlertTriangle, Bell, Loader2, Check, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { useNotifications } from "@/hooks/useNotifications";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 // --- Icons List ---
 const ICONS_LIST = [
@@ -36,19 +40,131 @@ interface Envelope {
   icon: string;
   color: string;
   spent?: number;
+  order?: number;
+}
+
+
+function SortableEnvelopeRow({ 
+  env, 
+  openModal,
+  handleDeleteEnvelope
+}: { 
+  env: Envelope, 
+  openModal: any,
+  handleDeleteEnvelope: any
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: env.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : "auto",
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative' as 'relative', // Cast to valid specific string literal type
+  };
+
+  const Icon = ICON_MAP[env.icon] || ShoppingCart;
+
+  return (
+    <div 
+        ref={setNodeRef} 
+        style={style} 
+        className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center justify-between group mb-3"
+    >
+        <div className="flex items-center gap-4">
+            {/* Drag Handle */}
+            <div 
+                {...attributes} 
+                {...listeners} 
+                className="cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-300 p-1 -ml-2 touch-none"
+            >
+                <GripVertical className="w-5 h-5" />
+            </div>
+
+            {/* Icone blanche sur fond couleur */}
+            <div className={`p-2 rounded-lg ${env.color} text-white`}>
+                <Icon className="h-5 w-5" />
+            </div>
+            <div>
+                <h3 className="font-bold">{env.name}</h3>
+                <p className="text-sm text-zinc-500">{Number(env.budget).toFixed(2)} € / mois</p>
+            </div>
+        </div>
+        <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+            <button 
+                onClick={() => openModal(env)}
+                className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg"
+            >
+                <Edit2 className="h-4 w-4" />
+            </button>
+            <button 
+                onClick={() => handleDeleteEnvelope(env.id, env.name)}
+                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-900/20 rounded-lg"
+            >
+                <Trash2 className="h-4 w-4" />
+            </button>
+        </div>
+    </div>
+  );
 }
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { permission, requestPermission, disableNotifications, loading: notifLoading } = useNotifications();
+  const [dbNotifEnabled, setDbNotifEnabled] = useState(false); // État en base de données
 
   const [loading, setLoading] = useState(true);
+
   const [settings, setSettings] = useState<UserSettings>({
     monthlyIncome: 0,
     fixedCosts: 0,
     monthlySavings: 0
   });
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
+
+  // Fn DnD Sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (active.id !== over?.id) {
+        setEnvelopes((items) => {
+            const oldIndex = items.findIndex((i) => i.id === active.id);
+            const newIndex = items.findIndex((i) => i.id === over?.id);
+            
+            const newOrder = arrayMove(items, oldIndex, newIndex);
+            
+            // Re-index locally
+            newOrder.forEach((item, idx) => { item.order = idx; });
+            
+            // Persist order
+            const batch = writeBatch(db);
+            newOrder.forEach((env) => {
+               if (user) {
+                   const ref = doc(db, "users", user.uid, "envelopes", env.id);
+                   batch.update(ref, { order: env.order });
+               }
+            });
+            batch.commit().catch(e => console.error("Error order save", e));
+
+            return newOrder;
+        });
+    }
+  };
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,12 +186,25 @@ export default function SettingsPage() {
       if (settingsSnap.exists()) {
         setSettings(settingsSnap.data() as UserSettings);
       }
+      
+      // 1.5 User Profile (pour notif enabled)
+      const userRef = doc(db, "users", user.uid);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists()) {
+          setDbNotifEnabled(userSnap.data().notificationsEnabled === true);
+      } else {
+          setDbNotifEnabled(false);
+      }
 
       // 2. Envelopes
       const envRef = collection(db, "users", user.uid, "envelopes");
       const envSnap = await getDocs(envRef);
       const list: Envelope[] = [];
       envSnap.forEach((d) => list.push({ id: d.id, ...d.data() } as Envelope));
+      
+      // Tri par ordre
+      list.sort((a, b) => (a.order || 0) - (b.order || 0));
+
       setEnvelopes(list);
 
     } catch (error) {
@@ -139,14 +268,23 @@ export default function SettingsPage() {
             setEnvelopes(envelopes.map(e => e.id === editingEnvelope.id ? { ...e, name: modalName, budget: numBudget, icon: modalIcon, color: modalColor } : e));
         } else {
             // Create
+            const newOrder = envelopes.length;
             const docRef = await addDoc(collection(db, "users", user.uid, "envelopes"), {
                 name: modalName,
                 budget: numBudget,
                 icon: modalIcon,
                 color: modalColor,
-                spent: 0
+                spent: 0,
+                order: newOrder
             });
-            setEnvelopes([...envelopes, { id: docRef.id, name: modalName, budget: numBudget, icon: modalIcon, color: modalColor }]);
+            setEnvelopes([...envelopes, { 
+                id: docRef.id, 
+                name: modalName, 
+                budget: numBudget, 
+                icon: modalIcon, 
+                color: modalColor,
+                order: newOrder
+            }]);
         }
         setIsModalOpen(false);
     } catch (error) {
@@ -166,6 +304,7 @@ export default function SettingsPage() {
     }
   };
 
+
   // --- Calculations ---
   const totalEnvelopes = envelopes.reduce((acc, env) => acc + env.budget, 0);
   const remainingBudget = settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings - totalEnvelopes;
@@ -184,6 +323,56 @@ export default function SettingsPage() {
 
       <div className="max-w-3xl mx-auto space-y-8">
         
+        {/* Section Notifications */}
+        <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Bell className="h-5 w-5 text-amber-500" />
+                Notifications
+            </h2>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="font-medium text-white">Rappel quotidien</h3>
+                    <p className="text-sm text-zinc-400">Recevez un rappel à 19h pour saisir vos dépenses.</p>
+                </div>
+                
+                {permission === 'granted' && dbNotifEnabled ? (
+                    <div className="flex items-center gap-2">
+                         <span className="flex items-center gap-2 text-green-500 text-sm font-medium bg-green-900/20 px-3 py-1.5 rounded-full border border-green-900/50">
+                            <Check className="h-4 w-4" /> Activées
+                        </span>
+                        <button 
+                            onClick={async () => {
+                                await disableNotifications();
+                                setDbNotifEnabled(false);
+                            }}
+                            disabled={notifLoading}
+                            className="text-white bg-zinc-700 hover:bg-zinc-600 px-3 py-1.5 rounded-lg text-sm transition-colors"
+                        >
+                            Désactiver
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={async () => {
+                            await requestPermission();
+                            if (Notification.permission === 'granted') {
+                                setDbNotifEnabled(true);
+                            }
+                        }}
+                        disabled={notifLoading || permission === 'denied'}
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                         {notifLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Activer"}
+                    </button>
+                )}
+            </div>
+            {permission === 'denied' && (
+                <p className="text-xs text-red-400 mt-2">
+                    Les notifications sont bloquées dans votre navigateur. Veuillez les autoriser dans les paramètres du navigateur pour activer cette fonctionnalité.
+                </p>
+            )}
+        </section>
+
         {/* Section 1: Budget Global */}
         <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
@@ -272,37 +461,26 @@ export default function SettingsPage() {
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 gap-3">
-                {envelopes.map((env) => {
-                    const Icon = ICON_MAP[env.icon] || ShoppingCart;
-                    return (
-                        <div key={env.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center justify-between group">
-                            <div className="flex items-center gap-4">
-                                <div className={`p-2 rounded-lg ${env.color} bg-opacity-20 text-${env.color.split('-')[1]}-500`}>
-                                   <Icon className="h-5 w-5" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold">{env.name}</h3>
-                                    <p className="text-sm text-zinc-500">{Number(env.budget).toFixed(2)} € / mois</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                <button 
-                                    onClick={() => openModal(env)}
-                                    className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg"
-                                >
-                                    <Edit2 className="h-4 w-4" />
-                                </button>
-                                <button 
-                                    onClick={() => handleDeleteEnvelope(env.id, env.name)}
-                                    className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-900/20 rounded-lg"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </button>
-                            </div>
-                        </div>
-                    );
-                })}
+            <div className="flex flex-col">
+                <DndContext 
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <SortableContext 
+                        items={envelopes.map(e => e.id)}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        {envelopes.map((env) => (
+                            <SortableEnvelopeRow 
+                                key={env.id} 
+                                env={env} 
+                                openModal={openModal} 
+                                handleDeleteEnvelope={handleDeleteEnvelope}
+                            />
+                        ))}
+                    </SortableContext>
+                </DndContext>
             </div>
         </section>
 

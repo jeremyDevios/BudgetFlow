@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { usePathname } from "next/navigation";
 
@@ -21,20 +22,32 @@ export default function ProtectedLayout({
   useEffect(() => {
     const checkOnboarding = async () => {
       if (user) {
-        // Vérifier si l'utilisateur a déjà fait l'onboarding
-        const settingsRef = doc(db, "users", user.uid, "settings", "general");
-        const settingsSnap = await getDoc(settingsRef);
+        // Validation email désactivée pour le développement/MVP
+        /* if (!user.emailVerified) {
+          await signOut(auth);
+          router.push("/login");
+          return;
+        } */
 
-        if (settingsSnap.exists() && settingsSnap.data().isOnboarded) {
-          // Si déjà onboardé et tente d'aller sur /onboarding -> redir vers dashboard
-          if (pathname === "/onboarding") {
-             router.push("/dashboard");
+        // Vérifier si l'utilisateur a déjà fait l'onboarding
+        try {
+          const settingsRef = doc(db, "users", user.uid, "settings", "general");
+          const settingsSnap = await getDoc(settingsRef);
+
+          if (settingsSnap.exists() && settingsSnap.data().isOnboarded) {
+            // Si déjà onboardé et tente d'aller sur /onboarding -> redir vers dashboard
+            if (pathname === "/onboarding") {
+               router.push("/dashboard");
+            }
+          } else {
+            // Si PAS onboardé -> redir vers onboarding (sauf si déjà dessus)
+            if (pathname !== "/onboarding") {
+              router.push("/onboarding");
+            }
           }
-        } else {
-          // Si PAS onboardé -> redir vers onboarding (sauf si déjà dessus)
-          if (pathname !== "/onboarding") {
-            router.push("/onboarding");
-          }
+        } catch (error) {
+          // Ignorer les erreurs de permission ici pour éviter de spammer la console si le profile n'est pas encore prêt
+          // console.warn("Onboarding check skipped:", error);
         }
       }
     };
