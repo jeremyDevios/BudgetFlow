@@ -24,7 +24,16 @@
   - Indicateurs d'équilibre budgétaire.
 - **🔒 Sécurité** : Authentification robuste et stockage Cloud via Firebase.
 
-## 🛠 Stack Technique
+## � Aperçu de l'interface
+
+<p align="center">
+  <img src="Screenshots/Dashboard.jpeg" width="200" alt="Dashboard" style="margin: 5px;" />
+  <img src="Screenshots/NewDepense.jpeg" width="200" alt="Nouvelle Dépense" style="margin: 5px;" />
+  <img src="Screenshots/History.jpeg" width="200" alt="Historique" style="margin: 5px;" />
+  <img src="Screenshots/Parameters.jpeg" width="200" alt="Paramètres" style="margin: 5px;" />
+</p>
+
+## �🛠 Stack Technique
 
 Ce projet utilise les dernières technologies du développement web modrene :
 
