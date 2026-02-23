@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { logger } from "@/lib/logger";
 
 interface AuthContextType {
   user: User | null;
@@ -20,7 +21,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     // Configurer la persistance
     setPersistence(auth, browserLocalPersistence).catch((error) => {
-      console.error("Erreur paramétrage persistance:", error);
+      logger.warn("Persistence configuration failed");
     });
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {

@@ -43,6 +43,7 @@ import {
   Workflow
 } from "lucide-react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
+import { logger } from "@/lib/logger";
 
 // --- Types ---
 type IconName = "ShoppingCart" | "Fuel" | "Utensils" | "Plane" | "Heart" | "Gamepad2" | "Bus" | "Shirt" | "Music" | "Coffee" | "Briefcase" | "GraduationCap" | "Baby" | "PawPrint" | "Gift" | "Smartphone" | "Wifi" | "Zap" | "Droplets" | "Hammer";
@@ -95,7 +96,7 @@ export default function DashboardPage() {
           let notifTriggered = false;
           const notifKey = `notif_popup_seen_${user.uid}`;
           // ... rest of notification logic ...
-      } catch(e) { console.warn("Notif check failed", e); }     
+      } catch(e) { logger.warn("Notif check failed"); }     
       
       const notifKey = `notif_popup_seen_${user.uid}`;
 
@@ -116,7 +117,7 @@ export default function DashboardPage() {
                sessionStorage.setItem(notifKey, 'true');
             }
           } catch(e) {
-             console.warn("User doc read failed:", e);
+             logger.warn("User doc read failed");
              // Fallback: montrer la popup quand même si on ne sait pas
              if (!sessionStorage.getItem(notifKey)) {
                 setShowNotifPopup(true);
@@ -136,7 +137,7 @@ export default function DashboardPage() {
             if (settingsSnap.exists()) {
                 setSettings(settingsSnap.data() as UserSettings);
             }
-        } catch(e) { console.warn("Settings read failed", e); }
+        } catch(e) { logger.warn("Settings read failed"); }
       }
 
       // 2. Enveloppes
@@ -155,7 +156,7 @@ export default function DashboardPage() {
           });
           // Tri par ordre
           envList.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-      } catch(e) { console.warn("Envelopes read failed", e); }
+      } catch(e) { logger.warn("Envelopes read failed"); }
 
       // 3. Transactions du mois sélectionné
       const { start, end } = getMonthBounds(currentDate);
@@ -181,13 +182,13 @@ export default function DashboardPage() {
                 envList[envIndex].spent += (data.amount || 0);
             }
           });
-      } catch(e) { console.warn("Transactions read failed", e); }
+      } catch(e) { logger.warn("Transactions read failed"); }
       
       setTransactions(txList);
       setEnvelopes(envList);
       
     } catch (error) {
-      console.error("Erreur chargement:", error);
+      logger.error("Error loading data");
     } finally {
       setLoading(false);
     }

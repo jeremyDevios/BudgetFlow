@@ -35,6 +35,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Generated files with secrets
+#/public/firebase-messaging-sw.js
+
 # Editors
 .vscode/
 .idea/
