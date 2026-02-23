@@ -7,6 +7,7 @@ import { MoveLeft, ArrowDown, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepa
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
+import { logger } from "@/lib/logger";
 
 const ICON_MAP: Record<string, LucideIcon> = {
   ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee,
@@ -55,7 +56,7 @@ export default function HistoryPage() {
       setTransactions(txList);
 
     } catch (error) {
-      console.error(error);
+      logger.error("Error fetching transactions", error);
     } finally {
       setLoading(false);
     }

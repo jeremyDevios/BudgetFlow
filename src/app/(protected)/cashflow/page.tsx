@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { ChevronLeft, Workflow, Loader2 } from "lucide-react";
 import { Sankey, Tooltip, ResponsiveContainer, Layer, Rectangle } from 'recharts';
+import { logger } from "@/lib/logger";
 
 interface UserSettings {
   monthlyIncome: number;
@@ -85,7 +86,7 @@ export default function CashFlowPage() {
         setEnvelopes(envList);
 
       } catch (error) {
-        console.error("Error fetching cashflow data:", error);
+        logger.error("Error fetching cashflow data", error);
       } finally {
         setLoading(false);
       }

@@ -4,6 +4,7 @@ import { getToken, onMessage } from "firebase/messaging";
 import { doc, setDoc } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { logger } from "@/lib/logger";
 
 export function useNotifications() {
   const { user } = useAuth();
@@ -56,10 +57,10 @@ export function useNotifications() {
             lastTokenUpdate: new Date().toISOString()
         }, { merge: true });
         
-        console.log("Notification Token:", token);
+        // Token registered successfully (logging skipped to prevent exposure)
       }
     } catch (error) {
-      console.error("Erreur lors de la demande de permission push:", error);
+      logger.error("Error requesting push permission", error);
     } finally {
       setLoading(false);
     }
@@ -87,7 +88,7 @@ export function useNotifications() {
           // Pour simplifier l'usage dans le composant, on va exposer une méthode explicite disable et enable
       }
     } catch (e) {
-        console.error(e);
+        logger.error("Error toggling notifications", e);
     }
   }
   
@@ -101,7 +102,7 @@ export function useNotifications() {
           }, { merge: true });
           // On ne change pas 'permission' car c'est celle du navigateur
       } catch (error) {
-          console.error("Erreur désactivation:", error);
+          logger.error("Error disabling notifications", error);
       } finally {
           setLoading(false);
       }

@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/firebase";
 import { adminDb } from "@/lib/firebaseAdmin";
+import { logger } from "@/lib/logger";
 
 // Validation constraints
 const CONSTRAINTS = {
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     // Don't expose error details in production
-    console.error("Validation error:", error);
+    logger.error("Server validation error", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

@@ -36,7 +36,10 @@ yarn-error.log*
 next-env.d.ts
 
 # Generated files with secrets
-#/public/firebase-messaging-sw.js
+/public/firebase-messaging-sw.js
+
+# Vulnerability reports
+VULNERABILITIES.md
 
 # Editors
 .vscode/

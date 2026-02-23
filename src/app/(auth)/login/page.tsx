@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
+import { validateEmail, validatePassword } from "@/lib/validation";
+import { logger } from "@/lib/logger";
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -41,7 +43,7 @@ export default function AuthPage() {
 
       router.push("/dashboard");
     } catch (err: any) {
-      console.error(err);
+      logger.sanitizedError("Google authentication error", err);
       setError("Erreur lors de la connexion avec Google.");
     } finally {
       setLoading(false);
@@ -51,16 +53,28 @@ export default function AuthPage() {
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (!isLogin) {
+      setError("L'inscription est disponible uniquement via Google.");
+      return;
+    }
+
+    // Validation côté client
+    if (!validateEmail(email)) {
+      setError("Email invalide.");
+      return;
+    }
+
+    if (!validatePassword(password)) {
+      setError("Le mot de passe doit faire au moins 6 caractères.");
+      return;
+    }
+
     setLoading(true);
 
     try {
       await setPersistence(auth, browserLocalPersistence);
-      let userCredential;
-      if (isLogin) {
-        userCredential = await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      }
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       
       // Assurer que le document utilisateur existe
       const user = userCredential.user;
@@ -79,20 +93,9 @@ export default function AuthPage() {
            updatedAt: new Date().toISOString()
       }, { merge: true });
 
-      if (!isLogin) {
-          // Vrais defaults pour nouveau compte
-           await setDoc(doc(db, "users", user.uid, "settings", "general"), {
-             isOnboarded: false,
-             monthlyIncome: 0,
-             fixedCosts: 0,
-             monthlySavings: 0,
-             currency: "EUR"
-          }, { merge: true });
-      }
-
       router.push("/dashboard");
     } catch (err: any) {
-      console.error(err);
+      logger.sanitizedError("Authentication error", err);
       if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
          setError("Email ou mot de passe incorrect.");
       } else if (err.code === "auth/email-already-in-use") {
@@ -115,77 +118,78 @@ export default function AuthPage() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white">BudgetFlow</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            {isLogin ? "Bon retour parmi nous" : "Commencez à gérer votre budget"}
+            {isLogin
+              ? "Bon retour parmi nous"
+              : "Inscription via Google uniquement"}
           </p>
         </div>
 
-        <form onSubmit={handleAuth} className="mt-8 space-y-6">
-          <div className="space-y-4">
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <Mail className="h-5 w-5 text-zinc-500" />
+        {isLogin && (
+          <form onSubmit={handleAuth} className="mt-8 space-y-6">
+            <div className="space-y-4">
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                  <Mail className="h-5 w-5 text-zinc-500" />
+                </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="block w-full rounded-lg border border-zinc-700 bg-zinc-800 py-3 pl-10 text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 sm:text-sm"
+                  placeholder="Ex: jeremy@exemple.com"
+                />
               </div>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="block w-full rounded-lg border border-zinc-700 bg-zinc-800 py-3 pl-10 text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 sm:text-sm"
-                placeholder="Ex: jeremy@exemple.com"
-              />
-            </div>
 
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                <Lock className="h-5 w-5 text-zinc-500" />
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                  <Lock className="h-5 w-5 text-zinc-500" />
+                </div>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="block w-full rounded-lg border border-zinc-700 bg-zinc-800 py-3 pl-10 text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 sm:text-sm"
+                  placeholder="Mot de passe"
+                />
               </div>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="block w-full rounded-lg border border-zinc-700 bg-zinc-800 py-3 pl-10 text-white placeholder-zinc-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 sm:text-sm"
-                placeholder="Mot de passe"
-              />
             </div>
-          </div>
 
-          {error && (
-            <div className="rounded-md bg-red-900/50 p-3 text-sm text-red-200 border border-red-800">
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="group relative flex w-full justify-center rounded-lg bg-amber-500 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <>
-                {isLogin ? "Se connecter" : "S'inscrire"}
-                <span className="absolute inset-y-0 right-0 flex items-center pr-3">
-                  <ArrowRight className="h-5 w-5 text-white/50 group-hover:text-white" />
-                </span>
-              </>
+            {error && (
+              <div className="rounded-md bg-red-900/50 p-3 text-sm text-red-200 border border-red-800">
+                {error}
+              </div>
             )}
-          </button>
-        </form>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="group relative flex w-full justify-center rounded-lg bg-amber-500 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <>
+                  Se connecter
+                  <span className="absolute inset-y-0 right-0 flex items-center pr-3">
+                    <ArrowRight className="h-5 w-5 text-white/50 group-hover:text-white" />
+                  </span>
+                </>
+              )}
+            </button>
+          </form>
+        )}
 
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-zinc-700"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="bg-zinc-900 px-2 text-zinc-500">Ou continuer avec</span>
           </div>
         </div>
 
@@ -213,7 +217,7 @@ export default function AuthPage() {
               fill="#EA4335"
             />
           </svg>
-          Google
+          {isLogin ? "Continuer avec Google" : "S'inscrire avec Google"}
         </button>
 
         <div className="mt-6 text-center">
@@ -225,7 +229,7 @@ export default function AuthPage() {
             className="text-sm font-medium text-amber-500 hover:text-amber-400"
           >
             {isLogin
-              ? "Pas encore de compte ? Créer un compte"
+              ? "Pas encore de compte ? Inscription Google uniquement"
               : "Déjà un compte ? Se connecter"}
           </button>
         </div>

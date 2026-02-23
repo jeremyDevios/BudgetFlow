@@ -11,6 +11,7 @@ import {
 import { collection, addDoc, doc, updateDoc, deleteDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { logger } from "@/lib/logger";
 
 type Envelope = {
   id: string;
@@ -130,7 +131,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
       refreshData();
       onClose();
     } catch (error) {
-      console.error("Erreur transaction:", error);
+      logger.sanitizedError("Transaction operation failed", error);
       alert("Erreur lors de l'opération");
     } finally {
       setLoading(false);
@@ -161,7 +162,7 @@ const handleDelete = async () => {
         refreshData();
         onClose();
     } catch (error) {
-        console.error("Error deleting transaction:", error);
+        logger.sanitizedError("Transaction deletion failed", error);
         alert("Erreur lors de la suppression");
     } finally {
         setLoading(false);

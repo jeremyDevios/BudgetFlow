@@ -8,6 +8,7 @@ import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, addMo
 import { fr } from "date-fns/locale";
 import { ChevronLeft, TrendingUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { logger } from "@/lib/logger";
 
 interface UserSettings {
   monthlyIncome: number;
@@ -105,7 +106,7 @@ export default function EvolutionPage() {
         setData(filteredData);
 
       } catch (error) {
-        console.error("Error fetching evolution data:", error);
+        logger.error("Error fetching evolution data", error);
       } finally {
         setLoading(false);
       }
