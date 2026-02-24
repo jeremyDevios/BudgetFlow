@@ -10,12 +10,7 @@ struct EnvelopeDetailView: View {
             VStack(spacing: 0) {
                 // Header Area
                 VStack(spacing: 15) {
-                    Image(systemName: envelope.icon)
-                        .font(.system(size: 50))
-                        .foregroundColor(.white)
-                        .padding(20)
-                        .background(Color(hex: envelope.color))
-                        .clipShape(Circle())
+                    EnvelopeIconView(icon: envelope.icon, colorString: envelope.color, size: 90)
                         .shadow(radius: 5)
                     
                     VStack(spacing: 5) {
@@ -32,7 +27,7 @@ struct EnvelopeDetailView: View {
                     }
                     
                     ProgressView(value: envelope.spent, total: envelope.budget)
-                        .tint(Color(hex: envelope.color))
+                        .tint(Color.fromString(envelope.color))
                         .padding(.horizontal, 40)
                         .scaleEffect(x: 1, y: 2, anchor: .center)
                 }

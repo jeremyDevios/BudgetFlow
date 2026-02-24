@@ -158,12 +158,7 @@ struct EnvelopeRow: View {
     
     var body: some View {
         HStack {
-            Image(systemName: envelope.icon)
-                .font(.title2)
-                .frame(width: 50, height: 50)
-                .background(Color(hex: envelope.color))
-                .foregroundColor(.white) // Assuming icons are white on colored bg
-                .cornerRadius(12)
+            EnvelopeIconView(icon: envelope.icon, colorString: envelope.color, size: 50)
             
             VStack(alignment: .leading) {
                 Text(envelope.name)
@@ -174,7 +169,7 @@ struct EnvelopeRow: View {
                     .bold()
                 
                 ProgressView(value: envelope.spent, total: envelope.budget)
-                    .tint(Color(hex: envelope.color))
+                    .tint(Color.fromString(envelope.color))
             }
             Spacer()
             

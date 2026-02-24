@@ -51,8 +51,7 @@ struct AddTransactionView: View {
                         ForEach(envelopes) { envelope in
                             Button(action: { selectedEnvelope = envelope }) {
                                 VStack {
-                                    Image(systemName: envelope.icon)
-                                        .font(.title2)
+                                    EnvelopeIconView(icon: envelope.icon, colorString: envelope.color, size: 32)
                                         .padding(.bottom, 2)
                                     Text(envelope.name)
                                         .font(.caption)
@@ -60,12 +59,12 @@ struct AddTransactionView: View {
                                 }
                                 .padding()
                                 .frame(maxWidth: .infinity)
-                                .background(selectedEnvelope == envelope ? Color(hex: envelope.color) : Color(UIColor.secondarySystemBackground))
-                                .foregroundColor(selectedEnvelope == envelope ? .white : .primary)
+                                .background(selectedEnvelope == envelope ? Color.fromString(envelope.color).opacity(0.2) : Color(UIColor.secondarySystemBackground))
+                                .foregroundColor(.primary)
                                 .cornerRadius(10)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .stroke(selectedEnvelope == envelope ? Color.white : Color.clear, lineWidth: 2)
+                                        .stroke(selectedEnvelope == envelope ? Color.fromString(envelope.color) : Color.clear, lineWidth: 2)
                                 )
                             }
                         }

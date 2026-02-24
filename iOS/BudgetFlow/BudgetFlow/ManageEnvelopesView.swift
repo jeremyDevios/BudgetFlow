@@ -10,8 +10,7 @@ struct ManageEnvelopesView: View {
         List {
             ForEach(envelopes) { envelope in
                 HStack {
-                    Image(systemName: envelope.icon)
-                        .foregroundStyle(Color(hex: envelope.color))
+                    EnvelopeIconView(icon: envelope.icon, colorString: envelope.color, size: 32)
                     Text(envelope.name)
                     Spacer()
                     Text(envelope.budget, format: .currency(code: "EUR"))
