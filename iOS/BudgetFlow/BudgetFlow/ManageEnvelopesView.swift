@@ -1,11 +1,13 @@
 import SwiftUI
+import SwiftUI
 import SwiftData
 
 struct ManageEnvelopesView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Envelope.orderIndex) private var envelopes: [Envelope]
     @State private var showingAddEnvelope = false
-    
+    @State private var editingEnvelope: Envelope? = nil
+
     var body: some View {
         List {
             ForEach(envelopes) { envelope in
@@ -14,6 +16,14 @@ struct ManageEnvelopesView: View {
                     Text(envelope.name)
                     Spacer()
                     Text(envelope.budget, format: .currency(code: "EUR"))
+                        .foregroundColor(.secondary)
+                    Button {
+                        editingEnvelope = envelope
+                    } label: {
+                        Image(systemName: "pencil")
+                            .foregroundColor(.appYellow)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .onMove(perform: moveEnvelopes)
@@ -33,8 +43,11 @@ struct ManageEnvelopesView: View {
         .sheet(isPresented: $showingAddEnvelope) {
             AddEnvelopeView()
         }
+        .sheet(item: $editingEnvelope) { envelope in
+            EnvelopeEditSheet(envelope: envelope)
+        }
     }
-    
+
     private func deleteEnvelopes(offsets: IndexSet) {
         withAnimation {
             for index in offsets {
@@ -42,12 +55,10 @@ struct ManageEnvelopesView: View {
             }
         }
     }
-    
+
     private func moveEnvelopes(from source: IndexSet, to destination: Int) {
         var revisedItems = envelopes
         revisedItems.move(fromOffsets: source, toOffset: destination)
-        
-        // Update orderIndex
         for (index, item) in revisedItems.enumerated() {
             item.orderIndex = index
         }

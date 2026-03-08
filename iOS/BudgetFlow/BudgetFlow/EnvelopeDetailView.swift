@@ -4,7 +4,8 @@ import SwiftData
 struct EnvelopeDetailView: View {
     @Bindable var envelope: Envelope
     @Environment(\.modelContext) private var modelContext
-    
+    @State private var showingEditSheet = false
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
@@ -12,34 +13,36 @@ struct EnvelopeDetailView: View {
                 VStack(spacing: 15) {
                     EnvelopeIconView(icon: envelope.icon, colorString: envelope.color, size: 90)
                         .shadow(radius: 5)
-                    
+
                     VStack(spacing: 5) {
                         Text(envelope.name)
                             .font(.largeTitle)
                             .bold()
-                        
-                        Text("\(envelope.spent, format: .currency(code: "EUR"))")
+
+                        (Text(envelope.spent, format: .currency(code: "EUR"))
                             .font(.title2)
                             .bold()
                             .foregroundColor(envelope.spent > envelope.budget ? .red : .primary)
-                        + Text(" / \(envelope.budget, format: .currency(code: "EUR"))")
+                        + Text(" / ")
                             .foregroundColor(.secondary)
+                        + Text(envelope.budget, format: .currency(code: "EUR"))
+                            .foregroundColor(.secondary))
                     }
-                    
-                    ProgressView(value: envelope.spent, total: envelope.budget)
+
+                    ProgressView(value: min(envelope.spent, envelope.budget), total: envelope.budget)
                         .tint(Color.fromString(envelope.color))
                         .padding(.horizontal, 40)
                         .scaleEffect(x: 1, y: 2, anchor: .center)
                 }
                 .padding(.vertical, 30)
-                
+
                 // Transactions List
                 VStack(alignment: .leading) {
                     Text("Historique")
                         .font(.headline)
                         .padding(.horizontal)
                         .padding(.bottom, 10)
-                    
+
                     if envelope.transactions.isEmpty {
                         VStack {
                             Spacer()
@@ -50,7 +53,6 @@ struct EnvelopeDetailView: View {
                         }
                         .frame(height: 100)
                     } else {
-                        // Group by date logic could go here, for now simple list
                         ForEach(envelope.transactions.sorted(by: { $0.date > $1.date })) { transaction in
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -61,17 +63,17 @@ struct EnvelopeDetailView: View {
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
-                                
+
                                 Spacer()
-                                
+
                                 Text("- \(transaction.amount, format: .currency(code: "EUR"))")
                                     .font(.body)
                                     .bold()
                                     .foregroundColor(.red)
                             }
                             .padding()
-                            .background(Color(UIColor.secondarySystemBackground))
-                            .cornerRadius(12)
+                            .background(Color(hex: "1C1C1E"))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                             .padding(.horizontal)
                             .padding(.vertical, 4)
                         }
@@ -83,11 +85,18 @@ struct EnvelopeDetailView: View {
         .navigationTitle(envelope.name)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                EditButton() // Or custom edit sheet
+                Button {
+                    showingEditSheet = true
+                } label: {
+                    Image(systemName: "pencil")
+                }
             }
         }
+        .sheet(isPresented: $showingEditSheet) {
+            EnvelopeEditSheet(envelope: envelope)
+        }
     }
-    
+
     private func deleteTransaction(offsets: IndexSet) {
         let sortedTransactions = envelope.transactions.sorted(by: { $0.date > $1.date })
         for index in offsets {
@@ -101,9 +110,9 @@ struct EnvelopeDetailView: View {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: Envelope.self, configurations: config)
-    let envelope = Envelope(name: "Courses", icon: "cart", color: "FF0000", budget: 500, orderIndex: 0)
+    let envelope = Envelope(name: "Courses", icon: "cart", color: "0000FF", budget: 500, orderIndex: 0)
     container.mainContext.insert(envelope)
-    
+
     return EnvelopeDetailView(envelope: envelope)
         .modelContainer(container)
 }
