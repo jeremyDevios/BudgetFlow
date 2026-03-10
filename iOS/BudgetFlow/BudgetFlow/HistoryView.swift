@@ -3,7 +3,11 @@ import SwiftData
 
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(SyncService.self) private var syncService
     @Query(sort: \Transaction.date, order: .reverse) private var allTransactions: [Transaction]
+    @Query private var userSettingsList: [UserSettings]
+
+    @State private var editingTransaction: Transaction? = nil
 
     // Group transactions by month (descending)
     var groupedTransactions: [(String, [Transaction])] {
@@ -44,9 +48,15 @@ struct HistoryView: View {
                         Section {
                             ForEach(transactions) { tx in
                                 TransactionHistoryRow(transaction: tx)
-                            }
-                            .onDelete { offsets in
-                                deleteTransactions(offsets: offsets, in: transactions)
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { editingTransaction = tx }
+                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                        Button(role: .destructive) {
+                                            deleteSingleTransaction(tx)
+                                        } label: {
+                                            Label("Supprimer", systemImage: "trash")
+                                        }
+                                    }
                             }
                         } header: {
                             Text(monthLabel)
@@ -63,14 +73,29 @@ struct HistoryView: View {
         .navigationTitle("Historique")
         .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .sheet(item: $editingTransaction) { tx in
+            TransactionEditSheet(transaction: tx)
+        }
     }
 
-    private func deleteTransactions(offsets: IndexSet, in transactions: [Transaction]) {
-        for index in offsets {
-            let tx = transactions[index]
-            // Update stored spent on the envelope
-            tx.envelope?.spent -= tx.amount
-            modelContext.delete(tx)
+    private func deleteSingleTransaction(_ tx: Transaction) {
+        let txId = tx.firestoreId
+        let envelope = tx.envelope
+        tx.envelope?.spent = max(0, (tx.envelope?.spent ?? 0) - tx.amount)
+        modelContext.delete(tx)
+
+        if let settings = userSettingsList.first,
+           settings.isOnlineMode,
+           !settings.firebaseUserId.isEmpty {
+            let userId = settings.firebaseUserId
+            Task {
+                if !txId.isEmpty {
+                    await syncService.deleteTransaction(firestoreId: txId, userId: userId)
+                }
+                if let env = envelope {
+                    try? await syncService.syncEnvelope(env, userId: userId)
+                }
+            }
         }
     }
 }
@@ -86,7 +111,6 @@ private struct TransactionHistoryRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            // Envelope color dot
             Circle()
                 .fill(envelopeColor)
                 .frame(width: 10, height: 10)
@@ -106,9 +130,14 @@ private struct TransactionHistoryRow: View {
 
             Spacer()
 
-            Text(transaction.amount, format: .currency(code: "EUR"))
-                .font(.body.bold())
-                .foregroundStyle(.red)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(transaction.amount, format: .currency(code: "EUR"))
+                    .font(.body.bold())
+                    .foregroundStyle(.red)
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.vertical, 4)
         .listRowBackground(Color(hex: "1C1C1E"))

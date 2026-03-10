@@ -4,23 +4,59 @@ import SwiftData
 struct EnvelopeEditSheet: View {
     @Bindable var envelope: Envelope
     @Environment(\.dismiss) private var dismiss
+    @Environment(SyncService.self) private var syncService
+
+    @Query private var allEnvelopes: [Envelope]
+    @Query private var userSettingsList: [UserSettings]
 
     @State private var editedName: String = ""
     @State private var editedAmountText: String = ""
-    @State private var editedIcon: String = "cart"
-    @State private var editedColorName: String = "Blue"
+    @State private var editedIcon: String = "ShoppingCart"
+    @State private var editedColor: String = "bg-amber-500"
 
     let availableIcons = [
-        "cart", "fuelpump", "fork.knife", "airplane", "heart",
-        "gamecontroller", "bus", "tshirt", "music.note", "cup.and.saucer",
-        "briefcase", "graduationcap", "gift", "pawprint", "star.fill"
+        "ShoppingCart", "Utensils", "Fuel", "Car", "Plane",
+        "Heart", "Gamepad2", "Bus", "Shirt", "Music",
+        "Coffee", "Briefcase", "GraduationCap", "Baby", "PawPrint",
+        "Gift", "Smartphone", "Wifi", "Zap", "Droplets",
+        "Hammer", "Home", "Train", "Bike", "DollarSign",
+        "CreditCard", "ShoppingBag", "Package", "Star", "Book",
+        "Pill", "Dumbbell", "Camera", "Moon", "Sun"
     ]
 
     let availableColors: [(Color, String)] = [
-        (.blue, "Blue"), (.orange, "Orange"), (.green, "Green"), (.red, "Red"),
-        (.purple, "Purple"), (.pink, "Pink"), (.indigo, "Indigo"), (.teal, "Teal"),
-        (.brown, "Brown"), (.cyan, "Cyan")
+        (Color(hex: "F59E0B"), "bg-amber-500"),
+        (Color(hex: "F97316"), "bg-orange-500"),
+        (Color(hex: "EF4444"), "bg-red-500"),
+        (Color(hex: "F43F5E"), "bg-rose-500"),
+        (Color(hex: "EC4899"), "bg-pink-500"),
+        (Color(hex: "A855F7"), "bg-purple-500"),
+        (Color(hex: "6366F1"), "bg-indigo-500"),
+        (Color(hex: "3B82F6"), "bg-blue-500"),
+        (Color(hex: "06B6D4"), "bg-cyan-500"),
+        (Color(hex: "14B8A6"), "bg-teal-500"),
+        (Color(hex: "22C55E"), "bg-green-500"),
+        (Color(hex: "84CC16"), "bg-lime-500"),
+        (Color(hex: "EAB308"), "bg-yellow-500"),
+        (Color(hex: "71717A"), "bg-zinc-500")
     ]
+
+    private var settings: UserSettings? { userSettingsList.first }
+
+    private var otherEnvelopesTotal: Double {
+        allEnvelopes.filter { $0.id != envelope.id }.reduce(0) { $0 + $1.budget }
+    }
+
+    private var availableForThis: Double {
+        guard let s = settings else { return 0 }
+        return s.monthlyIncome - s.fixedCosts - s.monthlySavings - otherEnvelopesTotal
+    }
+
+    private var currentAmount: Double { convertToDouble(editedAmountText) ?? 0 }
+
+    private var isOverBudget: Bool {
+        settings != nil && currentAmount > availableForThis
+    }
 
     var isSaveDisabled: Bool {
         editedName.trimmingCharacters(in: .whitespaces).isEmpty ||
@@ -29,7 +65,7 @@ struct EnvelopeEditSheet: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.001).ignoresSafeArea() // transparent bg for sheet
+            Color.black.opacity(0.001).ignoresSafeArea()
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
@@ -56,13 +92,33 @@ struct EnvelopeEditSheet: View {
                         HStack {
                             TextField("0", text: $editedAmountText)
                                 .keyboardType(.decimalPad)
-                                .foregroundColor(.white)
+                                .foregroundColor(isOverBudget ? .red : .white)
                             Text("€").foregroundColor(.gray)
                         }
                         .padding()
                         .background(Color.black)
                         .cornerRadius(8)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(isOverBudget ? Color.red.opacity(0.7) : Color.white.opacity(0.1), lineWidth: 1)
+                        )
+
+                        // Budget capacity indicator
+                        HStack {
+                            Text("Disponible :")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(availableForThis, format: .currency(code: "EUR"))
+                                .font(.caption.bold())
+                                .foregroundStyle(isOverBudget ? .red : Color.appGreen)
+                        }
+
+                        if isOverBudget {
+                            Label("Dépasse le budget disponible", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        }
                     }
 
                     // Icon Picker
@@ -70,7 +126,7 @@ struct EnvelopeEditSheet: View {
                         Text("Icône").font(.caption).foregroundColor(.gray)
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 5), spacing: 10) {
                             ForEach(availableIcons, id: \.self) { icon in
-                                Image(systemName: icon)
+                                Image(systemName: Color.lucideToSFSymbol[icon] ?? icon)
                                     .foregroundColor(editedIcon == icon ? .black : .gray)
                                     .padding(10)
                                     .background(editedIcon == icon ? Color.appYellow : Color.appSurface)
@@ -85,14 +141,14 @@ struct EnvelopeEditSheet: View {
                         Text("Couleur").font(.caption).foregroundColor(.gray)
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 12) {
-                                ForEach(availableColors, id: \.1) { (color, name) in
+                                ForEach(availableColors, id: \.1) { (displayColor, tailwindClass) in
                                     Circle()
-                                        .fill(color)
+                                        .fill(displayColor)
                                         .frame(width: 32, height: 32)
                                         .overlay(
-                                            Circle().strokeBorder(Color.white, lineWidth: editedColorName == name ? 4 : 0)
+                                            Circle().strokeBorder(Color.white, lineWidth: editedColor == tailwindClass ? 4 : 0)
                                         )
-                                        .onTapGesture { editedColorName = name }
+                                        .onTapGesture { editedColor = tailwindClass }
                                 }
                             }
                         }
@@ -128,17 +184,13 @@ struct EnvelopeEditSheet: View {
         }
         .background(Color(hex: "1C1C1E").ignoresSafeArea())
         .presentationDetents([.medium, .large])
+        .dismissKeyboardOnTap()
         .onAppear {
             editedName = envelope.name
             editedAmountText = envelope.budget > 0 ? String(format: "%.0f", envelope.budget) : ""
-            editedIcon = envelope.icon
-
-            // Reverse-map hex to color name
-            let hexUpper = envelope.color.uppercased()
-            let matched = availableColors.first { (color, _) in
-                (color.toHex() ?? "").uppercased() == hexUpper
-            }
-            editedColorName = matched?.1 ?? "Blue"
+            editedIcon = availableIcons.contains(envelope.icon) ? envelope.icon : (availableIcons.first ?? "ShoppingCart")
+            let availableColorClasses = Set(availableColors.map { $0.1 })
+            editedColor = availableColorClasses.contains(envelope.color) ? envelope.color : (availableColors.first?.1 ?? "bg-amber-500")
         }
     }
 
@@ -148,15 +200,25 @@ struct EnvelopeEditSheet: View {
             envelope.budget = amount
         }
         envelope.icon = editedIcon
-        envelope.color = Color.fromString(editedColorName).toHex() ?? envelope.color
+        envelope.color = editedColor
+
+        // Sync to Firestore if online mode
+        if let s = settings, s.isOnlineMode, !s.firebaseUserId.isEmpty {
+            let userId = s.firebaseUserId
+            let env = envelope
+            Task { try? await syncService.syncEnvelope(env, userId: userId) }
+        }
+
         dismiss()
     }
 }
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Envelope.self, configurations: config)
-    let envelope = Envelope(name: "Courses", icon: "cart", color: "0000FF", budget: 300, orderIndex: 0)
+    let container = try! ModelContainer(for: Envelope.self, UserSettings.self, configurations: config)
+    let settings = UserSettings(monthlyIncome: 3000, fixedCosts: 1520, monthlySavings: 480)
+    container.mainContext.insert(settings)
+    let envelope = Envelope(name: "Courses", icon: "ShoppingCart", color: "bg-blue-500", budget: 300, order: 0)
     container.mainContext.insert(envelope)
     return EnvelopeEditSheet(envelope: envelope)
         .modelContainer(container)

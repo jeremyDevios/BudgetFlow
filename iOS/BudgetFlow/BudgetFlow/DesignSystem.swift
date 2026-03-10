@@ -7,6 +7,87 @@ extension Color {
     static let appText = Color.white
     static let appSecondaryText = Color.gray
     static let appGreen = Color(hex: "10B981") // Emerald Green
+
+    static let lucideToSFSymbol: [String: String] = [
+        "ShoppingCart":  "cart",
+        "Fuel":          "fuelpump",
+        "Utensils":      "fork.knife",
+        "Plane":         "airplane",
+        "Heart":         "heart",
+        "Gamepad2":      "gamecontroller",
+        "Bus":           "bus.fill",
+        "Shirt":         "tshirt",
+        "Music":         "music.note",
+        "Coffee":        "cup.and.saucer",
+        "Briefcase":     "briefcase",
+        "GraduationCap": "graduationcap",
+        "Baby":          "figure.and.child.holdinghands",
+        "PawPrint":      "pawprint",
+        "Gift":          "gift",
+        "Smartphone":    "iphone",
+        "Wifi":          "wifi",
+        "Zap":           "bolt.fill",
+        "Droplets":      "drop.fill",
+        "Hammer":        "hammer",
+        "Home":          "house",
+        "Car":           "car",
+        "Train":         "tram",
+        "Bike":          "bicycle",
+        "DollarSign":    "dollarsign.circle",
+        "CreditCard":    "creditcard",
+        "ShoppingBag":   "bag",
+        "Package":       "shippingbox",
+        "Star":          "star",
+        "Sun":           "sun.max",
+        "Moon":          "moon",
+        "Cloud":         "cloud",
+        "Camera":        "camera",
+        "Book":          "book",
+        "Pill":          "pill",
+        "Dumbbell":      "dumbbell",
+        "Pizza":         "fork.knife.circle",
+        "Apple":         "applelogo"
+    ]
+
+    static let tailwindToHex: [String: String] = [
+        "bg-amber-500":   "F59E0B",
+        "bg-amber-400":   "FBBF24",
+        "bg-blue-500":    "3B82F6",
+        "bg-blue-600":    "2563EB",
+        "bg-blue-400":    "60A5FA",
+        "bg-green-500":   "22C55E",
+        "bg-green-400":   "4ADE80",
+        "bg-emerald-500": "10B981",
+        "bg-emerald-400": "34D399",
+        "bg-red-500":     "EF4444",
+        "bg-red-400":     "F87171",
+        "bg-rose-500":    "F43F5E",
+        "bg-rose-400":    "FB7185",
+        "bg-purple-500":  "A855F7",
+        "bg-purple-600":  "9333EA",
+        "bg-purple-400":  "C084FC",
+        "bg-pink-500":    "EC4899",
+        "bg-pink-400":    "F472B6",
+        "bg-fuchsia-500": "D946EF",
+        "bg-indigo-500":  "6366F1",
+        "bg-indigo-600":  "4F46E5",
+        "bg-indigo-400":  "818CF8",
+        "bg-teal-500":    "14B8A6",
+        "bg-teal-400":    "2DD4BF",
+        "bg-cyan-500":    "06B6D4",
+        "bg-cyan-400":    "22D3EE",
+        "bg-sky-500":     "0EA5E9",
+        "bg-sky-400":     "38BDF8",
+        "bg-orange-500":  "F97316",
+        "bg-orange-400":  "FB923C",
+        "bg-yellow-500":  "EAB308",
+        "bg-yellow-400":  "FACC15",
+        "bg-lime-500":    "84CC16",
+        "bg-zinc-500":    "71717A",
+        "bg-gray-500":    "6B7280",
+        "bg-slate-500":   "64748B",
+        "bg-violet-500":  "8B5CF6"
+    ]
 }
 
 struct PrimaryButton: View {
@@ -108,6 +189,10 @@ struct OnboardingProgressBar: View {
 extension Color {
     /// Converts a color name (like "Blue", "Orange") or hex string to a Color
     static func fromString(_ colorString: String) -> Color {
+        if let hex = tailwindToHex[colorString] {
+            return Color(hex: hex)
+        }
+
         // Check if it's a color name first
         switch colorString.lowercased() {
         case "blue": return .blue
@@ -147,7 +232,7 @@ struct EnvelopeIconView: View {
             Circle()
                 .fill(Color.fromString(colorString))
                 .frame(width: size, height: size)
-            Image(systemName: icon)
+            Image(systemName: Color.lucideToSFSymbol[icon] ?? icon)
                 .foregroundColor(.white)
                 .font(.system(size: size * 0.42)) // ~42% of circle size
         }

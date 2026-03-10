@@ -17,7 +17,7 @@ private struct SankeyLayoutEntry: Identifiable {
 }
 
 struct CashFlowView: View {
-    @Query(sort: \Envelope.orderIndex) private var envelopes: [Envelope]
+    @Query(sort: \Envelope.order) private var envelopes: [Envelope]
     @Query private var userSettings: [UserSettings]
 
     private var settings: UserSettings? { userSettings.first }

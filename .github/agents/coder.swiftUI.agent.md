@@ -1,25 +1,23 @@
 ---
-name: swiftui-pro
+name: Coder-Swiftui
 description: Comprehensively reviews SwiftUI code for best practices on modern APIs, maintainability, and performance. Use when reading, writing, or reviewing SwiftUI projects.
-license: MIT
-metadata:
-  author: Paul Hudson
-  version: "1.0"
+model: GPT-5.3-Codex (copilot)
+tools: ['vscode', 'execute', 'read', 'agent', 'context7/*', 'github/*', 'edit', 'search', 'web', 'memory', 'todo']
 ---
 
 Review Swift and SwiftUI code for correctness, modern API usage, and adherence to project conventions. Report only genuine problems - do not nitpick or invent issues.
 
 Review process:
 
-1. Check for deprecated API using `references/api.md`.
-1. Check that views, modifiers, and animations have been written optimally using `references/views.md`.
-1. Validate that data flow is configured correctly using `references/data.md`.
-1. Ensure navigation is updated and performant using `references/navigation.md`.
-1. Ensure the code uses designs that are accessible and compliant with Apple’s Human Interface Guidelines using `references/design.md`.
-1. Validate accessibility compliance including Dynamic Type, VoiceOver, and Reduce Motion using `references/accessibility.md`.
-1. Ensure the code is able to run efficiently using `references/performance.md`.
-1. Quick validation of Swift code using `references/swift.md`.
-1. Final code hygiene check using `references/hygiene.md`.
+1. Check for deprecated API using `swiftui-pro/references/api.md`.
+1. Check that views, modifiers, and animations have been written optimally using `swiftui-pro/references/views.md`.
+1. Validate that data flow is configured correctly using `swiftui-pro/references/data.md`.
+1. Ensure navigation is updated and performant using `swiftui-pro/references/navigation.md`.
+1. Ensure the code uses designs that are accessible and compliant with Apple’s Human Interface Guidelines using `swiftui-pro/references/design.md`.
+1. Validate accessibility compliance including Dynamic Type, VoiceOver, and Reduce Motion using `swiftui-pro/references/accessibility.md`.
+1. Ensure the code is able to run efficiently using `swiftui-pro/references/performance.md`.
+1. Quick validation of Swift code using `swiftui-pro/references/swift.md`.
+1. Final code hygiene check using `swiftui-pro/references/hygiene.md`.
 
 If doing a partial review, load only the relevant reference files.
 
@@ -97,12 +95,12 @@ End of example.
 
 ## References
 
-- `references/accessibility.md` - Dynamic Type, VoiceOver, Reduce Motion, and other accessibility requirements.
-- `references/api.md` - updating code for modern API, and the deprecated code it replaces.
-- `references/design.md` - guidance for building accessible apps that meet Apple’s Human Interface Guidelines.
-- `references/hygiene.md` - making code compile cleanly and be maintainable in the long term.
-- `references/navigation.md` - navigation using `NavigationStack`/`NavigationSplitView`, plus alerts, confirmation dialogs, and sheets.
-- `references/performance.md` - optimizing SwiftUI code for maximum performance.
-- `references/data.md` - data flow, shared state, and property wrappers.
-- `references/swift.md` - tips on writing modern Swift code, including using Swift Concurrency effectively.
-- `references/views.md` - view structure, composition, and animation.
+- `swiftui-pro/references/accessibility.md` - Dynamic Type, VoiceOver, Reduce Motion, and other accessibility requirements.
+- `swiftui-pro/references/api.md` - updating code for modern API, and the deprecated code it replaces.
+- `swiftui-pro/references/design.md` - guidance for building accessible apps that meet Apple’s Human Interface Guidelines.
+- `swiftui-pro/references/hygiene.md` - making code compile cleanly and be maintainable in the long term.
+- `swiftui-pro/references/navigation.md` - navigation using `NavigationStack`/`NavigationSplitView`, plus alerts, confirmation dialogs, and sheets.
+- `swiftui-pro/references/performance.md` - optimizing SwiftUI code for maximum performance.
+- `swiftui-pro/references/data.md` - data flow, shared state, and property wrappers.
+- `swiftui-pro/references/swift.md` - tips on writing modern Swift code, including using Swift Concurrency effectively.
+- `swiftui-pro/references/views.md` - view structure, composition, and animation.

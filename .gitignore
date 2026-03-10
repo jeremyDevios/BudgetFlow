@@ -53,6 +53,14 @@ xcuserdata/
 *.xcscmblueprint
 DerivedData/
 
+# Firebase iOS config (contains API keys — ne jamais committer)
+**/GoogleService-Info.plist
+
 # Debug / build reports
 bugreport.txt
+
+# Firebase backup & restore
+/backups/
+scripts/service-account.json
+scripts/*.service-account.json
 

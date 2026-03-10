@@ -4,9 +4,11 @@ import SwiftData
 struct AddTransactionView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(SyncService.self) private var syncService
+    @Query private var allTransactions: [Transaction]
+    @Query private var userSettingsList: [UserSettings]
 
     var envelopes: [Envelope]
-    @State private var preselectedEnvelopeId: UUID?
 
     @State private var amount: String = ""
     @State private var selectedEnvelope: Envelope?
@@ -20,11 +22,37 @@ struct AddTransactionView: View {
         _selectedEnvelope = State(initialValue: preselectedEnvelope)
     }
 
+    private var currentMonthRange: (start: Date, end: Date) {
+        (Calendar.current.startOfMonth(for: Date()),
+         Calendar.current.endOfMonth(for: Date()))
+    }
+
+    private var envelopeSpentThisMonth: Double {
+        guard let envelope = selectedEnvelope else { return 0 }
+        return monthlySpent(for: envelope, in: currentMonthRange)
+    }
+
+    private var envelopeRemaining: Double {
+        guard let envelope = selectedEnvelope else { return 0 }
+        return envelope.budget - envelopeSpentThisMonth
+    }
+
+    private var enteredAmount: Double {
+        let clean = amount.replacingOccurrences(of: ",", with: ".")
+        return Double(clean) ?? 0
+    }
+
+    private var willExceedBudget: Bool {
+        selectedEnvelope != nil && enteredAmount > envelopeRemaining
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    VStack {
+
+                    // Amount field
+                    VStack(spacing: 8) {
                         Text("Montant")
                             .font(.headline)
                             .foregroundStyle(.secondary)
@@ -36,6 +64,28 @@ struct AddTransactionView: View {
                             .padding()
                             .background(Color(hex: "1C1C1E"))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                        // Envelope remaining hint (shown when envelope is selected)
+                        if let envelope = selectedEnvelope {
+                            HStack {
+                                Text("Disponible \(envelope.name) :")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(envelopeRemaining, format: .currency(code: "EUR"))
+                                    .font(.caption.bold())
+                                    .foregroundStyle(envelopeRemaining <= 0 ? .red : Color.appGreen)
+                            }
+                            .padding(.horizontal, 4)
+
+                            if willExceedBudget {
+                                Label("Dépasse le budget de l'enveloppe", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 4)
+                            }
+                        }
                     }
                     .padding(.horizontal)
 
@@ -115,6 +165,17 @@ struct AddTransactionView: View {
         modelContext.insert(transaction)
         envelope.spent += amountVal
 
+        // Sync to Firestore if online mode
+        if let settings = userSettingsList.first,
+           settings.isOnlineMode,
+           !settings.firebaseUserId.isEmpty {
+            let userId = settings.firebaseUserId
+            Task {
+                try? await syncService.syncTransaction(transaction, userId: userId)
+                try? await syncService.syncEnvelope(envelope, userId: userId)
+            }
+        }
+
         dismiss()
     }
 }
@@ -122,9 +183,8 @@ struct AddTransactionView: View {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: Envelope.self, Transaction.self, configurations: config)
-    let envelope = Envelope(name: "Courses", icon: "cart", color: "orange", budget: 500, orderIndex: 0)
+    let envelope = Envelope(name: "Courses", icon: "cart", color: "orange", budget: 500, order: 0)
     container.mainContext.insert(envelope)
-
     return AddTransactionView(envelopes: [envelope])
         .modelContainer(container)
         .preferredColorScheme(.dark)

@@ -2,14 +2,16 @@ import SwiftUI
 import SwiftData
 
 struct DashboardView: View {
+    @Environment(SyncService.self) private var syncService
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Envelope.orderIndex) private var envelopes: [Envelope]
+    @Query(sort: \Envelope.order) private var envelopes: [Envelope]
     @Query private var userSettings: [UserSettings]
 
     @State private var selectedMonth = Date()
     @State private var showingAddTransaction = false
     @State private var selectedEnvelopeForTransaction: Envelope? = nil
     @State private var showingSettings = false
+    @State private var isRefreshing = false
 
     var settings: UserSettings? { userSettings.first }
 
@@ -49,6 +51,18 @@ struct DashboardView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
+                    if isRefreshing {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Actualisation...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .animation(.easeInOut, value: isRefreshing)
+                    }
+
                     BalanceSummaryCard(
                         currentMonthBalance: currentMonthBalance,
                         availablePlanned: availablePlanned,
@@ -72,6 +86,17 @@ struct DashboardView: View {
                 .padding(.bottom, 100)
             }
             .scrollIndicators(.hidden)
+            .refreshable {
+                guard let settings,
+                      settings.isOnlineMode,
+                      !settings.firebaseUserId.isEmpty else { return }
+                isRefreshing = true
+                defer { isRefreshing = false }
+                try? await syncService.loadFromFirestore(
+                    userId: settings.firebaseUserId,
+                    into: modelContext
+                )
+            }
 
             // FAB
             Button {
@@ -108,7 +133,7 @@ struct DashboardView: View {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: Envelope.self) { envelope in
-            EnvelopeDetailView(envelope: envelope)
+            EnvelopeDetailView(envelope: envelope, selectedMonth: selectedMonth)
         }
         .sheet(isPresented: $showingAddTransaction) {
             AddTransactionView(

@@ -1,3 +1,91 @@
+# Scripts BudgetFlow
+
+---
+
+## Backup & Restore Firestore
+
+### `backup-firestore.js`
+
+Exporte **toute la base Firestore** dans un fichier JSON local.  
+**Lecture seule** — aucune écriture sur la base de données.
+
+#### Prérequis : Clé de service Firebase
+
+1. Ouvrir la [Firebase Console](https://console.firebase.google.com) → projet **budgetflow-86842**
+2. **Paramètres du projet** (icône ⚙️) → onglet **Comptes de service**
+3. Cliquer **Générer une nouvelle clé privée** → télécharger le fichier JSON
+4. Le renommer `service-account.json` et le placer dans `scripts/`
+
+> ⚠️ Ce fichier est dans `.gitignore`. Ne le commitez jamais.
+
+#### Usage
+
+```bash
+# Backup complet (tous les utilisateurs)
+node scripts/backup-firestore.js
+
+# Backup d'un utilisateur précis
+node scripts/backup-firestore.js --user <userId>
+
+# Chemin de sortie personnalisé
+node scripts/backup-firestore.js --output ./backups/mon-backup.json
+```
+
+Le fichier est créé dans `backups/backup-YYYY-MM-DDTHH-MM-SS_full.json`  
+(dossier `backups/` créé automatiquement, ignoré par git).
+
+---
+
+### `restore-firestore.js`
+
+Réimporte un backup JSON dans Firestore.  
+**Par défaut : mode `--dry-run`** (simulation pure, aucune écriture).
+
+#### Usage
+
+```bash
+# Simuler la restauration (sans écrire)
+node scripts/restore-firestore.js --input ./backups/backup-xxx.json
+
+# Restauration réelle — écrasement complet des documents existants
+node scripts/restore-firestore.js --input ./backups/backup-xxx.json --confirm --overwrite
+
+# Restauration réelle — fusion (préserve les champs non présents dans le backup)
+node scripts/restore-firestore.js --input ./backups/backup-xxx.json --confirm --merge
+
+# Restaurer uniquement un utilisateur
+node scripts/restore-firestore.js --input ./backups/backup-xxx.json --user <userId> --confirm --overwrite
+
+# Restaurer vers un autre projet (ex : staging)
+node scripts/restore-firestore.js --input ./backups/backup-xxx.json --project mon-projet-staging --confirm --overwrite
+```
+
+#### Sécurités intégrées
+
+- Sans `--confirm` → **aucune écriture**, affichage des opérations prévues uniquement
+- Si la cible est le **même projet** que la source → demande de confirmation interactive (`RESTAURER`)
+- `--overwrite` et `--merge` sont mutuellement exclusifs
+- Utilise des **batches Firestore** (rotation automatique à 490 ops/batch)
+
+---
+
+## Procédure de Disaster Recovery
+
+En cas de compromission de la base :
+
+1. **Identifier le dernier backup sain** dans `backups/`
+2. **Vérifier** avec un dry-run :
+   ```bash
+   node scripts/restore-firestore.js --input ./backups/backup-SAIN.json
+   ```
+3. **Si nécessaire, créer un nouveau projet Firebase** et pointer `--project` dessus
+4. **Restaurer** :
+   ```bash
+   node scripts/restore-firestore.js --input ./backups/backup-SAIN.json --confirm --overwrite
+   ```
+
+---
+
 # Service Worker Generation
 
 ## Overview
