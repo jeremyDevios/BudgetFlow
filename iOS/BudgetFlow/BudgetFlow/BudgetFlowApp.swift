@@ -29,6 +29,7 @@ struct BudgetFlowApp: App {
             Envelope.self,
             Transaction.self
         ])
+        // Protection gérée via NSFileProtectionComplete dans Info.plist.
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])

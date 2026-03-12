@@ -52,7 +52,9 @@ class SyncService {
             let envelopesSnapshot = try await userRef.collection("envelopes").limit(to: 1).getDocuments()
             return !envelopesSnapshot.documents.isEmpty
         } catch {
+#if DEBUG
             print("checkDataExists error: \(error)")
+#endif
             return false
         }
     }
@@ -143,7 +145,9 @@ class SyncService {
 
             try context.save()
         } catch {
+#if DEBUG
             print("loadFromFirestore error: \(error)")
+#endif
             throw error
         }
     }
@@ -217,7 +221,9 @@ class SyncService {
         do {
             try await batch.commit()
         } catch {
+#if DEBUG
             print("saveToFirestore error: \(error)")
+#endif
             throw error
         }
     }
@@ -235,7 +241,9 @@ class SyncService {
                 "updatedAt": isoString(Date())
             ], merge: true)
         } catch {
+#if DEBUG
             print("syncSettings error: \(error)")
+#endif
         }
     }
 
@@ -269,7 +277,9 @@ class SyncService {
                 ], merge: true)
             }
         } catch {
+#if DEBUG
             print("syncEnvelope error: \(error)")
+#endif
             throw error
         }
     }
@@ -300,7 +310,9 @@ class SyncService {
                 ], merge: true)
             }
         } catch {
+#if DEBUG
             print("syncTransaction error: \(error)")
+#endif
         }
     }
 
@@ -322,7 +334,9 @@ class SyncService {
             }
             try await batch.commit()
         } catch {
+#if DEBUG
             print("deleteEnvelope error: \(error)")
+#endif
         }
     }
 
@@ -334,7 +348,9 @@ class SyncService {
                 .document(firestoreId)
                 .delete()
         } catch {
+#if DEBUG
             print("deleteTransaction error: \(error)")
+#endif
         }
     }
 

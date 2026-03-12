@@ -62,7 +62,9 @@ struct ContentView: View {
             }
             isOnboarded = true
         } catch {
+#if DEBUG
             print("ContentView: Firestore load error: \(error)")
+#endif
         }
     }
 }

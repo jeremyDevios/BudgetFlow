@@ -8,6 +8,7 @@ import { MoveLeft, Trash2, Calendar, Plus, ShoppingCart, Fuel, Utensils, Plane, 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, use } from "react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
+import { logger } from "@/lib/logger";
 
 const ICON_MAP: Record<string, LucideIcon> = {
   ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee,
@@ -102,7 +103,7 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
       setTransactions(txList);
 
     } catch (error) {
-      console.error(error);
+      logger.sanitizedError("Erreur chargement enveloppe", error);
     } finally {
       setLoading(false);
     }
@@ -121,7 +122,7 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
         await deleteDoc(doc(db, "users", user.uid, "transactions", txId));
         setTransactions(transactions.filter(t => t.id !== txId));
     } catch (error) {
-        console.error("Erreur suppression", error);
+      logger.sanitizedError("Erreur suppression", error);
     }
   };
 

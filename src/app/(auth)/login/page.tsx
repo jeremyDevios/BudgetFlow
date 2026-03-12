@@ -6,7 +6,7 @@ import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Lock, Mail, ArrowRight, Loader2 } from "lucide-react";
-import { validateEmail, validatePassword } from "@/lib/validation";
+import { validateEmail } from "@/lib/validation";
 import { logger } from "@/lib/logger";
 
 export default function AuthPage() {
@@ -15,6 +15,8 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const router = useRouter();
 
   const handleGoogleAuth = async () => {
@@ -59,14 +61,15 @@ export default function AuthPage() {
       return;
     }
 
-    // Validation côté client
-    if (!validateEmail(email)) {
-      setError("Email invalide.");
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      const remainingMinutes = Math.ceil((lockoutUntil - Date.now()) / (60 * 1000));
+      setError(`Trop de tentatives. Reessayez dans ${remainingMinutes} minute${remainingMinutes > 1 ? "s" : ""}.`);
       return;
     }
 
-    if (!validatePassword(password)) {
-      setError("Le mot de passe doit faire au moins 6 caractères.");
+    // Validation côté client
+    if (!validateEmail(email)) {
+      setError("Email invalide.");
       return;
     }
 
@@ -93,15 +96,28 @@ export default function AuthPage() {
            updatedAt: new Date().toISOString()
       }, { merge: true });
 
+      setLoginAttempts(0);
+      setLockoutUntil(null);
+
       router.push("/dashboard");
     } catch (err: any) {
       logger.sanitizedError("Authentication error", err);
+      const nextAttempts = loginAttempts + 1;
+      if (nextAttempts >= 5) {
+        setLockoutUntil(Date.now() + 5 * 60 * 1000);
+        setLoginAttempts(0);
+        setError("Trop de tentatives. Reessayez dans 5 minutes.");
+        return;
+      }
+
+      setLoginAttempts(nextAttempts);
+
       if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
          setError("Email ou mot de passe incorrect.");
       } else if (err.code === "auth/email-already-in-use") {
         setError("Cet email est déjà utilisé.");
       } else if (err.code === "auth/weak-password") {
-        setError("Le mot de passe doit faire au moins 6 caractères.");
+        setError("Le mot de passe doit contenir au moins 8 caracteres, avec majuscule, minuscule et chiffre.");
       } else if (err.code === "auth/network-request-failed") {
         setError("Erreur de connexion réseau. Vérifiez votre connexion internet ou les paramètres de votre pare-feu.");
       } else {

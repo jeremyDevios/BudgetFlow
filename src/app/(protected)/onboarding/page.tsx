@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, collection, writeBatch } from "firebase/firestore";
 import { useRouter } from "next/navigation";
+import { logger } from "@/lib/logger";
 import { 
   ArrowRight, 
   Wallet, 
@@ -180,7 +181,7 @@ export default function OnboardingPage() {
       router.push("/dashboard");
 
     } catch (error) {
-      console.error("Erreur lors de la sauvegarde :", error);
+      logger.sanitizedError("Erreur lors de la sauvegarde", error);
       alert("Une erreur est survenue. Veuillez réessayer.");
     } finally {
       setLoading(false);

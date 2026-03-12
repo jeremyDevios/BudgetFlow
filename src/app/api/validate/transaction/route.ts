@@ -1,8 +1,8 @@
 // Validate transaction data on the server
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/firebase";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { logger } from "@/lib/logger";
+import { getAuth } from "firebase-admin/auth";
 
 // Validation constraints
 const CONSTRAINTS = {
@@ -58,6 +58,14 @@ export async function POST(request: Request) {
         { error: "Unauthorized" },
         { status: 401 }
       );
+    }
+
+    const adminAuth = getAuth(adminDb.app);
+    let decodedToken;
+    try {
+      decodedToken = await adminAuth.verifyIdToken(authToken);
+    } catch {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
     const data: unknown = await request.json();

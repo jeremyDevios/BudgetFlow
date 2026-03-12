@@ -100,7 +100,7 @@ struct EvolutionView: View {
                                     x: .value("Mois", summary.month, unit: .month),
                                     y: .value("Reste", summary.remaining)
                                 )
-                                .foregroundStyle(summary.remaining >= 0 ? Color.appYellow : Color.red)
+                                .foregroundStyle(summary.remaining >= 0 ? Color.appGreen : Color.red)
                                 .symbolSize(40)
 
                                 RuleMark(y: .value("Zéro", 0))

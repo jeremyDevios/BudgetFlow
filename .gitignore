@@ -64,3 +64,5 @@ bugreport.txt
 scripts/service-account.json
 scripts/*.service-account.json
 
+# Audit Markdown reports
+Audit*.md

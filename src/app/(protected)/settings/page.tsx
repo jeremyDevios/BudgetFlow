@@ -10,6 +10,7 @@ import { useNotifications } from "@/hooks/useNotifications";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { logger } from "@/lib/logger";
 
 // --- Icons List ---
 const ICONS_LIST = [
@@ -159,7 +160,7 @@ export default function SettingsPage() {
                    batch.update(ref, { order: env.order });
                }
             });
-            batch.commit().catch(e => console.error("Error order save", e));
+            batch.commit().catch((error) => logger.sanitizedError("Error order save", error));
 
             return newOrder;
         });
@@ -207,8 +208,8 @@ export default function SettingsPage() {
 
       setEnvelopes(list);
 
-    } catch (error) {
-      console.error("Erreur chargement:", error);
+        } catch (error) {
+            logger.sanitizedError("Erreur chargement", error);
     } finally {
       setLoading(false);
     }
@@ -288,7 +289,7 @@ export default function SettingsPage() {
         }
         setIsModalOpen(false);
     } catch (error) {
-        console.error("Erreur sauvegarde enveloppe:", error);
+        logger.sanitizedError("Erreur sauvegarde enveloppe", error);
     }
   };
 
@@ -300,7 +301,7 @@ export default function SettingsPage() {
         await deleteDoc(doc(db, "users", user.uid, "envelopes", id));
         setEnvelopes(envelopes.filter(e => e.id !== id));
     } catch (error) {
-        console.error("Erreur suppression:", error);
+        logger.sanitizedError("Erreur suppression", error);
     }
   };
 
