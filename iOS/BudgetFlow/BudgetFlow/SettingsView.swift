@@ -86,10 +86,10 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(spacing: 8) {
                                 Image(systemName: "briefcase.fill")
-                                    .foregroundColor(.appYellow)
+                                    .foregroundColor(.appAccent)
                                 Text("Budget Global")
                                     .font(.headline)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.appText)
                             }
 
                             CustomInput(
@@ -114,17 +114,17 @@ struct SettingsView: View {
                         .padding()
                         .background(Color.appSurface)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.08), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.appBorder, lineWidth: 1))
 
                         // --- Summary Card ---
                         VStack(spacing: 0) {
                             summaryRow(
                                 label: "Total Enveloppes",
                                 value: totalEnvelopes,
-                                color: .appYellow
+                                color: .appAccent
                             )
                             Divider()
-                                .background(.white.opacity(0.1))
+                                .overlay(Color.appBorder)
                                 .padding(.horizontal, 4)
                             summaryRow(
                                 label: "Épargne visée",
@@ -132,7 +132,7 @@ struct SettingsView: View {
                                 color: .appGreen
                             )
                             Divider()
-                                .background(.white.opacity(0.1))
+                                .overlay(Color.appBorder)
                                 .padding(.horizontal, 4)
                             summaryRow(
                                 label: "Équilibre (Reste à allouer)",
@@ -144,15 +144,15 @@ struct SettingsView: View {
                         .padding(.vertical, 8)
                         .background(Color.appSurface)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.08), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.appBorder, lineWidth: 1))
 
                         // --- Navigation to Envelopes ---
                         NavigationLink(destination: ManageEnvelopesView()) {
                             HStack {
                                 Image(systemName: "tray.2.fill")
-                                    .foregroundColor(.appYellow)
+                                    .foregroundColor(.appAccent)
                                 Text("Mes Enveloppes")
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.appText)
                                 Spacer()
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(.secondary)
@@ -161,17 +161,17 @@ struct SettingsView: View {
                             .padding()
                             .background(Color.appSurface)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
-                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.08), lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.appBorder, lineWidth: 1))
                         }
 
                         // Section Notifications
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(spacing: 8) {
                                 Image(systemName: "bell.fill")
-                                    .foregroundColor(.appYellow)
+                                    .foregroundColor(.appAccent)
                                 Text("Notifications")
                                     .font(.headline)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.appText)
                             }
 
                             Toggle(isOn: Binding(
@@ -179,13 +179,13 @@ struct SettingsView: View {
                                 set: { handleNotificationsToggle($0) }
                             )) {
                                 Text("Rappels de saisie")
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.appText)
                                     .font(.subheadline)
                             }
-                            .tint(.appYellow)
+                            .tint(.appAccent)
 
                             if notificationsEnabled {
-                                Divider().background(.white.opacity(0.1))
+                                Divider().overlay(Color.appBorder)
 
                                 DatePicker(
                                     "Heure",
@@ -193,15 +193,14 @@ struct SettingsView: View {
                                     displayedComponents: .hourAndMinute
                                 )
                                 .datePickerStyle(.compact)
-                                .colorScheme(.dark)
-                                .foregroundColor(.white)
+                                .foregroundColor(.appText)
 
-                                Divider().background(.white.opacity(0.1))
+                                Divider().overlay(Color.appBorder)
 
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Jours")
                                         .font(.subheadline)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(.appText)
 
                                     HStack(spacing: 8) {
                                         ForEach(weekDayConfig, id: \.weekday) { config in
@@ -214,8 +213,8 @@ struct SettingsView: View {
                                                 rescheduleIfEnabled()
                                             }
                                             .frame(width: 36, height: 36)
-                                            .background(isSelected ? Color.appYellow : Color.white.opacity(0.1))
-                                            .foregroundColor(isSelected ? .black : .white)
+                                            .background(isSelected ? Color.appAccent : Color.appSecondaryText.opacity(0.15))
+                                            .foregroundColor(isSelected ? .black : Color.appText)
                                             .clipShape(Circle())
                                             .font(.caption.bold())
                                         }
@@ -226,7 +225,7 @@ struct SettingsView: View {
                         .padding()
                         .background(Color.appSurface)
                         .clipShape(RoundedRectangle(cornerRadius: 20))
-                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.08), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.appBorder, lineWidth: 1))
                         .alert("Notifications désactivées", isPresented: $showNotifPermissionDeniedAlert) {
                             Button("Ouvrir Réglages") {
                                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -296,7 +295,7 @@ struct SettingsView: View {
     private func summaryRow(label: String, value: Double, color: Color) -> some View {
         HStack {
             Text(label)
-                .foregroundColor(.secondary)
+                .foregroundColor(.appText)
                 .font(.subheadline)
             Spacer()
             Text(value, format: .currency(code: "EUR"))
@@ -402,5 +401,6 @@ struct SettingsView: View {
     container.mainContext.insert(settings)
     return SettingsView(settings: settings)
         .modelContainer(container)
+        .environment(SyncService())
         .preferredColorScheme(.dark)
 }

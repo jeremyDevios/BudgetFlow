@@ -62,7 +62,7 @@ struct AddTransactionView: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.center)
                             .padding()
-                            .background(Color(hex: "1C1C1E"))
+                            .background(Color.appSurface)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
 
                         // Envelope remaining hint (shown when envelope is selected)
@@ -108,7 +108,7 @@ struct AddTransactionView: View {
                                 .background(
                                     selectedEnvelope?.id == envelope.id
                                         ? Color.fromString(envelope.color).opacity(0.2)
-                                        : Color(hex: "1C1C1E")
+                                    : Color.appSurface
                                 )
                                 .foregroundStyle(.primary)
                                 .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -129,8 +129,9 @@ struct AddTransactionView: View {
                     HStack {
                         TextField("Note (Ex: Burger King)", text: $desc)
                             .padding()
-                            .background(Color(hex: "1C1C1E"))
+                            .background(Color.appSurface)
                             .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.appBorder, lineWidth: 1))
 
                         DatePicker("", selection: $date, displayedComponents: .date)
                             .labelsHidden()
@@ -187,5 +188,6 @@ struct AddTransactionView: View {
     container.mainContext.insert(envelope)
     return AddTransactionView(envelopes: [envelope])
         .modelContainer(container)
+        .environment(SyncService())
         .preferredColorScheme(.dark)
 }

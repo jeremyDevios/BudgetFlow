@@ -43,7 +43,7 @@ struct DashboardView: View {
         ZStack(alignment: .bottomTrailing) {
             // Dark gradient background
             LinearGradient(
-                colors: [Color(hex: "18181B"), Color(hex: "09090B")],
+                colors: [Color.appSurface, Color.appBackground],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -107,13 +107,13 @@ struct DashboardView: View {
                     .font(.title2.bold())
                     .foregroundStyle(.black)
                     .frame(width: 56, height: 56)
-                    .background(Color.appYellow)
+                        .background(Color.appAccent)
                     .clipShape(Circle())
-                    .shadow(color: Color.appYellow.opacity(0.4), radius: 12, y: 4)
+                        .shadow(color: Color.appAccent.opacity(0.4), radius: 12, y: 4)
             }
             .padding(.trailing, 20)
             .padding(.bottom, 20)
-            .accessibilityLabel("Nouvelle dépense")
+                    .accessibilityLabel("Ajouter une transaction")
             .sensoryFeedback(.impact, trigger: showingAddTransaction)
         }
         .toolbar {
@@ -193,5 +193,6 @@ private struct MonthSelectorPill: View {
         DashboardView()
     }
     .modelContainer(for: [UserSettings.self, Envelope.self, Transaction.self], inMemory: true)
+    .environment(SyncService())
     .preferredColorScheme(.dark)
 }

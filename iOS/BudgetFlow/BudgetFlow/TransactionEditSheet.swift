@@ -14,7 +14,11 @@ struct TransactionEditSheet: View {
     // Remaining budget for this envelope, with this transaction excluded from spent
     private var envelopeRemaining: Double {
         guard let env = transaction.envelope else { return 0 }
-        return env.budget - (env.spent - transaction.amount)
+        let cal = Calendar.current
+        let monthStart = cal.startOfMonth(for: transaction.date)
+        let monthEnd = cal.endOfMonth(for: transaction.date)
+        let monthTotal = monthlySpent(for: env, in: (start: monthStart, end: monthEnd))
+        return env.budget - (monthTotal - transaction.amount)
     }
 
     private var newAmount: Double { convertToDouble(amountText) ?? 0 }
@@ -31,22 +35,22 @@ struct TransactionEditSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text("Modifier la dépense")
-                    .font(.title2).bold().foregroundColor(.white)
+                    .font(.title2).bold().foregroundColor(Color.appText)
                     .padding(.top, 8)
 
                 // Amount
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Montant").font(.caption).foregroundColor(.gray)
+                    Text("Montant").font(.caption).foregroundColor(Color.appSecondaryText)
                     HStack {
                         TextField("0", text: $amountText)
                             .keyboardType(.decimalPad)
-                            .foregroundColor(.white)
-                        Text("€").foregroundColor(.gray)
+                            .foregroundColor(Color.appText)
+                        Text("€").foregroundColor(Color.appSecondaryText)
                     }
                     .padding()
-                    .background(Color.black)
+                    .background(Color.appSurface)
                     .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.appBorder, lineWidth: 1))
 
                     // Envelope budget hint
                     if let envelope = transaction.envelope {
@@ -70,21 +74,20 @@ struct TransactionEditSheet: View {
 
                 // Note
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Note").font(.caption).foregroundColor(.gray)
+                    Text("Note").font(.caption).foregroundColor(Color.appSecondaryText)
                     TextField("Ex: Burger King", text: $descriptionText)
                         .padding()
-                        .background(Color.black)
+                        .background(Color.appSurface)
                         .cornerRadius(8)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
-                        .foregroundColor(.white)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.appBorder, lineWidth: 1))
+                        .foregroundColor(Color.appText)
                 }
 
                 // Date
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Date").font(.caption).foregroundColor(.gray)
+                    Text("Date").font(.caption).foregroundColor(Color.appSecondaryText)
                     DatePicker("", selection: $date, displayedComponents: .date)
                         .labelsHidden()
-                        .colorScheme(.dark)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
@@ -93,20 +96,20 @@ struct TransactionEditSheet: View {
                     Button(action: { dismiss() }) {
                         Text("Annuler")
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.appText)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.white.opacity(0.1))
+                            .background(Color(.systemGray5))
                             .cornerRadius(12)
                     }
 
                     Button(action: saveChanges) {
                         Text("Sauvegarder")
                             .fontWeight(.bold)
-                            .foregroundColor(isSaveDisabled ? .gray : .black)
+                            .foregroundColor(isSaveDisabled ? Color.appSecondaryText : .white)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(isSaveDisabled ? Color.gray.opacity(0.3) : Color.white)
+                            .background(isSaveDisabled ? Color.appBorder : Color.appAccent)
                             .cornerRadius(12)
                     }
                     .disabled(isSaveDisabled)
@@ -115,7 +118,7 @@ struct TransactionEditSheet: View {
             }
             .padding(24)
         }
-        .background(Color(hex: "1C1C1E").ignoresSafeArea())
+        .background(Color.appBackground.ignoresSafeArea())
         .presentationDetents([.medium])
         .dismissKeyboardOnTap()
         .onAppear {
@@ -161,5 +164,6 @@ struct TransactionEditSheet: View {
     container.mainContext.insert(tx)
     return TransactionEditSheet(transaction: tx)
         .modelContainer(container)
+        .environment(SyncService())
         .preferredColorScheme(.dark)
 }

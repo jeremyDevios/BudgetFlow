@@ -13,7 +13,7 @@ struct EnvelopeGridSection: View {
             HStack {
                 Text("Mes Enveloppes")
                     .font(.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.appText)
                 Spacer()
                 Text("\(envelopes.count) catégorie\(envelopes.count > 1 ? "s" : "")")
                     .font(.caption)
@@ -49,6 +49,7 @@ struct EnvelopeGridSection: View {
 // MARK: - Envelope Card
 
 private struct EnvelopeCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let envelope: Envelope
     let spentThisMonth: Double
     let monthRange: (start: Date, end: Date)
@@ -71,7 +72,7 @@ private struct EnvelopeCard: View {
 
                 Text(envelope.name)
                     .font(.subheadline.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.appText)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -95,7 +96,7 @@ private struct EnvelopeCard: View {
 
             Text(remaining, format: .currency(code: "EUR"))
                 .font(.title3.bold())
-                .foregroundStyle(remaining < 0 ? .red : .white)
+                .foregroundStyle(remaining < 0 ? Color(uiColor: .systemRed) : Color.appText)
                 .contentTransition(.numericText())
 
             Text("sur \(envelope.budget, format: .currency(code: "EUR"))")
@@ -111,15 +112,23 @@ private struct EnvelopeCard: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.black)
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(cardColor.opacity(0.12))
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(cardColor.opacity(0.30), lineWidth: 1)
-            }
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    LinearGradient(
+                        colors: colorScheme == .dark
+                            ? [Color.appBackground, cardColor.opacity(0.20)]
+                            : [Color(.systemGray6), cardColor.opacity(0.18)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
         }
+        .shadow(
+            color: colorScheme == .dark
+                ? Color.black.opacity(0.0)
+                : Color.black.opacity(0.06),
+            radius: 4, x: 0, y: 2
+        )
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
@@ -127,6 +136,7 @@ private struct EnvelopeCard: View {
 // MARK: - Transaction Segment Bar
 
 private struct TransactionSegmentBar: View {
+    @Environment(\.colorScheme) private var colorScheme
     let transactions: [Transaction]
     let color: Color
     let budget: Double
@@ -146,7 +156,7 @@ private struct TransactionSegmentBar: View {
                 }
             }
             .frame(maxWidth: geo.size.width, alignment: .leading)
-            .background(Capsule().fill(.white.opacity(0.08)))
+            .background(Capsule().fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.08)))
             .clipShape(RoundedRectangle(cornerRadius: 3))
         }
         .frame(height: 5)

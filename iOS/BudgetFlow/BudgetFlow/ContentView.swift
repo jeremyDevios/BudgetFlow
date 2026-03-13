@@ -18,7 +18,7 @@ struct ContentView: View {
                 ZStack {
                     Color.appBackground.ignoresSafeArea()
                     ProgressView()
-                        .tint(Color.appYellow)
+                        .tint(Color.appAccent)
                 }
             } else if isOnboarded {
                 MainTabView()
@@ -98,5 +98,6 @@ struct OnboardingWrapper: View {
 #Preview {
     ContentView()
         .modelContainer(for: [UserSettings.self, Envelope.self, Transaction.self], inMemory: true)
+        .environment(SyncService())
 }
 

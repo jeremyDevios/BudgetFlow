@@ -28,8 +28,8 @@ struct MainTabView: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
-        .tint(Color.appYellow)
+        .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+        .tint(Color.appAccent)
     }
 }
 

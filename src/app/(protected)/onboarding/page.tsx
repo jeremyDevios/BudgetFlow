@@ -238,24 +238,24 @@ export default function OnboardingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center p-6">
+    <div className="min-h-screen bg-app-bg text-app-text flex flex-col items-center p-6">
       <div className="w-full max-w-2xl">
         {/* Progress Bar */}
         <div className="flex gap-2 mb-12">
-          <div className={`h-1 flex-1 rounded-full ${step >= 1 ? "bg-amber-500" : "bg-zinc-800"}`} />
-          <div className={`h-1 flex-1 rounded-full ${step >= 2 ? "bg-amber-500" : "bg-zinc-800"}`} />
+          <div className={`h-1 flex-1 rounded-full ${step >= 1 ? "bg-amber-500" : "bg-app-surface"}`} />
+          <div className={`h-1 flex-1 rounded-full ${step >= 2 ? "bg-amber-500" : "bg-app-surface"}`} />
         </div>
 
         {step === 1 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Commençons par les bases</h1>
-              <p className="mt-2 text-zinc-400">Pour établir votre budget, nous avons besoin de connaître vos flux mensuels fixes.</p>
+              <p className="mt-2 text-app-text-secondary">Pour établir votre budget, nous avons besoin de connaître vos flux mensuels fixes.</p>
             </div>
             
             {/* Affichage Somme Disponible (Prévisionnel) */}
             <div className={`p-4 rounded-xl border ${availableAmount >= 0 ? 'bg-green-950/30 border-green-900' : 'bg-red-950/30 border-red-900'} transition-colors`}>
-                <p className="text-sm text-zinc-400">Capacité pour vos enveloppes :</p>
+                <p className="text-sm text-app-text-secondary">Capacité pour vos enveloppes :</p>
                 <p className={`text-3xl font-bold ${availableAmount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {availableAmount.toFixed(2)} €
                 </p>
@@ -269,13 +269,13 @@ export default function OnboardingPage() {
                   Salaire Mensuel Net
                 </label>
                 <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
                     <input 
                         type="number"
                         inputMode="decimal"
                         value={income}
                         onChange={(e) => setIncome(e.target.value)}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
+                        className="w-full bg-app-surface border border-app-border rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
                         placeholder="2500"
                     />
                 </div>
@@ -288,19 +288,19 @@ export default function OnboardingPage() {
                   Charges Incompressibles
                   <div className="group relative">
                     <HelpCircle className="h-4 w-4 text-zinc-600 cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-zinc-800 border border-zinc-700 rounded-lg text-xs text-zinc-300 hidden group-hover:block z-10 shadow-xl">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-app-surface border border-app-border rounded-lg text-xs text-zinc-300 hidden group-hover:block z-10 shadow-xl">
                       Cumul des charges fixes : Loyer, Électricité, Internet, Assurances, Abonnements Netflix/Spotify, etc.
                     </div>
                   </div>
                 </label>
                 <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
                     <input 
                         type="number"
                         inputMode="decimal"
                         value={fixedCosts}
                         onChange={(e) => setFixedCosts(e.target.value)}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
+                        className="w-full bg-app-surface border border-app-border rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
 
                         placeholder="1200"
                     />
@@ -315,13 +315,13 @@ export default function OnboardingPage() {
                   <span className="text-xs text-zinc-600 font-normal">(Crypto, Immo, Livret A...)</span>
                 </label>
                 <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
                     <input 
                         type="number"
                         inputMode="decimal"
                         value={savings}
                         onChange={(e) => setSavings(e.target.value)}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
+                        className="w-full bg-app-surface border border-app-border rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
                         placeholder="300"
                     />
                 </div>
@@ -341,7 +341,7 @@ export default function OnboardingPage() {
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div>
               <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Vos Enveloppes</h1>
-              <p className="mt-2 text-zinc-400">Définissez vos budgets pour les dépenses du quotidien (courses, sorties...).</p>
+              <p className="mt-2 text-app-text-secondary">Définissez vos budgets pour les dépenses du quotidien (courses, sorties...).</p>
             </div>
 
             {/* Affichage Somme Disponible Dynamique */}
@@ -365,23 +365,23 @@ export default function OnboardingPage() {
                 
                 if (isEditing) {
                     return (
-                        <div key={env.id} className="bg-zinc-900 border border-amber-500 p-4 rounded-xl space-y-4 animate-in fade-in duration-200">
+                        <div key={env.id} className="bg-app-surface border border-amber-500 p-4 rounded-xl space-y-4 animate-in fade-in duration-200">
                              <input 
                                 type="text" 
                                 placeholder="Nom"
-                                className="w-full bg-black border border-zinc-800 rounded-lg p-3 focus:border-amber-500 focus:outline-none"
+                                className="w-full bg-app-bg border border-app-border rounded-lg p-3 focus:border-amber-500 focus:outline-none"
                                 value={editEnvelopeName}
                                 onChange={(e) => setEditEnvelopeName(e.target.value)}
                                 autoFocus
                             />
                             
-                            <div className="flex gap-2 text-sm text-zinc-400">Montant (€)</div>
+                            <div className="flex gap-2 text-sm text-app-text-secondary">Montant (€)</div>
                             <input 
                                 type="number"
                                 inputMode="decimal"
                                 value={editEnvelopeAmount}
                                 onChange={(e) => setEditEnvelopeAmount(e.target.value)}
-                                className="w-full bg-black border border-zinc-800 rounded-lg p-3 text-right focus:border-amber-500 focus:outline-none"
+                                className="w-full bg-app-bg border border-app-border rounded-lg p-3 text-right focus:border-amber-500 focus:outline-none"
                             />
 
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-700">
@@ -389,7 +389,7 @@ export default function OnboardingPage() {
                                     <button
                                         key={name}
                                         onClick={() => setEditEnvelopeIcon(name)}
-                                        className={`p-2 rounded-lg border flex-shrink-0 ${editEnvelopeIcon === name ? "bg-zinc-800 border-amber-500 text-amber-500" : "border-zinc-800 text-zinc-500 hover:bg-zinc-800"}`}
+                                        className={`p-2 rounded-lg border flex-shrink-0 ${editEnvelopeIcon === name ? "bg-app-surface border-amber-500 text-amber-500" : "border-app-border text-app-text-secondary hover:bg-app-surface"}`}
                                     >
                                         <Icon className="h-4 w-4" />
                                     </button>
@@ -407,13 +407,13 @@ export default function OnboardingPage() {
                             <div className="flex gap-2 pt-2">
                                 <button 
                                     onClick={saveEditedEnvelope}
-                                    className="flex-1 bg-amber-500 text-white py-2 rounded-lg font-semibold hover:bg-amber-600 flex justify-center items-center gap-2"
+                                    className="flex-1 bg-amber-500 text-app-text py-2 rounded-lg font-semibold hover:bg-amber-600 flex justify-center items-center gap-2"
                                 >
                                     <Check className="h-4 w-4" /> Sauvegarder
                                 </button>
                                  <button 
                                     onClick={cancelEditing}
-                                    className="px-4 bg-transparent border border-zinc-700 text-white py-2 rounded-lg hover:bg-zinc-800"
+                                    className="px-4 bg-transparent border border-app-border text-app-text py-2 rounded-lg hover:bg-app-surface"
                                 >
                                     <X className="h-4 w-4" />
                                 </button>
@@ -423,25 +423,25 @@ export default function OnboardingPage() {
                 }
 
                 return (
-                <div key={env.id} className="flex items-center gap-4 bg-zinc-900 border border-zinc-800 p-4 rounded-xl group hover:border-zinc-700 transition-all">
+                <div key={env.id} className="flex items-center gap-4 bg-app-surface border border-app-border p-4 rounded-xl group hover:border-app-border transition-all">
                   <div className={`w-12 h-12 rounded-full ${env.color} flex items-center justify-center shrink-0`}>
                     {(() => {
                         const IconComponent = PREDEFINED_ICONS.find(i => i.name === env.icon)?.icon || ShoppingCart;
-                        return <IconComponent className="h-6 w-6 text-white" />;
+                        return <IconComponent className="h-6 w-6 text-app-text" />;
                     })()}
                   </div>
                   <div className="flex-1 cursor-pointer" onClick={() => startEditingEnvelope(env)}>
                     <h3 className="font-semibold">{env.name}</h3>
-                    <p className="text-xs text-zinc-500">Budget mensuel</p>
+                    <p className="text-xs text-app-text-secondary">Budget mensuel</p>
                   </div>
                   <div className="relative w-32">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">€</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
                     <input 
                         type="number"
                         inputMode="decimal"
                         value={env.amount}
                         onChange={(e) => updateEnvelopeAmount(env.id, e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-lg py-2 pl-8 pr-2 text-right focus:ring-1 focus:ring-amber-500 focus:outline-none"
+                        className="w-full bg-app-bg border border-app-border rounded-lg py-2 pl-8 pr-2 text-right focus:ring-1 focus:ring-amber-500 focus:outline-none"
                     />
                   </div>
                   <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -466,11 +466,11 @@ export default function OnboardingPage() {
 
                 {/* Formulaire ajout enveloppe */}
                 {isAddingEnvelope ? (
-                    <div className="bg-zinc-900 border border-zinc-700 p-4 rounded-xl space-y-4 animate-in zoom-in-95 duration-200">
+                    <div className="bg-app-surface border border-app-border p-4 rounded-xl space-y-4 animate-in zoom-in-95 duration-200">
                         <input 
                             type="text" 
                             placeholder="Nom (ex: Cadeaux)"
-                            className="w-full bg-black border border-zinc-800 rounded-lg p-3 focus:border-amber-500 focus:outline-none"
+                            className="w-full bg-app-bg border border-app-border rounded-lg p-3 focus:border-amber-500 focus:outline-none"
                             value={newEnvelopeName}
                             onChange={(e) => setNewEnvelopeName(e.target.value)}
                             autoFocus
@@ -480,7 +480,7 @@ export default function OnboardingPage() {
                                 <button
                                     key={name}
                                     onClick={() => setNewEnvelopeIcon(name)}
-                                    className={`p-2 rounded-lg border ${newEnvelopeIcon === name ? "bg-zinc-800 border-amber-500 text-amber-500" : "border-zinc-800 text-zinc-500 hover:bg-zinc-800"}`}
+                                    className={`p-2 rounded-lg border ${newEnvelopeIcon === name ? "bg-app-surface border-amber-500 text-amber-500" : "border-app-border text-app-text-secondary hover:bg-app-surface"}`}
                                 >
                                     <Icon className="h-4 w-4" />
                                 </button>
@@ -504,7 +504,7 @@ export default function OnboardingPage() {
                             </button>
                              <button 
                                 onClick={() => setIsAddingEnvelope(false)}
-                                className="flex-1 bg-transparent border border-zinc-700 text-white py-2 rounded-lg hover:bg-zinc-800"
+                                className="flex-1 bg-transparent border border-app-border text-app-text py-2 rounded-lg hover:bg-app-surface"
                             >
                                 Annuler
                             </button>
@@ -513,7 +513,7 @@ export default function OnboardingPage() {
                 ) : (
                     <button 
                         onClick={() => setIsAddingEnvelope(true)}
-                        className="w-full py-4 border border-dashed border-zinc-800 rounded-xl flex items-center justify-center gap-2 text-zinc-500 hover:text-white hover:border-zinc-600 transition-all hover:bg-zinc-900/50"
+                        className="w-full py-4 border border-dashed border-app-border rounded-xl flex items-center justify-center gap-2 text-app-text-secondary hover:text-app-text hover:border-zinc-600 transition-all hover:bg-app-surface/50"
                     >
                         <Plus className="h-5 w-5" />
                         Créer une enveloppe
@@ -524,14 +524,14 @@ export default function OnboardingPage() {
             <div className="flex gap-4 pt-8">
                 <button 
                     onClick={() => setStep(1)}
-                    className="flex-1 py-4 bg-zinc-900 hover:bg-zinc-800 rounded-xl font-bold text-zinc-400 hover:text-white transition-colors"
+                    className="flex-1 py-4 bg-app-surface hover:bg-app-surface rounded-xl font-bold text-app-text-secondary hover:text-app-text transition-colors"
                 >
                     Retour
                 </button>
                 <button 
                     onClick={handleFinish}
                     disabled={loading || !isBudgetValid}
-                    className="flex-[2] py-4 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-500"
+                    className="flex-[2] py-4 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-app-text-secondary"
                 >
                     {loading ? "Configuration..." : "Terminer"} <CheckCircle2 className="h-5 w-5" />
                 </button>

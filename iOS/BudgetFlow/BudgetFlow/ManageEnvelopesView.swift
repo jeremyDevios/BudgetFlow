@@ -107,4 +107,5 @@ struct ManageEnvelopesView: View {
 #Preview {
     ManageEnvelopesView()
         .modelContainer(for: Envelope.self, inMemory: true)
+        .environment(SyncService())
 }

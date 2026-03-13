@@ -1,12 +1,56 @@
 import SwiftUI
+import UIKit
 
 extension Color {
-    static let appYellow = Color(hex: "F59E0B") // Amber/Orange
-    static let appBackground = Color.black
-    static let appSurface = Color(hex: "1C1C1E") // Dark Gray
-    static let appText = Color.white
-    static let appSecondaryText = Color.gray
-    static let appGreen = Color(hex: "10B981") // Emerald Green
+    // Couleurs adaptatives Light/Dark
+    static let appBackground = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.035, green: 0.035, blue: 0.043, alpha: 1) // #09090B
+            : UIColor(red: 0.980, green: 0.980, blue: 0.973, alpha: 1) // #FAFAF9
+    })
+
+    static let appSurface = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.110, green: 0.110, blue: 0.118, alpha: 1) // #1C1C1E
+            : UIColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1)       // #FFFFFF
+    })
+
+    static let appText = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor.white
+            : UIColor(red: 0.094, green: 0.094, blue: 0.106, alpha: 1) // #18181B
+    })
+
+    static let appSecondaryText = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.631, green: 0.631, blue: 0.671, alpha: 1) // #A1A1AA
+            : UIColor(red: 0.443, green: 0.443, blue: 0.482, alpha: 1) // #71717A
+    })
+
+    static let appBorder = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor.white.withAlphaComponent(0.08)
+            : UIColor.black.withAlphaComponent(0.08)
+    })
+
+    static let appAccent = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.961, green: 0.620, blue: 0.043, alpha: 1) // #F59E0B amber
+            : UIColor(red: 0.961, green: 0.620, blue: 0.043, alpha: 1) // #F59E0B amber
+    })
+
+    // Garde appYellow pour compatibilite avec le code existant (pointe vers appAccent)
+    static let appYellow = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.961, green: 0.620, blue: 0.043, alpha: 1)
+            : UIColor(red: 0.961, green: 0.620, blue: 0.043, alpha: 1)
+    })
+
+    static let appGreen = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.063, green: 0.725, blue: 0.506, alpha: 1) // #10B981
+            : UIColor(red: 0.022, green: 0.588, blue: 0.412, alpha: 1) // #059669
+    })
 
     static let lucideToSFSymbol: [String: String] = [
         "ShoppingCart":  "cart",
@@ -111,7 +155,7 @@ struct PrimaryButton: View {
             .foregroundColor(isDisabled ? .gray : .white) // Or black text on yellow? Image has white text on orange button usually, but checking image again... actually it looks like white text on orange button. Wait, typically yellow buttons have black text for contrast. Let's look at the image again. Ah, the image provided has White Text on Orange Button.
             .frame(maxWidth: .infinity)
             .padding()
-            .background(isDisabled ? Color.gray.opacity(0.3) : Color.appYellow)
+            .background(isDisabled ? Color.gray.opacity(0.3) : Color.appAccent)
             .cornerRadius(12)
         }
         .disabled(isDisabled)
@@ -128,7 +172,7 @@ struct AppTextField: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: icon)
-                    .foregroundColor(.appYellow)
+                    .foregroundColor(.appAccent)
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.medium)
@@ -163,7 +207,7 @@ struct AppTextField: View {
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    .stroke(Color.appBorder, lineWidth: 1)
             )
         }
     }
@@ -178,7 +222,7 @@ struct OnboardingProgressBar: View {
         HStack(spacing: 4) {
             ForEach(1...totalSteps, id: \.self) { index in
                 Rectangle()
-                    .fill(index <= step ? Color.appYellow : Color.gray.opacity(0.3))
+                    .fill(index <= step ? Color.appAccent : Color.gray.opacity(0.3))
                     .frame(height: 4)
                     .cornerRadius(2)
             }

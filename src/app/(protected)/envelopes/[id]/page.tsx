@@ -141,24 +141,24 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
     setIsEditModalOpen(true);
   };
 
-  if (loading) return <div className="min-h-screen bg-black text-white p-8">Chargement...</div>;
+  if (loading) return <div className="min-h-screen bg-app-bg text-app-text p-8">Chargement...</div>;
   if (!envelope) return null;
 
   const Icon = ICON_MAP[envelope.icon] || ShoppingCart;
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 pb-20">
+    <div className="min-h-screen bg-app-bg text-app-text p-4 pb-20">
       <header className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-4">
-            <button onClick={() => router.back()} className="p-2 bg-zinc-900 rounded-full hover:bg-zinc-800 transition-colors">
+            <button onClick={() => router.back()} className="p-2 bg-app-surface rounded-full hover:bg-app-surface transition-colors">
                 <MoveLeft className="h-6 w-6" />
             </button>
-            <div className={`p-3 rounded-xl ${envelope.color} text-white border border-zinc-800`}>
+            <div className={`p-3 rounded-xl ${envelope.color} text-app-text border border-app-border`}>
                 <Icon className="h-6 w-6" />
             </div>
             <div>
                 <h1 className="text-2xl font-bold">{envelope.name}</h1>
-                <p className="text-zinc-500">
+                <p className="text-app-text-secondary">
                     {contextDate ? `Dépenses de ${formatMonthYear(contextDate)}` : "Historique récent"}
                 </p>
             </div>
@@ -175,7 +175,7 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
       
       <div className="space-y-4 max-w-3xl mx-auto">
         {transactions.length === 0 ? (
-            <div className="text-center py-12 text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+            <div className="text-center py-12 text-app-text-secondary border border-dashed border-app-border rounded-xl">
                 Aucune dépense pour le moment.
             </div>
         ) : (
@@ -183,15 +183,15 @@ export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: s
                 <div 
                     key={tx.id} 
                     onClick={() => handleEditClick(tx)}
-                    className="flex justify-between items-center bg-zinc-900/50 border border-zinc-800 p-4 rounded-xl cursor-pointer hover:bg-zinc-900 transition-colors group"
+                    className="flex justify-between items-center bg-app-surface/50 border border-app-border p-4 rounded-xl cursor-pointer hover:bg-app-surface transition-colors group"
                 >
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-zinc-950 rounded-full text-zinc-500 group-hover:bg-black transition-colors">
+                        <div className="p-3 bg-app-bg rounded-full text-app-text-secondary group-hover:bg-app-bg transition-colors">
                              <Calendar className="h-4 w-4" />
                         </div>
                         <div>
-                            <p className="font-medium text-white">{tx.description || "Dépense"}</p>
-                            <p className="text-xs text-zinc-500">{new Date(tx.date).toLocaleDateString()}</p>
+                            <p className="font-medium text-app-text">{tx.description || "Dépense"}</p>
+                            <p className="text-xs text-app-text-secondary">{new Date(tx.date).toLocaleDateString()}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-4">

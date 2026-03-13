@@ -58,7 +58,7 @@ struct EvolutionView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "18181B"), Color(hex: "09090B")],
+                colors: [Color.appSurface, Color.appBackground],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -72,7 +72,7 @@ struct EvolutionView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Reste disponible")
                                 .font(.headline)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Color.appText)
 
                             Chart(monthlyData) { summary in
                                 AreaMark(
@@ -81,7 +81,7 @@ struct EvolutionView: View {
                                 )
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [Color.appYellow.opacity(0.35), .clear],
+                                        colors: [Color.appAccent.opacity(0.35), .clear],
                                         startPoint: .top,
                                         endPoint: .bottom
                                     )
@@ -92,7 +92,7 @@ struct EvolutionView: View {
                                     x: .value("Mois", summary.month, unit: .month),
                                     y: .value("Reste", summary.remaining)
                                 )
-                                .foregroundStyle(Color.appYellow)
+                                .foregroundStyle(Color.appAccent)
                                 .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round))
                                 .interpolationMethod(.catmullRom)
 
@@ -123,28 +123,30 @@ struct EvolutionView: View {
                                         }
                                     }
                                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                                        .foregroundStyle(.white.opacity(0.08))
+                                        .foregroundStyle(Color.appBorder)
                                 }
                             }
                             .chartPlotStyle { plot in
                                 plot.background(Color.clear)
                             }
                             .frame(height: 220)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Graphique d'évolution du budget sur 12 mois")
                         }
                         .padding(20)
                         .background {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 20)
-                                    .fill(Color(hex: "1C1C1E"))
+                                    .fill(Color.appSurface)
                                 RoundedRectangle(cornerRadius: 20)
-                                    .stroke(.white.opacity(0.08), lineWidth: 1)
+                                    .stroke(Color.appBorder, lineWidth: 1)
                             }
                         }
 
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Détails mensuels")
                                 .font(.headline)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(Color.appText)
                                 .padding(.horizontal, 4)
 
                             ForEach(monthlyData.reversed()) { summary in
@@ -178,7 +180,7 @@ private struct MonthSummaryRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(summary.label)
                     .font(.subheadline.bold())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.appText)
                     .textCase(.uppercase)
             }
             .frame(width: 50, alignment: .leading)
@@ -191,7 +193,7 @@ private struct MonthSummaryRow: View {
                     .foregroundStyle(.secondary)
                 Text(summary.totalSpent, format: .currency(code: "EUR"))
                     .font(.subheadline.bold())
-                    .foregroundStyle(Color.appYellow)
+                    .foregroundStyle(Color.appAccent)
             }
 
             Divider()
@@ -210,7 +212,7 @@ private struct MonthSummaryRow: View {
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(hex: "1C1C1E"))
+                .fill(Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(.white.opacity(0.06), lineWidth: 1)

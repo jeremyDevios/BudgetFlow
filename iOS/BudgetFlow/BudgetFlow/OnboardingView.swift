@@ -280,7 +280,7 @@ struct EnvelopeEditorSheet: View {
     
     var body: some View {
         ZStack {
-            Color.black.opacity(0.8).ignoresSafeArea()
+            Color.appBackground.opacity(0.8).ignoresSafeArea()
                 .onTapGesture {
                     // Optional: dismiss on background tap? Maybe not for modal
                 }
@@ -289,17 +289,17 @@ struct EnvelopeEditorSheet: View {
                 Text("Modifier l'enveloppe")
                     .font(.title2)
                     .bold()
-                    .foregroundColor(.white)
+                    .foregroundColor(.appText)
                 
                 // Name
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Nom").font(.caption).foregroundColor(.gray)
                     TextField("Type", text: $editedName)
                         .padding()
-                        .background(Color.black)
+                        .background(Color.appBackground)
                         .cornerRadius(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
-                        .foregroundColor(.white)
+                        .foregroundColor(.appText)
                 }
                 
                 // Amount
@@ -308,14 +308,14 @@ struct EnvelopeEditorSheet: View {
                     HStack {
                         TextField("0", text: $editedAmountText)
                             .keyboardType(.decimalPad)
-                            .foregroundColor(.white)
+                            .foregroundColor(.appText)
                             .onChange(of: editedAmountText) { oldValue, newValue in
                                 // No need to update anything here, convertToDouble will handle it in onSave
                             }
                         Text("€").foregroundColor(.gray)
                     }
                     .padding()
-                    .background(Color.black)
+                    .background(Color.appBackground)
                     .cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
                 }
@@ -328,7 +328,7 @@ struct EnvelopeEditorSheet: View {
                             Image(systemName: icon)
                                 .foregroundColor(editedIcon == icon ? .black : .gray)
                                 .padding(10)
-                                .background(editedIcon == icon ? Color.appYellow : Color.appSurface)
+                                .background(editedIcon == icon ? Color.appAccent : Color.appSurface)
                                 .cornerRadius(8)
                                 .onTapGesture {
                                     editedIcon = icon
@@ -365,10 +365,10 @@ struct EnvelopeEditorSheet: View {
                     Button(action: onCancel) {
                         Text("Annuler")
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(.appText)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.white.opacity(0.1))
+                            .background(Color.appText.opacity(0.1))
                             .cornerRadius(12)
                     }
                     
@@ -392,7 +392,7 @@ struct EnvelopeEditorSheet: View {
                 }
             }
             .padding(24)
-            .background(Color(hex: "1C1C1E")) // Background similar to image
+            .background(Color.appSurface) // Background similar to image
             .cornerRadius(20)
             .padding(.horizontal, 20)
         }
@@ -423,13 +423,13 @@ struct WelcomeView: View {
                 
                 VStack(spacing: 0) {
                     Text("Maîtrisez votre")
-                        .foregroundColor(.white)
+                        .foregroundColor(.appText)
                     Text("Budget")
-                        .foregroundColor(.appYellow)
+                        .foregroundColor(.appAccent)
                 }
                 .font(.system(size: 42, weight: .black))
                 .multilineTextAlignment(.center)
-                .shadow(color: .appYellow.opacity(0.3), radius: 20, x: 0, y: 10)
+                .shadow(color: .appAccent.opacity(0.3), radius: 20, x: 0, y: 10)
 
                 
                 Text("La méthode des enveloppes, revisitée. Calculez le montant idéal de vos enveloppes selon vos revenus, charges et objectifs d'épargne. Un budget sur-mesure pour maîtriser vos dépenses et réaliser vos rêves.")
@@ -490,7 +490,7 @@ struct StepBasicsView: View {
                     Text("Commençons par les bases")
                         .font(.largeTitle)
                         .bold()
-                        .foregroundColor(.white)
+                        .foregroundColor(.appText)
                         .padding(.top, 20)
                     
                     Text("Pour établir votre budget, nous avons besoin de connaître vos flux mensuels fixes.")
@@ -577,10 +577,10 @@ struct CustomInput: View {
 
     private var borderColor: Color {
         if isFocused {
-            return .appYellow
+            return .appAccent
         }
         if isEmpty {
-            return .appYellow.opacity(glowPulse ? 0.75 : 0.2)
+            return .appAccent.opacity(glowPulse ? 0.75 : 0.2)
         }
         return .appGreen.opacity(0.6)
     }
@@ -591,10 +591,10 @@ struct CustomInput: View {
 
     private var glowColor: Color {
         if isFocused {
-            return .appYellow.opacity(0.4)
+            return .appAccent.opacity(0.4)
         }
         if isEmpty {
-            return .appYellow.opacity(glowPulse ? 0.28 : 0.0)
+            return .appAccent.opacity(glowPulse ? 0.28 : 0.0)
         }
         return .clear
     }
@@ -603,10 +603,10 @@ struct CustomInput: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: icon)
-                    .foregroundColor(.appYellow)
+                    .foregroundColor(.appAccent)
                 Text(title)
                     .font(.subheadline)
-                    .foregroundColor(.white)
+                    .foregroundColor(.appText)
 
                 Spacer()
 
@@ -618,7 +618,7 @@ struct CustomInput: View {
                     }) {
                         Image(systemName: "info.circle")
                             .font(.callout)
-                            .foregroundColor(.appYellow.opacity(0.8))
+                            .foregroundColor(.appAccent.opacity(0.8))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Informations")
@@ -630,7 +630,7 @@ struct CustomInput: View {
                     .foregroundColor(.gray)
                 TextField(placeholder, text: $text)
                     .keyboardType(.decimalPad)
-                    .foregroundColor(.white)
+                    .foregroundColor(.appText)
                     .font(.title3)
                     .focused($isFocused)
             }
@@ -643,7 +643,7 @@ struct CustomInput: View {
             if showInfo, let info = infoText {
                 HStack(alignment: .top, spacing: 6) {
                     Image(systemName: "info.circle.fill")
-                        .foregroundColor(.appYellow.opacity(0.7))
+                        .foregroundColor(.appAccent.opacity(0.7))
                         .font(.caption)
                         .padding(.top, 1)
                     Text(info)
@@ -691,7 +691,7 @@ struct StepEnvelopesView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Vos Enveloppes").font(.largeTitle).bold().foregroundColor(.white)
+                            Text("Vos Enveloppes").font(.largeTitle).bold().foregroundColor(.appText)
                             Text("Définissez vos budgets pour les dépenses du quotidien (courses, sorties...).")
                                 .foregroundColor(.gray)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -701,7 +701,7 @@ struct StepEnvelopesView: View {
 
                         HStack {
                             Text(isOverBudget ? "Dépassement :" : "Reste à attribuer :")
-                                .foregroundColor(.white).fontWeight(.medium)
+                                .foregroundColor(.appText).fontWeight(.medium)
                             Spacer()
                             Text(abs(remaining), format: .currency(code: "EUR"))
                                 .font(.title2).bold()
@@ -803,7 +803,7 @@ struct OnboardingEnvelopeRow: View {
                 Spacer()
                 Text("Supprimer")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(.appText)
                     .padding(.horizontal, 20)
             }
             .frame(maxWidth: .infinity)
@@ -821,7 +821,7 @@ struct OnboardingEnvelopeRow: View {
                             Text(env.name)
                                 .font(.headline)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(.appText)
                             Text("Budget mensuel")
                                 .font(.caption)
                                 .foregroundColor(.gray)
@@ -838,7 +838,7 @@ struct OnboardingEnvelopeRow: View {
                     TextField("Amount", text: $amountText)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
-                        .foregroundColor(.white)
+                        .foregroundColor(.appText)
                         .font(.headline)
                         .frame(width: 50)
                         .onChange(of: amountText) { oldValue, newValue in
@@ -851,7 +851,7 @@ struct OnboardingEnvelopeRow: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.black.opacity(0.5))
+                .background(Color.appBackground.opacity(0.5))
                 .cornerRadius(8)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
                 
@@ -955,10 +955,10 @@ struct BottomActionBar: View {
                 }
                 .font(.headline)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(.appText)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(isMainDisabled ? Color.gray : Color.appYellow)
+                .background(isMainDisabled ? Color.gray : Color.appAccent)
                 .cornerRadius(12)
             }
             .disabled(isMainDisabled)
@@ -991,7 +991,7 @@ struct ExpensePill: View {
                     .foregroundColor(.gray)
                     .textCase(.uppercase)
                 Text(amount)
-                    .font(.caption).fontWeight(.bold).foregroundColor(.white)
+                    .font(.caption).fontWeight(.bold).foregroundColor(.appText)
             }
         }
         .padding(8)

@@ -11,6 +11,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { logger } from "@/lib/logger";
+import ThemeToggle from "@/components/ThemeToggle";
 
 // --- Icons List ---
 const ICONS_LIST = [
@@ -77,37 +78,37 @@ function SortableEnvelopeRow({
     <div 
         ref={setNodeRef} 
         style={style} 
-        className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center justify-between group mb-3"
+        className="bg-app-surface border border-app-border rounded-xl p-4 flex items-center justify-between group mb-3"
     >
         <div className="flex items-center gap-4">
             {/* Drag Handle */}
             <div 
                 {...attributes} 
                 {...listeners} 
-                className="cursor-grab active:cursor-grabbing text-zinc-500 hover:text-zinc-300 p-1 -ml-2 touch-none"
+                className="cursor-grab active:cursor-grabbing text-app-text-secondary hover:text-app-text p-1 -ml-2 touch-none"
             >
                 <GripVertical className="w-5 h-5" />
             </div>
 
             {/* Icone blanche sur fond couleur */}
-            <div className={`p-2 rounded-lg ${env.color} text-white`}>
+            <div className={`p-2 rounded-lg ${env.color} text-app-text`}>
                 <Icon className="h-5 w-5" />
             </div>
             <div>
                 <h3 className="font-bold">{env.name}</h3>
-                <p className="text-sm text-zinc-500">{Number(env.budget).toFixed(2)} € / mois</p>
+                <p className="text-sm text-app-text-secondary">{Number(env.budget).toFixed(2)} € / mois</p>
             </div>
         </div>
         <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button 
                 onClick={() => openModal(env)}
-                className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg"
+                className="p-2 text-app-text-secondary hover:text-app-text hover:bg-app-surface rounded-lg"
             >
                 <Edit2 className="h-4 w-4" />
             </button>
             <button 
                 onClick={() => handleDeleteEnvelope(env.id, env.name)}
-                className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-900/20 rounded-lg"
+                className="p-2 text-app-text-secondary hover:text-red-500 hover:bg-red-900/20 rounded-lg"
             >
                 <Trash2 className="h-4 w-4" />
             </button>
@@ -311,29 +312,41 @@ export default function SettingsPage() {
   const remainingBudget = settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings - totalEnvelopes;
   const isOverBudget = remainingBudget < 0;
 
-  if (loading) return <div className="min-h-screen bg-black text-white p-8">Chargement...</div>;
+  if (loading) return <div className="min-h-screen bg-app-bg text-app-text p-8">Chargement...</div>;
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 pb-20">
+    <div className="min-h-screen bg-app-bg text-app-text p-4 pb-20">
       <header className="flex items-center gap-4 mb-8">
-        <button onClick={() => router.back()} className="p-2 bg-zinc-900 rounded-full hover:bg-zinc-800 transition-colors">
+        <button onClick={() => router.back()} className="p-2 bg-app-surface rounded-full hover:bg-app-surface transition-colors">
             <MoveLeft className="h-6 w-6" />
         </button>
         <h1 className="text-2xl font-bold">Paramètres</h1>
       </header>
 
       <div className="max-w-3xl mx-auto space-y-8">
+
+        {/* Section Apparence */}
+        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
+            <h2 className="text-xl font-bold mb-4">Apparence</h2>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h3 className="font-medium text-app-text">Thème</h3>
+                    <p className="text-sm text-app-text-secondary">Basculer entre mode clair et mode sombre.</p>
+                </div>
+                <ThemeToggle />
+            </div>
+        </section>
         
         {/* Section Notifications */}
-        <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Bell className="h-5 w-5 text-amber-500" />
                 Notifications
             </h2>
             <div className="flex items-center justify-between">
                 <div>
-                    <h3 className="font-medium text-white">Rappel quotidien</h3>
-                    <p className="text-sm text-zinc-400">Recevez un rappel à 19h pour saisir vos dépenses.</p>
+                    <h3 className="font-medium text-app-text">Rappel quotidien</h3>
+                    <p className="text-sm text-app-text-secondary">Recevez un rappel à 19h pour saisir vos dépenses.</p>
                 </div>
                 
                 {permission === 'granted' && dbNotifEnabled ? (
@@ -347,7 +360,7 @@ export default function SettingsPage() {
                                 setDbNotifEnabled(false);
                             }}
                             disabled={notifLoading}
-                            className="text-white bg-zinc-700 hover:bg-zinc-600 px-3 py-1.5 rounded-lg text-sm transition-colors"
+                            className="text-app-text bg-zinc-700 hover:bg-zinc-600 px-3 py-1.5 rounded-lg text-sm transition-colors"
                         >
                             Désactiver
                         </button>
@@ -361,7 +374,7 @@ export default function SettingsPage() {
                             }
                         }}
                         disabled={notifLoading || permission === 'denied'}
-                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-app-text rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                          {notifLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Activer"}
                     </button>
@@ -375,7 +388,7 @@ export default function SettingsPage() {
         </section>
 
         {/* Section 1: Budget Global */}
-        <section className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                 <Briefcase className="h-5 w-5 text-amber-500" />
                 Budget Global
@@ -384,67 +397,67 @@ export default function SettingsPage() {
             <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label className="block text-sm text-zinc-400 mb-1">Revenus (Salaire)</label>
+                        <label className="block text-sm text-app-text-secondary mb-1">Revenus (Salaire)</label>
                         <div className="relative">
                             <input 
                                 type="number"
                                 inputMode="decimal"
                                 value={settings.monthlyIncome} 
                                 onChange={(e) => handleUpdateSettings('monthlyIncome', e.target.value)}
-                                className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
+                                className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
                             />
-                            <span className="absolute right-3 top-2 text-zinc-500">€</span>
+                            <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm text-zinc-400 mb-1">Frais Fixes</label>
+                        <label className="block text-sm text-app-text-secondary mb-1">Frais Fixes</label>
                         <div className="relative">
                             <input 
                                 type="number"
                                 inputMode="decimal" 
                                 value={settings.fixedCosts} 
                                 onChange={(e) => handleUpdateSettings('fixedCosts', e.target.value)}
-                                className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
+                                className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
                             />
-                            <span className="absolute right-3 top-2 text-zinc-500">€</span>
+                            <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
                         </div>
                     </div>
                     <div className="sm:col-span-2">
-                        <label className="block text-sm text-zinc-400 mb-1">Épargne Souhaitée</label>
+                        <label className="block text-sm text-app-text-secondary mb-1">Épargne Souhaitée</label>
                         <div className="relative">
                             <input 
                                 type="number"
                                 inputMode="decimal" 
                                 value={settings.monthlySavings} 
                                 onChange={(e) => handleUpdateSettings('monthlySavings', e.target.value)}
-                                className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
+                                className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
                             />
-                            <span className="absolute right-3 top-2 text-zinc-500">€</span>
+                            <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Balance Indicator */}
-                <div className={`mt-6 p-4 rounded-xl border ${isOverBudget ? 'bg-red-900/20 border-red-800' : 'bg-green-900/20 border-green-800'}`}>
+                <div className={`mt-6 p-4 rounded-xl border ${isOverBudget ? 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800'}`}>
                     <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-zinc-300">Total Enveloppes</span>
-                        <span className="font-bold">{totalEnvelopes.toFixed(2)} €</span>
+                        <span className="text-sm font-medium text-app-text">Total Enveloppes</span>
+                        <span className="font-bold text-app-text">{totalEnvelopes.toFixed(2)} €</span>
                     </div>
-                    <div className="flex justify-between items-center mb-2 text-amber-500/80">
+                    <div className="flex justify-between items-center mb-2 text-amber-600 dark:text-amber-500/80">
                         <span className="text-sm font-medium">Épargne visée</span>
                         <span className="font-bold">{Number(settings.monthlySavings).toFixed(2)} €</span>
                     </div>
-                    <div className="flex justify-between items-center pt-2 border-t border-dashed border-zinc-700">
-                        <span className="text-sm font-medium text-zinc-300">Équilibre (Reste à allouer)</span>
+                    <div className="flex justify-between items-center pt-2 border-t border-dashed border-app-border">
+                        <span className="text-sm font-medium text-app-text">Équilibre (Reste à allouer)</span>
                         <div className="flex items-center gap-2">
                             {isOverBudget && <AlertTriangle className="h-4 w-4 text-red-500" />}
-                            <span className={`font-bold text-lg ${isOverBudget ? 'text-red-500' : 'text-green-500'}`}>
+                            <span className={`font-bold text-lg ${isOverBudget ? 'text-red-600 dark:text-red-500' : 'text-green-700 dark:text-green-500'}`}>
                                 {remainingBudget.toFixed(2)} €
                             </span>
                         </div>
                     </div>
                     {isOverBudget && (
-                        <p className="text-xs text-red-400 mt-2">Attention : Vos dépenses (Enveloppes + Épargne + Frais) dépassent vos revenus.</p>
+                        <p className="text-xs text-red-600 dark:text-red-400 mt-2">Attention : Vos dépenses (Enveloppes + Épargne + Frais) dépassent vos revenus.</p>
                     )}
                 </div>
             </div>
@@ -489,41 +502,66 @@ export default function SettingsPage() {
 
       {/* Modal Edit/Create */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-             <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4 animate-in fade-in">
+             <div className="w-full max-w-md bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl">
                 <h2 className="text-xl font-bold mb-6">
                     {editingEnvelope ? "Modifier l'enveloppe" : "Nouvelle Enveloppe"}
                 </h2>
                 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm text-zinc-400 mb-1">Nom</label>
+                        <label className="block text-sm text-app-text-secondary mb-1">Nom</label>
                         <input 
                             type="text" 
                             value={modalName}
                             onChange={(e) => setModalName(e.target.value)}
-                            className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
+                            className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
                             placeholder="Ex: Courses"
                         />
                     </div>
                     <div>
-                        <label className="block text-sm text-zinc-400 mb-1">Budget Mensuel</label>
+                        <label className="block text-sm text-app-text-secondary mb-1">Budget Mensuel</label>
                         <div className="relative">
                             <input 
                                 type="number"
                                 inputMode="decimal"
                                 value={modalBudget}
                                 onChange={(e) => setModalBudget(e.target.value)}
-                                className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
+                                className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
                                 placeholder="0"
                             />
-                            <span className="absolute right-3 top-2 text-zinc-500">€</span>
+                            <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
                         </div>
+                        {(() => {
+                            const currentBudget = parseFloat(modalBudget) || 0;
+                            const otherEnvelopesTotal = envelopes
+                                .filter((e) => !editingEnvelope || e.id !== editingEnvelope.id)
+                                .reduce((sum, e) => sum + e.budget, 0);
+                            const budgetAvailable = settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings - otherEnvelopesTotal;
+                            const afterAllocation = budgetAvailable - currentBudget;
+
+                            return (
+                                <div className={`mt-2 rounded-lg border p-3 ${afterAllocation < 0 ? 'bg-red-900/20 border-red-800' : 'bg-green-900/20 border-green-800'}`}>
+                                    <p className="text-xs text-app-text-secondary">
+                                        Budget disponible : <span className="font-semibold text-app-text">{budgetAvailable.toFixed(2)} €</span>
+                                    </p>
+                                    <p className="text-xs mt-1">
+                                        Après allocation : <span className={`font-semibold ${afterAllocation >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{afterAllocation.toFixed(2)} €</span>
+                                    </p>
+                                    {afterAllocation < 0 && (
+                                        <p className="mt-2 text-xs text-red-400 flex items-center gap-1">
+                                            <AlertTriangle className="h-3.5 w-3.5" />
+                                            <span>⚠ Ce budget dépasse le solde disponible</span>
+                                        </p>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Icon Picker */}
                     <div>
-                         <label className="block text-sm text-zinc-400 mb-2">Icône</label>
+                         <label className="block text-sm text-app-text-secondary mb-2">Icône</label>
                          <div className="grid grid-cols-5 gap-2 max-h-32 overflow-y-auto p-1">
                             {ICONS_LIST.map(iconName => {
                                 const Icon = ICON_MAP[iconName];
@@ -531,7 +569,7 @@ export default function SettingsPage() {
                                     <button 
                                         key={iconName}
                                         onClick={() => setModalIcon(iconName)}
-                                        className={`p-2 rounded-lg flex items-center justify-center transition-colors ${modalIcon === iconName ? 'bg-amber-500 text-black' : 'bg-black text-zinc-500 hover:bg-zinc-800'}`}
+                                        className={`p-2 rounded-lg flex items-center justify-center transition-colors ${modalIcon === iconName ? 'bg-amber-500 text-black' : 'bg-app-bg text-app-text-secondary hover:bg-app-surface'}`}
                                     >
                                         <Icon className="h-5 w-5" />
                                     </button>
@@ -542,7 +580,7 @@ export default function SettingsPage() {
 
                     {/* Color Picker */}
                      <div>
-                         <label className="block text-sm text-zinc-400 mb-2">Couleur</label>
+                         <label className="block text-sm text-app-text-secondary mb-2">Couleur</label>
                          <div className="flex flex-wrap gap-2">
                             {COLORS.map(color => (
                                 <button
@@ -558,7 +596,7 @@ export default function SettingsPage() {
                 <div className="flex gap-3 mt-8">
                     <button 
                         onClick={() => setIsModalOpen(false)}
-                        className="flex-1 py-3 rounded-xl bg-zinc-800 font-bold hover:bg-zinc-700 transition-colors"
+                        className="flex-1 py-3 rounded-xl bg-app-surface font-bold hover:bg-app-surface transition-colors"
                     >
                         Annuler
                     </button>

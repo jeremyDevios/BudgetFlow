@@ -72,7 +72,7 @@ struct EnvelopeDetailView: View {
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
                             .padding()
-                            .listRowBackground(Color(hex: "1C1C1E"))
+                            .listRowBackground(Color.appSurface)
                     } else {
                         ForEach(filteredTransactions) { tx in
                             TransactionDetailRow(transaction: tx)
@@ -85,13 +85,13 @@ struct EnvelopeDetailView: View {
                                         Label("Supprimer", systemImage: "trash")
                                     }
                                 }
-                                .listRowBackground(Color(hex: "1C1C1E"))
+                                .listRowBackground(Color.appSurface)
                         }
                     }
                 } header: {
                     Text("Historique")
                         .font(.subheadline.bold())
-                        .foregroundStyle(Color.appYellow)
+                        .foregroundStyle(Color.appAccent)
                         .textCase(.none)
                 }
             }
@@ -99,7 +99,7 @@ struct EnvelopeDetailView: View {
             .scrollContentBackground(.hidden)
             .background(
                 LinearGradient(
-                    colors: [Color(hex: "18181B"), Color(hex: "09090B")],
+                    colors: [Color.appSurface, Color.appBackground],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -114,9 +114,9 @@ struct EnvelopeDetailView: View {
                     .font(.title2.bold())
                     .foregroundStyle(.black)
                     .frame(width: 56, height: 56)
-                    .background(Color.appYellow)
+                        .background(Color.appAccent)
                     .clipShape(Circle())
-                    .shadow(color: Color.appYellow.opacity(0.4), radius: 12, y: 4)
+                        .shadow(color: Color.appAccent.opacity(0.4), radius: 12, y: 4)
             }
             .padding(.trailing, 20)
             .padding(.bottom, 20)

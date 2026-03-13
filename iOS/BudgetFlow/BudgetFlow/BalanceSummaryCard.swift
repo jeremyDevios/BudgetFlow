@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct BalanceSummaryCard: View {
+    @Environment(\.colorScheme) private var colorScheme
     let currentMonthBalance: Double
     let availablePlanned: Double
     let totalSpentThisMonth: Double
@@ -10,22 +11,36 @@ struct BalanceSummaryCard: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            // Background layers
+            // Fond adaptatif
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color.black)
+                .fill(
+                    colorScheme == .dark
+                        ? LinearGradient(
+                            colors: [Color(red: 0.08, green: 0.08, blue: 0.10), Color(red: 0.05, green: 0.05, blue: 0.06)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        : LinearGradient(
+                            colors: [Color(.systemGray5), Color(.systemGray6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                )
 
-            // Amber radial glow top-right
+            // Amber radial glow (meme dans les deux modes, legerement adapte)
             RadialGradient(
-                colors: [Color(hex: "F59E0B").opacity(0.35), Color.clear],
+                colors: [
+                    Color(red: 0.961, green: 0.620, blue: 0.043)
+                        .opacity(colorScheme == .dark ? 0.35 : 0.25),
+                    Color.clear
+                ],
                 center: .topTrailing,
                 startRadius: 0,
                 endRadius: 180
             )
             .clipShape(RoundedRectangle(cornerRadius: 24))
 
-            // Subtle border
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            // Pas de stroke border
 
             // Content
             VStack(spacing: 6) {
@@ -37,7 +52,7 @@ struct BalanceSummaryCard: View {
 
                 Text(currentMonthBalance, format: .currency(code: "EUR"))
                     .font(.system(size: 40, weight: .bold, design: .rounded))
-                    .foregroundStyle(currentMonthBalance < 0 ? Color.red : Color.white)
+                    .foregroundStyle(currentMonthBalance < 0 ? Color(uiColor: .systemRed) : Color.appText)
                     .contentTransition(.numericText())
 
                 Text("Sur \(Int(availablePlanned)) € prévus")
@@ -72,6 +87,7 @@ struct BalanceSummaryCard: View {
 // MARK: - Global Progress Bar
 
 private struct GlobalProgressBar: View {
+    @Environment(\.colorScheme) private var colorScheme
     let progress: Double
     let totalSpent: Double
 
@@ -92,7 +108,7 @@ private struct GlobalProgressBar: View {
             .foregroundStyle(.secondary)
 
             Capsule()
-                .fill(.white.opacity(0.12))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.12))
                 .frame(height: 10)
                 .overlay(alignment: .leading) {
                     GeometryReader { geo in

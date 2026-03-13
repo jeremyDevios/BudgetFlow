@@ -55,7 +55,7 @@ export default function ProtectedLayout({
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-black text-white">
+      <div className="flex h-screen w-full items-center justify-center bg-app-bg text-app-text">
         <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
       </div>
     );

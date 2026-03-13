@@ -25,7 +25,7 @@ struct CashFlowView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: [Color(hex: "18181B"), Color(hex: "09090B")],
+                colors: [Color.appSurface, Color.appBackground],
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -38,13 +38,16 @@ struct CashFlowView: View {
                             .frame(height: 420)
                             .padding(.horizontal, 16)
                             .padding(.top, 16)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Diagramme de flux financier")
+                            .accessibilityValue("Revenus distribués entre charges fixes, épargne et enveloppes")
 
                         let totalAllocated = settings.monthlySavings + settings.fixedCosts + envelopes.reduce(0) { $0 + $1.budget }
                         let unallocated = settings.monthlyIncome - totalAllocated
 
                         HStack(spacing: 12) {
                             SummaryCard(label: "Revenu Total", amount: settings.monthlyIncome, color: Color.appGreen)
-                            SummaryCard(label: "Total Alloué", amount: totalAllocated, color: Color.appYellow)
+                            SummaryCard(label: "Total Alloué", amount: totalAllocated, color: Color.appAccent)
                         }
                         .padding(.horizontal, 16)
 
@@ -150,10 +153,10 @@ private struct SankeyDiagramView: View {
             }
             .background {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(hex: "1C1C1E"))
+                    .fill(Color.appSurface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(.white.opacity(0.08), lineWidth: 1)
+                            .stroke(Color.appBorder, lineWidth: 1)
                     )
             }
             .overlay {
@@ -306,10 +309,10 @@ private struct SummaryCard: View {
         .padding(14)
         .background {
             RoundedRectangle(cornerRadius: 14)
-                .fill(Color(hex: "1C1C1E"))
+                .fill(Color.appSurface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
-                        .stroke(.white.opacity(0.08), lineWidth: 1)
+                        .stroke(Color.appBorder, lineWidth: 1)
                 )
         }
     }
