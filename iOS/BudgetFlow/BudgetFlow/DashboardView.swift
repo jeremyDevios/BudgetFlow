@@ -2,195 +2,197 @@ import SwiftUI
 import SwiftData
 
 struct DashboardView: View {
+    @Environment(SyncService.self) private var syncService
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Envelope.orderIndex) private var envelopes: [Envelope]
-    @Query private var transactions: [Transaction]
+    @Query(sort: \Envelope.order) private var envelopes: [Envelope]
     @Query private var userSettings: [UserSettings]
-    
-    @State private var showingAddTransaction = false
-    @State private var showingSettings = false
+
     @State private var selectedMonth = Date()
-    
-    var settings: UserSettings? {
-        userSettings.first
+    @State private var showingAddTransaction = false
+    @State private var selectedEnvelopeForTransaction: Envelope? = nil
+    @State private var showingSettings = false
+    @State private var isRefreshing = false
+
+    var settings: UserSettings? { userSettings.first }
+
+    var monthRange: (start: Date, end: Date) {
+        (Calendar.current.startOfMonth(for: selectedMonth),
+         Calendar.current.endOfMonth(for: selectedMonth))
     }
-    
-    var totalBudget: Double {
-        envelopes.reduce(0) { $0 + $1.budget }
+
+    var spentPerEnvelope: [UUID: Double] {
+        Dictionary(uniqueKeysWithValues: envelopes.map {
+            ($0.id, monthlySpent(for: $0, in: monthRange))
+        })
     }
-    
-    var totalSpent: Double {
-        envelopes.reduce(0) { $0 + ($1.spent) } // Verify if spent is updated correctly
-    }
-    
-    var remainingAvailable: Double {
+
+    var totalSpentThisMonth: Double { spentPerEnvelope.values.reduce(0, +) }
+
+    var availablePlanned: Double {
         guard let s = settings else { return 0 }
-        return s.monthlyIncome - s.fixedCosts - s.monthlySavings - totalSpent
+        return s.monthlyIncome - s.fixedCosts - s.monthlySavings
     }
-    
-    var progress: Double {
-        guard settings != nil else { return 0 }
-        _ = totalBudget // Or total available for envelopes
-        // Logic: if budget is arbitrary, just sum of envelopes? 
-        // In screenshots: "Reste Disponible 156.56 / 1000 prévus". 
-        // It seems 1000 is the sum of envelopes budgets? Or remaining after fixed costs?
-        // Let's assume user tracks envelope spending against envelope budgets.
-        // But the big dashboard card might be Global "Left to Spend" based on (Income - Fixed - Savings) -> "Reste à vivre"
-        
-        // Let's stick to the screenshot: "Reste Disponible ... Sur 1000€ prévus".
-        // 1000 seems to be the total of envelopes budgets.
-        return totalBudget > 0 ? totalSpent / totalBudget : 0
+
+    var currentMonthBalance: Double { availablePlanned - totalSpentThisMonth }
+
+    var globalProgress: Double {
+        availablePlanned > 0 ? totalSpentThisMonth / availablePlanned : 0
     }
 
     var body: some View {
-        NavigationStack {
+        ZStack(alignment: .bottomTrailing) {
+            // Dark gradient background
+            LinearGradient(
+                colors: [Color.appSurface, Color.appBackground],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
             ScrollView {
                 VStack(spacing: 20) {
-                    // Header Month Selector
-                    HStack {
-                        Button(action: { changeMonth(-1) }) {
-                            Image(systemName: "chevron.left")
+                    if isRefreshing {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Actualisation...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                        Text(selectedMonth, format: .dateTime.month(.wide).year())
-                            .font(.headline)
-                        Button(action: { changeMonth(1) }) {
-                            Image(systemName: "chevron.right")
-                        }
-                        Spacer()
-                        Button(action: { showingSettings = true }) {
-                            Image(systemName: "gear")
-                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .animation(.easeInOut, value: isRefreshing)
                     }
-                    .padding()
-                    
-                    // Main Card
-                    VStack {
-                        Text("RESTE DISPONIBLE")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        Text(remainingAvailable, format: .currency(code: "EUR"))
-                            .font(.system(size: 34, weight: .bold))
-                            .foregroundStyle(self.progress > 1.0 ? Color(.systemRed) : Color(.systemOrange))
-                        
-                        Text("Sur \(totalBudget, format: .currency(code: "EUR")) prévus")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        
-                        // Progress Bar
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                Rectangle()
-                                    .frame(width: geometry.size.width, height: 12)
-                                    .opacity(0.3)
-                                    .foregroundColor(.gray)
-                                    .cornerRadius(6)
-                                
-                                Rectangle()
-                                    .frame(width: min(CGFloat(self.progress) * geometry.size.width, geometry.size.width), height: 12)
-                                    .foregroundColor(self.progress > 1.0 ? .red : .orange)
-                                    .cornerRadius(6)
-                            }
+
+                    BalanceSummaryCard(
+                        currentMonthBalance: currentMonthBalance,
+                        availablePlanned: availablePlanned,
+                        totalSpentThisMonth: totalSpentThisMonth,
+                        globalProgress: globalProgress,
+                        envelopes: envelopes,
+                        spentPerEnvelope: spentPerEnvelope
+                    )
+
+                    EnvelopeGridSection(
+                        envelopes: envelopes,
+                        spentPerEnvelope: spentPerEnvelope,
+                        monthRange: monthRange,
+                        onAddTransaction: { envelope in
+                            selectedEnvelopeForTransaction = envelope
+                            showingAddTransaction = true
                         }
-                        .frame(height: 12)
-                        .padding(.top, 10)
-                        
-                        HStack {
-                            Text("Dépenses : \(totalSpent, format: .currency(code: "EUR"))")
-                            Spacer()
-                            Text("\(Int(progress * 100))%")
-                        }
-                        .font(.caption)
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 100)
+            }
+            .scrollIndicators(.hidden)
+            .refreshable {
+                guard let settings,
+                      settings.isOnlineMode,
+                      !settings.firebaseUserId.isEmpty else { return }
+                isRefreshing = true
+                defer { isRefreshing = false }
+                try? await syncService.loadFromFirestore(
+                    userId: settings.firebaseUserId,
+                    into: modelContext
+                )
+            }
+
+            // FAB
+            Button {
+                selectedEnvelopeForTransaction = nil
+                showingAddTransaction = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.title2.bold())
+                    .foregroundStyle(.black)
+                    .frame(width: 56, height: 56)
+                        .background(Color.appAccent)
+                    .clipShape(Circle())
+                        .shadow(color: Color.appAccent.opacity(0.4), radius: 12, y: 4)
+            }
+            .padding(.trailing, 20)
+            .padding(.bottom, 20)
+                    .accessibilityLabel("Ajouter une transaction")
+            .sensoryFeedback(.impact, trigger: showingAddTransaction)
+        }
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                MonthSelectorPill(selectedMonth: $selectedMonth)
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    showingSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
                         .foregroundStyle(.secondary)
-                        .padding(.top, 5)
-                    }
-                    .padding()
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .cornerRadius(20)
-                    .padding(.horizontal)
-                    
-                    // Envelopes List
-                    VStack(alignment: .leading) {
-                        Text("Mes Enveloppes")
-                            .font(.headline)
-                            .padding(.horizontal)
-                        
-                        ForEach(envelopes) { envelope in
-                            NavigationLink(destination: EnvelopeDetailView(envelope: envelope)) {
-                                EnvelopeRow(envelope: envelope)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
                 }
+                .accessibilityLabel("Paramètres")
             }
-            .navigationTitle("")
-            .toolbar {
-                ToolbarItem(placement: .bottomBar) {
-                    Button(action: { showingAddTransaction = true }) {
-                        Image(systemName: "plus.circle.fill")
-                            .resizable()
-                            .frame(width: 50, height: 50)
-                            .foregroundColor(.orange)
-                    }
-                }
-            }
-            .sheet(isPresented: $showingAddTransaction) {
-                 AddTransactionView(envelopes: envelopes)
-            }
-            .sheet(isPresented: $showingSettings) {
-                if let s = settings {
-                    SettingsView(settings: s)
-                }
+        }
+        .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(for: Envelope.self) { envelope in
+            EnvelopeDetailView(envelope: envelope, selectedMonth: selectedMonth)
+        }
+        .sheet(isPresented: $showingAddTransaction) {
+            AddTransactionView(
+                envelopes: envelopes,
+                preselectedEnvelope: selectedEnvelopeForTransaction
+            )
+        }
+        .sheet(isPresented: $showingSettings) {
+            if let s = settings {
+                SettingsView(settings: s)
             }
         }
     }
-    
-    func changeMonth(_ value: Int) {
+}
+
+// MARK: - Month Selector Pill
+
+private struct MonthSelectorPill: View {
+    @Binding var selectedMonth: Date
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button { changeMonth(-1) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+            }
+            .accessibilityLabel("Mois précédent")
+
+            Text(selectedMonth, format: .dateTime.month(.wide).year())
+                .font(.subheadline.bold())
+                .frame(minWidth: 130)
+                .textCase(.none)
+
+            Button { changeMonth(1) } label: {
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+            }
+            .accessibilityLabel("Mois suivant")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay(Capsule().stroke(.white.opacity(0.15), lineWidth: 1))
+    }
+
+    private func changeMonth(_ value: Int) {
         if let newDate = Calendar.current.date(byAdding: .month, value: value, to: selectedMonth) {
             selectedMonth = newDate
         }
     }
 }
 
-struct EnvelopeRow: View {
-    @Bindable var envelope: Envelope
-    
-    var body: some View {
-        HStack {
-            EnvelopeIconView(icon: envelope.icon, colorString: envelope.color, size: 50)
-            
-            VStack(alignment: .leading) {
-                Text(envelope.name)
-                    .font(.headline)
-                
-                Text("\(envelope.spent, format: .currency(code: "EUR"))")
-                    .font(.title3)
-                    .bold()
-                
-                ProgressView(value: envelope.spent, total: envelope.budget)
-                    .tint(Color.fromString(envelope.color))
-            }
-            Spacer()
-            
-            VStack(alignment: .trailing) {
-                Image(systemName: "ellipsis")
-                    .foregroundColor(.gray)
-                Spacer()
-                Text("sur \(envelope.budget, format: .currency(code: "EUR"))")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        } // End HStack
-        .padding()
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(15)
-        .padding(.horizontal)
-        .padding(.vertical, 4)
-    }
-}
-
 #Preview {
-    DashboardView()
-        .modelContainer(for: [UserSettings.self, Envelope.self, Transaction.self], inMemory: true)
+    NavigationStack {
+        DashboardView()
+    }
+    .modelContainer(for: [UserSettings.self, Envelope.self, Transaction.self], inMemory: true)
+    .environment(SyncService())
+    .preferredColorScheme(.dark)
 }

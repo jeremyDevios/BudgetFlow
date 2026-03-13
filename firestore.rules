@@ -16,6 +16,23 @@ service cloud.firestore {
       return email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
     }
 
+    function isValidEnvelopeData(data) {
+      return data.budget is number
+        && data.budget > 0
+        && data.budget <= 1000000
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 50;
+    }
+
+    function isValidTransactionData(data) {
+      return data.amount is number
+        && data.amount > 0
+        && data.amount <= 1000000
+        && (!("note" in data) || (data.note is string && data.note.size() <= 255))
+        && (!("description" in data) || (data.description is string && data.description.size() <= 255));
+    }
+
     // --- USER COLLECTION RULES ---
     match /users/{userId} {
       // Allow users to read/write only their own document
@@ -33,16 +50,16 @@ service cloud.firestore {
       // --- ENVELOPES SUBCOLLECTION ---
       match /envelopes/{envelopeId} {
         allow read: if isAuthenticated() && isUserOwner(userId);
-        allow create: if isAuthenticated() && isUserOwner(userId);
-        allow update: if isAuthenticated() && isUserOwner(userId);
+        allow create: if isAuthenticated() && isUserOwner(userId) && isValidEnvelopeData(request.resource.data);
+        allow update: if isAuthenticated() && isUserOwner(userId) && isValidEnvelopeData(request.resource.data);
         allow delete: if isAuthenticated() && isUserOwner(userId);
       }
 
       // --- TRANSACTIONS SUBCOLLECTION ---
       match /transactions/{transactionId} {
         allow read: if isAuthenticated() && isUserOwner(userId);
-        allow create: if isAuthenticated() && isUserOwner(userId);
-        allow update: if isAuthenticated() && isUserOwner(userId);
+        allow create: if isAuthenticated() && isUserOwner(userId) && isValidTransactionData(request.resource.data);
+        allow update: if isAuthenticated() && isUserOwner(userId) && isValidTransactionData(request.resource.data);
         allow delete: if isAuthenticated() && isUserOwner(userId);
       }
     }

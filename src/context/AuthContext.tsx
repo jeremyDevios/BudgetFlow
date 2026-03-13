@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { onAuthStateChanged, User, setPersistence, browserSessionPersistence, signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
 
@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Configurer la persistance
-    setPersistence(auth, browserLocalPersistence).catch((error) => {
+    setPersistence(auth, browserSessionPersistence).catch(() => {
       logger.warn("Persistence configuration failed");
     });
 
@@ -31,6 +31,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+    let inactivityTimer: ReturnType<typeof setTimeout>;
+
+    const resetInactivityTimer = () => {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        signOut(auth).catch(() => {
+          logger.warn("Auto sign-out on inactivity failed");
+        });
+      }, INACTIVITY_TIMEOUT_MS);
+    };
+
+    const events: Array<keyof WindowEventMap> = ["mousemove", "keydown", "click", "touchstart"];
+
+    resetInactivityTimer();
+    events.forEach((eventName) => window.addEventListener(eventName, resetInactivityTimer));
+
+    return () => {
+      clearTimeout(inactivityTimer);
+      events.forEach((eventName) => window.removeEventListener(eventName, resetInactivityTimer));
+    };
+  }, [user]);
 
   return (
     <AuthContext.Provider value={{ user, loading }}>

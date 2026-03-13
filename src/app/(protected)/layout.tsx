@@ -5,8 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
-import { db, auth } from "@/lib/firebase";
-import { signOut } from "firebase/auth";
+import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { usePathname } from "next/navigation";
 
@@ -22,13 +21,6 @@ export default function ProtectedLayout({
   useEffect(() => {
     const checkOnboarding = async () => {
       if (user) {
-        // Validation email désactivée pour le développement/MVP
-        /* if (!user.emailVerified) {
-          await signOut(auth);
-          router.push("/login");
-          return;
-        } */
-
         // Vérifier si l'utilisateur a déjà fait l'onboarding
         try {
           const settingsRef = doc(db, "users", user.uid, "settings", "general");
@@ -63,7 +55,7 @@ export default function ProtectedLayout({
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-black text-white">
+      <div className="flex h-screen w-full items-center justify-center bg-app-bg text-app-text">
         <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
       </div>
     );

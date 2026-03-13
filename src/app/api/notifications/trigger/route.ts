@@ -5,10 +5,8 @@ export const dynamic = 'force-dynamic'; // Prevent caching
 
 export async function GET(request: Request) {
   // 1. Security Check
-  const { searchParams } = new URL(request.url);
-  const key = searchParams.get("key");
-  
-  if (key !== process.env.CRON_SECRET) {
+  const key = request.headers.get("x-cron-secret");
+  if (!key || key !== process.env.CRON_SECRET) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
@@ -104,7 +102,7 @@ export async function GET(request: Request) {
         notifications.push(
           adminMessaging.send(message).then(() => {
             sentCount++;
-            console.log(`Notification sent to ${userDoc.id}`);
+            console.log("Notification sent successfully");
           }).catch((error) => {
             console.error(`Error sending to user ${userDoc.id}:`, error);
             // If invalid token, remove it
@@ -125,15 +123,13 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
-      total_users_scanned: usersSnap.size,
-      eligible_users: eligibleCount,
       sent: sentCount
     });
     
   } catch (error: any) {
     console.error("Cron Error:", error);
     return NextResponse.json(
-      { error: error.message || "Internal Server Error" },
+      { error: process.env.NODE_ENV === "development" ? error.message : "Internal Server Error" },
       { status: 500 }
     );
   }

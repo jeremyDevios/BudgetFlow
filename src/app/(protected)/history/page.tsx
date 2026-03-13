@@ -76,20 +76,20 @@ export default function HistoryPage() {
     setTransactionToEdit(null);
   };
 
-  if (loading) return <div className="min-h-screen bg-black text-white p-8">Chargement...</div>;
+  if (loading) return <div className="min-h-screen bg-app-bg text-app-text p-8">Chargement...</div>;
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 pb-20">
-      <header className="flex items-center justify-between mb-8 sticky top-0 bg-black/80 backdrop-blur-md py-4 z-10 border-b border-zinc-800">
+    <div className="min-h-screen bg-app-bg text-app-text p-4 pb-20">
+      <header className="flex items-center justify-between mb-8 sticky top-0 bg-app-bg/80 backdrop-blur-md py-4 z-10 border-b border-app-border">
         <div className="flex items-center gap-4">
-            <button onClick={() => router.back()} className="p-2 bg-zinc-900 rounded-full hover:bg-zinc-800 transition-colors">
+            <button onClick={() => router.back()} className="p-2 bg-app-surface rounded-full hover:bg-app-surface transition-colors">
                 <MoveLeft className="h-6 w-6" />
             </button>
             <h1 className="text-2xl font-bold">Historique Global</h1>
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto relative border-l border-zinc-800 ml-4 sm:ml-8 space-y-8 pl-8 sm:pl-12 my-8">
+      <div role="list" className="max-w-3xl mx-auto relative border-l border-app-border ml-4 sm:ml-8 space-y-8 pl-8 sm:pl-12 my-8">
         {transactions.map((tx, index) => {
             const env = envelopes[tx.envelopeId] || {};
             const Icon = ICON_MAP[env.icon] || ShoppingCart;
@@ -104,7 +104,7 @@ export default function HistoryPage() {
                     {/* Month Divider */}
                     {showMonthDivider && (
                         <div className="absolute -left-[54px] sm:-left-[70px] -top-10 flex items-center mb-6 mt-2">
-                             <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest bg-black py-1 pr-2">
+                             <span className="text-app-text-secondary text-xs font-bold uppercase tracking-widest bg-app-bg py-1 pr-2">
                                 {dateObj.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
                              </span>
                         </div>
@@ -115,15 +115,15 @@ export default function HistoryPage() {
 
                     <div 
                         onClick={() => handleEditClick(tx)}
-                        className="bg-zinc-900/40 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60 p-4 rounded-xl transition-all flex items-center justify-between group cursor-pointer"
+                        className="bg-app-surface/40 border border-app-border hover:border-app-border hover:bg-app-surface/60 p-4 rounded-xl transition-all flex items-center justify-between group cursor-pointer"
                     >
                          <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl ${env.color || 'bg-zinc-800'} text-white`}>
+                            <div className={`p-3 rounded-xl ${env.color || 'bg-app-surface'} text-app-text`}>
                                 <Icon className="h-5 w-5" />
                             </div>
                             <div>
-                                <p className="font-semibold text-white">{tx.description || env.name || "Dépense"}</p>
-                                <p className="text-xs text-zinc-500 flex items-center gap-1">
+                                <p className="font-semibold text-app-text">{tx.description || env.name || "Dépense"}</p>
+                                <p className="text-xs text-app-text-secondary flex items-center gap-1">
                                     {dateObj.toLocaleDateString()}
                                     <span className="text-zinc-600">•</span>
                                     {env.name}

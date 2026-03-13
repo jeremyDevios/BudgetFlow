@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import FirebaseAuth
 
 // MARK: - Extensions for Keyboard Dismissal
 extension View {
@@ -23,15 +24,45 @@ extension Color {
     }
 }
 
+private struct PageFlipModifier: ViewModifier {
+    let angle: Double
+    let anchor: UnitPoint
+
+    func body(content: Content) -> some View {
+        content
+            .rotation3DEffect(.degrees(angle), axis: (0, 1, 0), anchor: anchor, perspective: 0.5)
+            .opacity(abs(angle) > 70 ? 0 : 1)
+    }
+}
+
+extension AnyTransition {
+    static func pageFlip(forward: Bool) -> AnyTransition {
+        .asymmetric(
+            insertion: .modifier(
+                active: PageFlipModifier(angle: forward ? 90 : -90,
+                                         anchor: forward ? .trailing : .leading),
+                identity: PageFlipModifier(angle: 0, anchor: .center)
+            ),
+            removal: .modifier(
+                active: PageFlipModifier(angle: forward ? -90 : 90,
+                                         anchor: forward ? .leading : .trailing),
+                identity: PageFlipModifier(angle: 0, anchor: .center)
+            )
+        )
+    }
+}
+
 
 struct OnboardingView: View {
     @Environment(\.modelContext) private var modelContext
-    @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted = false
+    @Environment(SyncService.self) private var syncService
+    @Environment(FirebaseManager.self) private var firebaseManager
+    @AppStorage("isOnboarded") private var isOnboarded = false
     @Binding var settings: UserSettings
     
     @State private var step: Int = 0 
     @State private var previousStep: Int = 0
-    // 0: Welcome, 1: Basics, 2: Envelopes
+    // 0: Welcome, 1: Storage mode, 2: Basics, 3: Envelopes
     
     // Data State
     @State private var monthlyIncome: Double?
@@ -40,6 +71,10 @@ struct OnboardingView: View {
     
     // Custom Envelopes State
     @State private var tempEnvelopes: [TempEnvelope] = []
+    @State private var isOnlineMode: Bool = false
+    @State private var showAuthSheet: Bool = false
+    @State private var firebaseUser: FirebaseAuth.User? = nil
+    @State private var isFinishing: Bool = false
     
     // Transitions
     @Namespace private var animation
@@ -55,104 +90,153 @@ struct OnboardingView: View {
                     hideKeyboard()
                 }
             
-            // Background Animation Layer (Visible on Step 0)
-            if step == 0 {
-                FloatingIconsBackground()
-                    .transition(.opacity)
-            }
-            
             VStack {
                 if step == 0 {
-                    WelcomeView(onStart: { 
-                        withAnimation { 
+                    WelcomeView(onStart: {
+                        withAnimation {
                             previousStep = step
-                            step = 1 
-                        } 
+                            step = 1
+                        }
                     })
-                    .transition(.asymmetric(
-                        insertion: .move(edge: isMovingForward ? .trailing : .leading),
-                        removal: .move(edge: isMovingForward ? .leading : .trailing)
-                    ))
+                    .id(0)
+                    .transition(.pageFlip(forward: isMovingForward))
                 } else if step == 1 {
+                    StorageModeView(
+                        onBack: {
+                            withAnimation {
+                                previousStep = step
+                                step = 0
+                            }
+                        },
+                        onOffline: {
+                            isOnlineMode = false
+                            if tempEnvelopes.isEmpty { initDefaultEnvelopes() }
+                            withAnimation {
+                                previousStep = step
+                                step = 2
+                            }
+                        },
+                        onOnline: {
+                            isOnlineMode = true
+                            showAuthSheet = true
+                        }
+                    )
+                    .id(1)
+                    .transition(.pageFlip(forward: isMovingForward))
+                } else if step == 2 {
                     StepBasicsView(
                         income: $monthlyIncome,
                         fixedCosts: $fixedCosts,
                         savings: $monthlySavings,
-                        onBack: { 
-                            withAnimation { 
+                        onBack: {
+                            withAnimation {
                                 previousStep = step
-                                step = 0 
-                            } 
+                                step = 1
+                            }
                         },
                         onContinue: {
-                            // Initialize default envelopes if empty
-                            if tempEnvelopes.isEmpty {
-                                tempEnvelopes = [
-                                    TempEnvelope(name: "Courses", icon: "cart", color: "Blue", amount: 300),
-                                    TempEnvelope(name: "Essence", icon: "fuelpump", color: "Orange", amount: 150),
-                                    TempEnvelope(name: "Loisirs", icon: "gamecontroller", color: "Green", amount: 100)
-                                ]
-                            }
-                            withAnimation { 
+                            if tempEnvelopes.isEmpty { initDefaultEnvelopes() }
+                            withAnimation {
                                 previousStep = step
-                                step = 2 
+                                step = 3
                             }
                         }
                     )
-                    .id(step)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: isMovingForward ? .trailing : .leading),
-                        removal: .move(edge: isMovingForward ? .leading : .trailing)
-                    ))
-                } else if step == 2 {
+                    .id(2)
+                    .transition(.pageFlip(forward: isMovingForward))
+                } else if step == 3 {
                     StepEnvelopesView(
                         income: monthlyIncome ?? 0,
                         fixedCosts: fixedCosts ?? 0,
                         savings: monthlySavings ?? 0,
                         envelopes: $tempEnvelopes,
-                        onBack: { 
-                            withAnimation { 
+                        onBack: {
+                            withAnimation {
                                 previousStep = step
-                                step = 1 
-                            } 
+                                step = 2
+                            }
                         },
-                        onFinish: finishOnboarding
+                        onFinish: {
+                            Task { await finishOnboarding() }
+                        }
                     )
-                    .id(step)
-                    .transition(.asymmetric(
-                        insertion: .move(edge: isMovingForward ? .trailing : .leading),
-                        removal: .move(edge: isMovingForward ? .leading : .trailing)
-                    ))
+                        .id(3)
+                        .transition(.pageFlip(forward: isMovingForward))
                 }
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: step)
+        .sheet(isPresented: $showAuthSheet) {
+            AuthView(
+                onSuccess: { user in
+                    firebaseUser = user
+                    showAuthSheet = false
+                    Task {
+                        let hasData = await syncService.checkDataExists(for: user.uid)
+                        if hasData {
+                            try? await syncService.loadFromFirestore(userId: user.uid, into: modelContext)
+                            settings.isOnlineMode = true
+                            settings.firebaseUserId = user.uid
+                            settings.isOnboarded = true
+                            isOnboarded = true
+                        } else {
+                            if tempEnvelopes.isEmpty { initDefaultEnvelopes() }
+                            withAnimation {
+                                previousStep = 1
+                                step = 2
+                            }
+                        }
+                    }
+                },
+                onDismiss: { showAuthSheet = false }
+            )
+            .environment(firebaseManager)
+            .environment(syncService)
+        }
+        .animation(.easeInOut(duration: 0.45), value: step)
     }
     
-    private func finishOnboarding() {
-        // Save Settings
+    private func initDefaultEnvelopes() {
+        tempEnvelopes = [
+            TempEnvelope(name: "Courses", icon: "cart", color: "Blue", amount: 300),
+            TempEnvelope(name: "Essence", icon: "fuelpump", color: "Orange", amount: 150),
+            TempEnvelope(name: "Loisirs", icon: "gamecontroller", color: "Green", amount: 100)
+        ]
+    }
+
+    private func finishOnboarding() async {
+        isFinishing = true
+
+        // Save settings
         settings.monthlyIncome = monthlyIncome ?? 0
         settings.fixedCosts = fixedCosts ?? 0
         settings.monthlySavings = monthlySavings ?? 0
-        
-        // Save Envelopes to SwiftData
+        settings.isOnlineMode = isOnlineMode
+
+        // Save envelopes to SwiftData
         try? modelContext.delete(model: Envelope.self)
-        
+
+        var createdEnvelopes: [Envelope] = []
         for (index, env) in tempEnvelopes.enumerated() {
-            // Convert color name to hex for consistency with rest of app
             let colorHex = Color.fromString(env.color).toHex() ?? "0000FF"
-            
             let newEnv = Envelope(
                 name: env.name,
                 icon: env.icon,
                 color: colorHex,
                 budget: env.amount,
-                orderIndex: index
+                order: index
             )
             modelContext.insert(newEnv)
+            createdEnvelopes.append(newEnv)
         }
-        
-        isOnboardingCompleted = true
+
+        // If online mode, save to Firestore
+        if isOnlineMode, let user = firebaseUser {
+            settings.firebaseUserId = user.uid
+            try? await syncService.saveToFirestore(settings: settings, envelopes: createdEnvelopes, userId: user.uid)
+        }
+
+        isFinishing = false
+        isOnboarded = true
     }
 }
 
@@ -196,7 +280,7 @@ struct EnvelopeEditorSheet: View {
     
     var body: some View {
         ZStack {
-            Color.black.opacity(0.8).ignoresSafeArea()
+            Color.appBackground.opacity(0.8).ignoresSafeArea()
                 .onTapGesture {
                     // Optional: dismiss on background tap? Maybe not for modal
                 }
@@ -205,17 +289,17 @@ struct EnvelopeEditorSheet: View {
                 Text("Modifier l'enveloppe")
                     .font(.title2)
                     .bold()
-                    .foregroundColor(.white)
+                    .foregroundColor(.appText)
                 
                 // Name
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Nom").font(.caption).foregroundColor(.gray)
                     TextField("Type", text: $editedName)
                         .padding()
-                        .background(Color.black)
+                        .background(Color.appBackground)
                         .cornerRadius(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
-                        .foregroundColor(.white)
+                        .foregroundColor(.appText)
                 }
                 
                 // Amount
@@ -224,14 +308,14 @@ struct EnvelopeEditorSheet: View {
                     HStack {
                         TextField("0", text: $editedAmountText)
                             .keyboardType(.decimalPad)
-                            .foregroundColor(.white)
+                            .foregroundColor(.appText)
                             .onChange(of: editedAmountText) { oldValue, newValue in
                                 // No need to update anything here, convertToDouble will handle it in onSave
                             }
                         Text("€").foregroundColor(.gray)
                     }
                     .padding()
-                    .background(Color.black)
+                    .background(Color.appBackground)
                     .cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
                 }
@@ -244,7 +328,7 @@ struct EnvelopeEditorSheet: View {
                             Image(systemName: icon)
                                 .foregroundColor(editedIcon == icon ? .black : .gray)
                                 .padding(10)
-                                .background(editedIcon == icon ? Color.appYellow : Color.appSurface)
+                                .background(editedIcon == icon ? Color.appAccent : Color.appSurface)
                                 .cornerRadius(8)
                                 .onTapGesture {
                                     editedIcon = icon
@@ -281,10 +365,10 @@ struct EnvelopeEditorSheet: View {
                     Button(action: onCancel) {
                         Text("Annuler")
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(.appText)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.white.opacity(0.1))
+                            .background(Color.appText.opacity(0.1))
                             .cornerRadius(12)
                     }
                     
@@ -308,7 +392,7 @@ struct EnvelopeEditorSheet: View {
                 }
             }
             .padding(24)
-            .background(Color(hex: "1C1C1E")) // Background similar to image
+            .background(Color.appSurface) // Background similar to image
             .cornerRadius(20)
             .padding(.horizontal, 20)
         }
@@ -331,34 +415,38 @@ struct WelcomeView: View {
     var onStart: () -> Void
     
     var body: some View {
-        VStack {
-            Spacer()
-            
-            VStack(spacing: 0) {
-                Text("Maîtrisez votre")
-                    .foregroundColor(.white)
-                Text("Budget")
-                    .foregroundColor(.appYellow)
-            }
-            .font(.system(size: 42, weight: .black))
-            .multilineTextAlignment(.center)
-            .shadow(color: .appYellow.opacity(0.3), radius: 20, x: 0, y: 10)
+        ZStack {
+            FloatingIconsBackground()
 
-            
-            Text("La méthode des enveloppes, revisitée. Calculez le montant idéal de vos enveloppes selon vos revenus, charges et objectifs d'épargne. Un budget sur-mesure pour maîtriser vos dépenses et réaliser vos rêves.")
-                .font(.body)
+            VStack {
+                Spacer()
+                
+                VStack(spacing: 0) {
+                    Text("Maîtrisez votre")
+                        .foregroundColor(.appText)
+                    Text("Budget")
+                        .foregroundColor(.appAccent)
+                }
+                .font(.system(size: 42, weight: .black))
                 .multilineTextAlignment(.center)
-                .foregroundColor(.gray)
-                .padding(.horizontal, 30)
-                .padding(.top, 20)
-            
-            Spacer()
-            
-            PrimaryButton(title: "Commencer", icon: "arrow.right", action: onStart)
-                .padding(.horizontal, 40)
-                .padding(.bottom, 50)
+                .shadow(color: .appAccent.opacity(0.3), radius: 20, x: 0, y: 10)
+
+                
+                Text("La méthode des enveloppes, revisitée. Calculez le montant idéal de vos enveloppes selon vos revenus, charges et objectifs d'épargne. Un budget sur-mesure pour maîtriser vos dépenses et réaliser vos rêves.")
+                    .font(.body)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 30)
+                    .padding(.top, 20)
+                
+                Spacer()
+                
+                PrimaryButton(title: "Commencer", icon: "arrow.right", action: onStart)
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 50)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -386,6 +474,12 @@ struct StepBasicsView: View {
         let s = convertToDouble(savingsString) ?? savings ?? 0
         return max(0, i - f - s)
     }
+
+    var isContinueDisabled: Bool {
+        (convertToDouble(incomeString) ?? 0) <= 0 ||
+        costsString.isEmpty ||
+        savingsString.isEmpty
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -396,7 +490,7 @@ struct StepBasicsView: View {
                     Text("Commençons par les bases")
                         .font(.largeTitle)
                         .bold()
-                        .foregroundColor(.white)
+                        .foregroundColor(.appText)
                         .padding(.top, 20)
                     
                     Text("Pour établir votre budget, nous avons besoin de connaître vos flux mensuels fixes.")
@@ -420,8 +514,20 @@ struct StepBasicsView: View {
                     // Inputs
                     Group {
                         CustomInput(title: "Salaire Mensuel Net", icon: "wallet.pass", text: $incomeString, placeholder: "2500")
-                        CustomInput(title: "Charges Incompressibles", icon: "building.columns", text: $costsString, placeholder: "1200")
-                        CustomInput(title: "Objectif d'Épargne", icon: "briefcase", text: $savingsString, placeholder: "300")
+                        CustomInput(
+                            title: "Charges Incompressibles",
+                            icon: "building.columns",
+                            text: $costsString,
+                            placeholder: "1200",
+                            infoText: "Charges récurrentes automatiques prélevées chaque mois : loyer, remboursements de prêt... Ces montants sont déduits avant le calcul de vos enveloppes et ne doivent pas y figurer."
+                        )
+                        CustomInput(
+                            title: "Objectif d'Épargne",
+                            icon: "briefcase",
+                            text: $savingsString,
+                            placeholder: "300",
+                            infoText: "Montant fixe mis de côté chaque mois pour l'épargne ou l'investissement. Déduit automatiquement avant le calcul du budget disponible pour vos enveloppes."
+                        )
                     }
                 }
                 .padding(.horizontal)
@@ -432,6 +538,7 @@ struct StepBasicsView: View {
                 backTitle: "Retour",
                 mainTitle: "Continuer",
                 mainIcon: "arrow.right",
+                isMainDisabled: isContinueDisabled,
                 onBack: onBack,
                 onMain: {
                     income = convertToDouble(incomeString)
@@ -454,29 +561,109 @@ struct CustomInput: View {
     let icon: String
     @Binding var text: String
     let placeholder: String
-    
+    var infoText: String? = nil
+
+    @FocusState private var isFocused: Bool
+    @State private var glowPulse = false
+    @State private var showInfo = false
+
+    private var trimmedText: String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isEmpty: Bool {
+        trimmedText.isEmpty
+    }
+
+    private var borderColor: Color {
+        if isFocused {
+            return .appAccent
+        }
+        if isEmpty {
+            return .appAccent.opacity(glowPulse ? 0.75 : 0.2)
+        }
+        return .appGreen.opacity(0.6)
+    }
+
+    private var borderWidth: CGFloat {
+        isFocused ? 2 : 1
+    }
+
+    private var glowColor: Color {
+        if isFocused {
+            return .appAccent.opacity(0.4)
+        }
+        if isEmpty {
+            return .appAccent.opacity(glowPulse ? 0.28 : 0.0)
+        }
+        return .clear
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Image(systemName: icon).foregroundColor(.appYellow)
-                Text(title).font(.subheadline).foregroundColor(.white)
+                Image(systemName: icon)
+                    .foregroundColor(.appAccent)
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.appText)
+
+                Spacer()
+
+                if infoText != nil {
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            showInfo.toggle()
+                        }
+                    }) {
+                        Image(systemName: "info.circle")
+                            .font(.callout)
+                            .foregroundColor(.appAccent.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Informations")
+                }
             }
+
             HStack {
-                Text("€").foregroundColor(.gray)
+                Text("€")
+                    .foregroundColor(.gray)
                 TextField(placeholder, text: $text)
                     .keyboardType(.decimalPad)
-                    .foregroundColor(.white)
+                    .foregroundColor(.appText)
                     .font(.title3)
+                    .focused($isFocused)
             }
             .padding()
             .background(Color.appSurface)
             .cornerRadius(12)
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(borderColor, lineWidth: borderWidth))
+            .shadow(color: glowColor, radius: 8)
+
+            if showInfo, let info = infoText {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.appAccent.opacity(0.7))
+                        .font(.caption)
+                        .padding(.top, 1)
+                    Text(info)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 6)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                glowPulse = true
+            }
         }
     }
 }
 
-// MARK: - Step 2: Envelopes
+// MARK: - Step 3: Envelopes
 struct StepEnvelopesView: View {
     let income: Double
     let fixedCosts: Double
@@ -504,7 +691,7 @@ struct StepEnvelopesView: View {
                     VStack(alignment: .leading, spacing: 20) {
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Vos Enveloppes").font(.largeTitle).bold().foregroundColor(.white)
+                            Text("Vos Enveloppes").font(.largeTitle).bold().foregroundColor(.appText)
                             Text("Définissez vos budgets pour les dépenses du quotidien (courses, sorties...).")
                                 .foregroundColor(.gray)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -514,7 +701,7 @@ struct StepEnvelopesView: View {
 
                         HStack {
                             Text(isOverBudget ? "Dépassement :" : "Reste à attribuer :")
-                                .foregroundColor(.white).fontWeight(.medium)
+                                .foregroundColor(.appText).fontWeight(.medium)
                             Spacer()
                             Text(abs(remaining), format: .currency(code: "EUR"))
                                 .font(.title2).bold()
@@ -616,7 +803,7 @@ struct OnboardingEnvelopeRow: View {
                 Spacer()
                 Text("Supprimer")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(.appText)
                     .padding(.horizontal, 20)
             }
             .frame(maxWidth: .infinity)
@@ -634,7 +821,7 @@ struct OnboardingEnvelopeRow: View {
                             Text(env.name)
                                 .font(.headline)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(.appText)
                             Text("Budget mensuel")
                                 .font(.caption)
                                 .foregroundColor(.gray)
@@ -651,7 +838,7 @@ struct OnboardingEnvelopeRow: View {
                     TextField("Amount", text: $amountText)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
-                        .foregroundColor(.white)
+                        .foregroundColor(.appText)
                         .font(.headline)
                         .frame(width: 50)
                         .onChange(of: amountText) { oldValue, newValue in
@@ -664,7 +851,7 @@ struct OnboardingEnvelopeRow: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
-                .background(Color.black.opacity(0.5))
+                .background(Color.appBackground.opacity(0.5))
                 .cornerRadius(8)
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
                 
@@ -768,10 +955,10 @@ struct BottomActionBar: View {
                 }
                 .font(.headline)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(.appText)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(isMainDisabled ? Color.gray : Color.appYellow)
+                .background(isMainDisabled ? Color.gray : Color.appAccent)
                 .cornerRadius(12)
             }
             .disabled(isMainDisabled)
@@ -804,7 +991,7 @@ struct ExpensePill: View {
                     .foregroundColor(.gray)
                     .textCase(.uppercase)
                 Text(amount)
-                    .font(.caption).fontWeight(.bold).foregroundColor(.white)
+                    .font(.caption).fontWeight(.bold).foregroundColor(.appText)
             }
         }
         .padding(8)

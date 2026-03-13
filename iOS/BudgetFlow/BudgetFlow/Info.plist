@@ -6,5 +6,20 @@
 	<array>
 		<string>remote-notification</string>
 	</array>
+	<key>NSFileProtectionComplete</key>
+	<true/>
+	<key>GIDClientID</key>
+	<string>145493401261-ngkvg6ordlcruh4komak5u78c4slvrjv.apps.googleusercontent.com</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.145493401261-ngkvg6ordlcruh4komak5u78c4slvrjv</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

@@ -2,26 +2,26 @@
 
 > Maîtrisez votre budget mensuel grâce à la méthode des enveloppes. Simple, visuel et efficace.
 
-**BudgetFlow** est une application web moderne conçue pour vous aider à reprendre le contrôle de vos finances personnelles. Basée sur la célèbre **méthode des enveloppes virtuelles**, elle vous permet d'allouer un budget précis à chaque catégorie de dépense et de suivre votre consommation en temps réel, sans frustration.
+**BudgetFlow** est une application multi-plateforme (Web + iOS native) conçue pour vous aider à reprendre le contrôle de vos finances personnelles. Basée sur la **méthode des enveloppes virtuelles**, elle vous permet d'allouer un budget précis à chaque catégorie de dépense et de suivre votre consommation en temps réel.
 
-## Fonctionnalités:
+## Fonctionnalités
 
 - **Gestion par Enveloppes** : Créez des catégories personnalisées (Courses, Loisirs, Shopping, etc.) et allouez-y un budget mensuel.
 - **Dashboard Visuel** :
-  - Vue d'ensemble du *Economie*.
-  - Barres de progression détaillées pour chaque enveloppe.
-  - Segmentation visuelle des dépenses sur la barre de progression.
-- **Mobile First** :
-  - Interface pensée pour l'usage quotidien sur smartphone.
-  - Claviers numériques adaptés (iOS/Android) pour une saisie ultra-rapide.
-  - Actions rapides ("Nouvelle Dépense") accessibles en un clic.
+  - Vue d'ensemble avec solde disponible.
+  - Barres de progression par enveloppe avec indicateur de dépassement.
+  - Solde restant affiché en temps réel lors de la saisie d'une dépense.
+- **Thème clair / sombre** : Bascule adaptative sur Web et iOS, respectant les préférences système.
+- **Mobile First** : Interface pensée pour l'usage quotidien sur smartphone.
 - **Historique & Suivi** :
-  - Historique global des transactions avec séparation mensuelle.
+  - Historique global des transactions avec regroupement mensuel.
   - Vue détaillée par enveloppe.
-- **Configuration Complète** :
-  - Gestion des revenus (Salaire).
-  - Déduction automatique des charges fixes et de l'épargne cible.
+  - Graphique d'évolution de l'épargne.
+  - Diagramme Cash Flow (Sankey).
+- **Configuration complète** :
+  - Revenus, charges fixes, épargne cible.
   - Indicateurs d'équilibre budgétaire.
+- **Tests unitaires** : Couverture ≥ 80 % sur la logique métier (Jest sur Web, XCTest sur iOS).
 
 ## Aperçu de l'interface
 
@@ -29,32 +29,51 @@
 
 ### Mobile
 
-  <img src="Screenshots/BudgetFlow.png" width="1000" alt="BudgetFlow Mobile" style="margin: 5px;" />
+#### iOS SwiftUI
+  <img src="Screenshots/BudgetFow-iOS-Dark.png" width="1000" alt="BudgetFlow Mobile Dark" style="margin: 5px;" />
+  <img src="Screenshots/BudgetFow-iOS-Ligth.png" width="1000" alt="BudgetFlow Mobile Ligth" style="margin: 5px;" />
+
+#### iOS WebApp
+  <img src="Screenshots/BudgetFlow.png" width="1000" alt="BudgetFlow Mobile Web" style="margin: 5px;" />
 
 ### Web
   <img src="Screenshots/HomePage.png" width="600" alt="Page d'accueil" style="margin: 5px;" />
-  <img src="Screenshots/Dasboard.png" width="600" alt="Dashboard" style="margin: 5px;" />
-  <img src="Screenshots/EvolutionView.png" width="600" alt="Évolution Économie" style="margin: 5px;" />
+  <img src="Screenshots/Dasboard-WebApp-Dark.png" width="600" alt="Dashboard" style="margin: 5px;" />
+  <img src="Screenshots/Dashboard-WepApp-Light.png" width="600" alt="Dashboard" style="margin: 5px;" />
+  <img src="Screenshots/EvolutionView-WebApp.png" width="600" alt="Évolution Économie" style="margin: 5px;" />
   <img src="Screenshots/CashFlowView.png" width="600" alt="Cash Flow" style="margin: 5px;" />
+  <img src="Screenshots/HistoryView-WebApp.png" width="600" alt="Historique" style="margin: 5px;" />
+  <img src="Screenshots/NewExpense-WebApp.png" width="600" alt="Nouvelle Dépense" style="margin: 5px;" />
 </p>
 
 ## Stack Technique
 
-Ce projet utilise les dernières technologies du développement web moderne :
+### Web App
 
-- **Framework** : [Next.js 14](https://nextjs.org/) (App Router)
-- **Langage** : [TypeScript](https://www.typescriptlang.org/)
-- **Styles** : [Tailwind CSS](https://tailwindcss.com/)
+- **Framework** : [Next.js 16](https://nextjs.org/) (App Router)
+- **Langage** : [TypeScript](https://www.typescriptlang.org/) (mode strict)
+- **Styles** : [Tailwind CSS](https://tailwindcss.com/) avec tokens sémantiques adaptatifs (clair/sombre)
 - **Backend as a Service** : [Firebase](https://firebase.google.com/)
-  - **Authentication** : Email/Password & Google Auth.
-  - **Firestore** : Base de données NoSQL temps réel.
-  - **Cloud Messaging** : Notifications push quotidiennes.
+  - **Authentication** : Email/Password & Google Auth
+  - **Firestore** : Base de données NoSQL temps réel
+  - **Cloud Messaging** : Notifications push
 - **Icônes** : [Lucide React](https://lucide.dev/)
 - **Graphiques** : [Recharts](https://recharts.org/) (Sankey Diagram)
 - **Gestion de dates** : [date-fns](https://date-fns.org/)
-- **Drag & Drop** : [@dnd-kit](https://dndkit.com/) (Réorganisation des enveloppes)
+- **Drag & Drop** : [@dnd-kit](https://dndkit.com/)
+- **Tests** : [Jest](https://jestjs.io/) + [@testing-library/react](https://testing-library.com/)
 
-## Installation & Démarrage
+### iOS App
+
+- **Framework** : SwiftUI
+- **Stockage local** : SwiftData (offline-first)
+- **Synchronisation** : Firebase Firestore (mode en ligne optionnel)
+- **Charts** : Swift Charts (natif)
+- **Icônes** : SF Symbols
+- **Notifications** : UNUserNotificationCenter (notifications locales)
+- **Tests** : XCTest
+
+## Installation & Démarrage (Web)
 
 ### Prérequis
 
@@ -72,8 +91,6 @@ cd budget-flow
 
 ```bash
 npm install
-# ou
-yarn install
 ```
 
 ### 3. Configuration des variables d'environnement
@@ -103,57 +120,54 @@ npm run dev
 
 L'application sera accessible sur `http://localhost:3000`.
 
+## Tests
+
+Voir [UnitTest.md](UnitTest.md) pour les instructions complètes.
+
+```bash
+# Lancer les tests Web
+npm test
+
+# Avec rapport de couverture
+npm run test:coverage
+```
+
+Pour les tests iOS : ouvrir le projet dans Xcode et appuyer sur **⌘U**.
+
 ## Déploiement en Production
 
 ### Déploiement sur Vercel (Recommandé)
 
-BudgetFlow est optimisé pour un déploiement One-Click sur [Vercel](https://vercel.com/), la plateforme officielle de Next.js.
-
 1. **Connectez votre dépôt GitHub** à Vercel.
-2. **Configurez les variables d'environnement** :
-   - Allez dans *Settings > Environment Variables*.
-   - Ajoutez toutes les variables `NEXT_PUBLIC_FIREBASE_*` depuis votre `.env.local`.
-3. **Déployez** : Vercel détectera automatiquement Next.js et déploiera votre application.
-4. **Configuration Firebase** :
-   - Ajoutez le domaine de production (ex: `votre-app.vercel.app`) dans Firebase Console > Authentication > Authorized domains.
-   - Ajoutez également le domaine dans Cloud Messaging pour les notifications.
+2. **Configurez les variables d'environnement** dans *Settings > Environment Variables*.
+3. **Déployez** : Vercel détectera automatiquement Next.js.
+4. **Configuration Firebase** : Ajoutez le domaine de production dans Firebase Console > Authentication > Authorized domains.
 
 ### Autres plateformes
 
-BudgetFlow peut également être déployé sur :
 - **Netlify** : Utilisez le plugin Next.js.
 - **AWS Amplify** : Support natif de Next.js.
-- **VPS/Docker** : Build avec `npm run build` puis `npm start`.
+- **VPS/Docker** : `npm run build` puis `npm start`.
 
 ### Configuration Post-Déploiement
 
-- **Firestore Rules** : Assurez-vous que vos règles de sécurité Firestore limitent l'accès aux données de chaque utilisateur.
-- **Firebase Hosting** (optionnel) : Vous pouvez également héberger sur Firebase Hosting.
-- **PWA** : L'application est PWA-ready. Activez le Service Worker pour permettre l'installation sur mobile.
+```bash
+# Déployer les règles Firestore
+firebase deploy --only firestore:rules
+```
 
-## Configuration des Notifications
+## Notifications
 
-Pour activer les notifications quotidiennes de rappel et de résumé des dépenses :
-
-1. Consultez le fichier **[NOTIFICATION.md](NOTIFICATION.md)** qui détaille :
-   - La configuration de Firebase Cloud Messaging.
-   - Le déploiement des Cloud Functions pour déclencher les notifications.
-   - La personnalisation des horaires et messages.
-   - Le paramétrage des tokens utilisateur.
-
-2. Assurez-vous que :
-   - Firebase Cloud Messaging est activé dans votre projet Firebase.
-   - Le fichier `firebase-messaging-sw.js` est présent dans `/public`.
-   - Les utilisateurs ont accordé la permission de notifications dans leurs paramètres.
+Voir [NOTIFICATION.md](NOTIFICATION.md) pour la configuration de Firebase Cloud Messaging et des crons de notifications.
 
 ## Structure du Projet
 
 ```
 src/
 ├── app/                      # Pages et Routing (Next.js App Router)
-│   ├── (auth)/               # Pages publiques (Login)
+│   ├── (auth)/
 │   │   └── login/page.tsx
-│   ├── (protected)/          # Pages protégées (nécessitent authentification)
+│   ├── (protected)/          # Pages nécessitant authentification
 │   │   ├── dashboard/        # Tableau de bord principal
 │   │   ├── evolution/        # Graphique d'évolution des économies
 │   │   ├── cashflow/         # Diagramme Sankey des flux financiers
@@ -161,48 +175,59 @@ src/
 │   │   ├── settings/         # Paramètres et gestion des enveloppes
 │   │   ├── envelopes/[id]/   # Détail d'une enveloppe
 │   │   └── onboarding/       # Configuration initiale
-│   ├── api/                  # API Routes
-│   │   └── notifications/    # Endpoints pour notifications
-│   └── layout.tsx            # Layout racine et Providers
-├── components/               # Composants UI réutilisables
+│   ├── api/
+│   │   ├── notifications/trigger/  # Endpoint cron notifications
+│   │   └── validate/transaction/   # Validation serveur
+│   └── layout.tsx
+├── components/
 │   └── dashboard/
-│       └── TransactionModal.tsx  # Modal d'ajout/édition de dépense
-├── context/                  # Contextes React
-│   └── AuthContext.tsx       # Gestion de l'authentification
-├── hooks/                    # Custom Hooks
-│   └── useNotifications.ts   # Hook pour gérer les notifications
-├── lib/                      # Configuration et utilitaires
+│       └── TransactionModal.tsx
+├── context/
+│   └── AuthContext.tsx
+├── hooks/
+│   └── useNotifications.ts
+├── lib/
 │   ├── firebase.ts           # Configuration Firebase Client
 │   ├── firebaseAdmin.ts      # Configuration Firebase Admin (SSR)
-│   └── dateUtils.ts          # Utilitaires de manipulation de dates
-└── ...
+│   ├── validation.ts         # Validateurs réutilisables
+│   ├── logger.ts             # Logger sanitisé (prod/dev)
+│   └── dateUtils.ts          # Utilitaires de dates
+└── __tests__/
+    └── lib/
+        ├── validation.test.ts
+        ├── dateUtils.test.ts
+        └── logger.test.ts
+
+iOS/BudgetFlow/
+├── BudgetFlow/               # Code source Swift
+│   ├── Models/               # Envelope, Transaction, UserSettings
+│   ├── Views/                # Toutes les vues SwiftUI
+│   ├── DesignSystem.swift    # Tokens de design adaptatifs (clair/sombre)
+│   ├── Extensions.swift      # Extensions Color, Calendar
+│   ├── NotificationService.swift
+│   └── SyncService.swift     # Synchronisation Firestore
+└── BudgetFlowTests/
+    └── BudgetFlowTests.swift # Tests XCTest
 ```
 
-## 🚧 EN COURS : Application iOS Native
+## iOS App
 
-Une **application iOS native** est actuellement en développement pour offrir une expérience encore plus fluide et intégrée sur iPhone et iPad.
+L'application iOS native est **fonctionnelle** et disponible via le dossier `iOS/` du projet.
 
-### Fonctionnalités prévues :
-- **Widget iOS** : Aperçu du reste à vivre directement sur l'écran d'accueil.
-- **Siri Shortcuts** : Ajout de dépenses via commandes vocales.
-- **Face ID / Touch ID** : Sécurisation renforcée de l'accès.
-- **Notifications riches** : Aperçu des dépenses avec actions rapides (Marquer comme payé, Catégoriser).
-- **Mode Hors-ligne** : Synchronisation différée avec Firebase.
+### Fonctionnalités disponibles
 
-### Statut actuel :
-- 🟡 En développement actif.
-- 🟢 Version Web entièrement fonctionnelle et compatible iOS via Safari (PWA).
+- ✅ Toutes les fonctionnalités de base (enveloppes, transactions, historique, évolution, cash flow)
+- ✅ Mode hors-ligne (SwiftData, aucune connexion requise)
+- ✅ Mode en ligne avec synchronisation Firestore
+- ✅ Thème clair / sombre adaptatif
+- ✅ Notifications locales hebdomadaires
+- ✅ Gestures natives (swipe-to-delete, drag & drop, retours haptiques)
+- ✅ Accessibilité VoiceOver
+- ⚠️ Authentification Firebase (en cours d'intégration)
 
-**Intéressé(e) pour tester la beta iOS ?** Contactez-nous via les Issues GitHub.
+## Sécurité
 
-## Contribuer
-
-Les contributions sont les bienvenues !
-1.  Forkez le projet.
-2.  Créez votre branche de fonctionnalité (`git checkout -b feature/AmazingFeature`).
-3.  Commitez vos changements (`git commit -m 'Add some AmazingFeature'`).
-4.  Push vers la branche (`git push origin feature/AmazingFeature`).
-5.  Ouvrez une Pull Request.
+Voir [SECURITY.md](SECURITY.md) pour les détails des mesures de sécurité implémentées (règles Firestore, headers HTTP, validation, logs sanitisés).
 
 ## Licence
 

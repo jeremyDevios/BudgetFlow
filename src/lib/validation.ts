@@ -50,10 +50,12 @@ export function validateEmail(email: unknown): email is string {
 }
 
 export function validatePassword(password: unknown): password is string {
-  // Minimum 6 characters (Firebase default), can be more restrictive
   return (
     typeof password === "string" &&
-    password.length >= 6 &&
-    password.length <= 128
+    password.length >= 8 &&
+    password.length <= 128 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /[0-9]/.test(password)
   );
 }

@@ -186,15 +186,15 @@ export default function EvolutionPage() {
   }));
 
   if (loading) {
-     return <div className="min-h-screen bg-black flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
+     return <div className="min-h-screen bg-app-bg flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 pb-20">
+    <div className="min-h-screen bg-app-bg text-app-text p-4 pb-20">
       <header className="flex items-center gap-4 mb-8">
         <button 
           onClick={() => router.back()}
-          className="p-2 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors"
+          className="p-2 rounded-full bg-app-surface border border-app-border hover:bg-app-surface transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -205,10 +205,10 @@ export default function EvolutionPage() {
       </header>
 
       {/* Graphique Container */}
-      <div className="bg-zinc-900/50 border border-zinc-800 rounded-3xl p-6 relative overflow-hidden">
+      <div className="bg-app-surface/50 border border-app-border rounded-3xl p-6 relative overflow-hidden">
         
         {data.length === 0 ? (
-            <div className="text-center text-zinc-500 py-10">Pas assez de données pour afficher l'évolution.</div>
+            <div className="text-center text-app-text-secondary py-10">Pas assez de données pour afficher l'évolution.</div>
         ) : (
             <div className="relative w-full mt-4 select-none" style={{ height: height }}>
                 
@@ -286,8 +286,8 @@ export default function EvolutionPage() {
                                 }}
                             >
                                 {/* Tooltip */}
-                                <div className={`absolute ${tooltipPositionClass} bg-zinc-900/90 border border-amber-500/30 px-3 py-2 rounded-xl shadow-2xl backdrop-blur-md text-center transform transition-all duration-200 ${hoveredIndex === i ? `scale-100 opacity-100 ${tooltipTransformEnd}` : `scale-90 opacity-0 ${tooltipTransformStart}`} pointer-events-none whitespace-nowrap z-30`}>
-                                    <span className="block text-xs text-zinc-400 capitalize mb-1">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
+                                <div className={`absolute ${tooltipPositionClass} bg-app-surface/90 border border-amber-500/30 px-3 py-2 rounded-xl shadow-2xl backdrop-blur-md text-center transform transition-all duration-200 ${hoveredIndex === i ? `scale-100 opacity-100 ${tooltipTransformEnd}` : `scale-90 opacity-0 ${tooltipTransformStart}`} pointer-events-none whitespace-nowrap z-30`}>
+                                    <span className="block text-xs text-app-text-secondary capitalize mb-1">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
                                     <span className={`block text-lg font-bold ${d.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                         {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
                                     </span>
@@ -303,7 +303,7 @@ export default function EvolutionPage() {
                                 
                                 {/* Label Axe X (Mois) */}
                                 <div 
-                                    className="absolute top-6 text-xs font-medium text-zinc-500 transition-colors group-hover:text-white"
+                                    className="absolute top-6 text-xs font-medium text-app-text-secondary transition-colors group-hover:text-app-text"
                                     style={{ marginTop: '10px' }} // Décalage pour ne pas coller au point
                                 >
                                     {format(d.date, "MMM", { locale: fr })}
@@ -318,14 +318,14 @@ export default function EvolutionPage() {
       
       {/* Liste détaillée en dessous */}
       <div className="mt-8 space-y-3">
-          <h3 className="text-lg font-semibold text-zinc-300 px-2">Détails mensuels</h3>
+          <h3 className="text-lg font-semibold text-app-text px-2">Détails mensuels</h3>
           {data.slice().reverse().map((d, i) => (
-              <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-zinc-900/30 border border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/60 transition-all rounded-2xl group gap-4">
+              <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-app-surface/30 border border-app-border hover:border-app-border hover:bg-app-surface/60 transition-all rounded-2xl group gap-4">
                   
                   {/* Mois (Gauche) */}
                   <div className="flex items-center gap-3">
                       <div className={`w-1 h-8 rounded-full ${d.remaining >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                      <span className="capitalize font-medium text-zinc-200 text-lg">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
+                      <span className="capitalize font-medium text-app-text text-lg">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
                   </div>
 
                   {/* Groupe Dépenses + Économie (Droite) */}
@@ -333,7 +333,7 @@ export default function EvolutionPage() {
                       
                       {/* Dépenses */}
                       <div className="flex justify-between sm:flex-col sm:items-end sm:text-right">
-                           <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">Dépenses</span>
+                           <span className="text-xs text-app-text-secondary uppercase tracking-wider block mb-1">Dépenses</span>
                            <span className="font-bold font-mono text-amber-500 text-lg leading-none">
                                {d.totalSpent.toFixed(2)} €
                            </span>
@@ -341,7 +341,7 @@ export default function EvolutionPage() {
 
                       {/* Économie */}
                       <div className="flex justify-between sm:flex-col sm:items-end sm:text-right">
-                           <span className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">Économie</span>
+                           <span className="text-xs text-app-text-secondary uppercase tracking-wider block mb-1">Économie</span>
                            <span className={`font-bold font-mono text-lg leading-none ${d.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
                            </span>

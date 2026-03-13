@@ -96,12 +96,12 @@ export default function CashFlowPage() {
   }, [user]);
 
   if (loading) {
-    return <div className="min-h-screen bg-black flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
+    return <div className="min-h-screen bg-app-bg flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
   }
 
   if (!settings) {
       return (
-          <div className="min-h-screen bg-black text-white p-4 flex flex-col items-center justify-center">
+          <div className="min-h-screen bg-app-bg text-app-text p-4 flex flex-col items-center justify-center">
               <p className="mb-4">Veuillez configurer vos paramètres (Revenu, Frais fixes) pour voir le diagramme.</p>
               <button onClick={() => router.push('/settings')} className="text-amber-500 underline">Aller aux paramètres</button>
           </div>
@@ -225,11 +225,11 @@ export default function CashFlowPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-4 pb-20">
+    <div className="min-h-screen bg-app-bg text-app-text p-4 pb-20">
       <header className="flex items-center gap-4 mb-4">
         <button 
           onClick={() => router.back()}
-          className="p-2 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 transition-colors"
+          className="p-2 rounded-full bg-app-surface border border-app-border hover:bg-app-surface transition-colors"
         >
           <ChevronLeft className="w-5 h-5" />
         </button>
@@ -239,7 +239,7 @@ export default function CashFlowPage() {
         </h1>
       </header>
       
-      <div className="bg-zinc-900/40 border border-zinc-800 rounded-3xl p-2 sm:p-6 h-[75vh] w-full overflow-hidden flex flex-col">
+      <div className="bg-app-surface/40 border border-app-border rounded-3xl p-2 sm:p-6 h-[75vh] w-full overflow-hidden flex flex-col">
          {settings.monthlyIncome > 0 ? (
              <ResponsiveContainer width="100%" height="100%">
                 <Sankey
@@ -267,7 +267,7 @@ export default function CashFlowPage() {
                 </Sankey>
              </ResponsiveContainer>
          ) : (
-             <div className="flex h-full items-center justify-center text-zinc-500">
+             <div className="flex h-full items-center justify-center text-app-text-secondary">
                  Aucun revenu configuré.
              </div>
          )}
@@ -275,12 +275,12 @@ export default function CashFlowPage() {
 
        {/* Legend / Summary */}
        <div className="mt-8 grid grid-cols-2 gap-4 text-center">
-             <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800">
-                 <span className="block text-zinc-400 text-xs uppercase mb-1">Revenu Total</span>
+             <div className="bg-app-surface/50 p-4 rounded-2xl border border-app-border">
+                 <span className="block text-app-text-secondary text-xs uppercase mb-1">Revenu Total</span>
                  <span className="text-2xl font-bold text-emerald-400">{settings.monthlyIncome} €</span>
              </div>
-             <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800">
-                 <span className="block text-zinc-400 text-xs uppercase mb-1">Total Alloué</span>
+             <div className="bg-app-surface/50 p-4 rounded-2xl border border-app-border">
+                 <span className="block text-app-text-secondary text-xs uppercase mb-1">Total Alloué</span>
                  <span className="text-2xl font-bold text-amber-500">{totalAllocated} €</span>
              </div>
        </div>

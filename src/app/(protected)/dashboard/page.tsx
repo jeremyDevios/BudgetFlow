@@ -222,20 +222,20 @@ export default function DashboardPage() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-black flex items-center justify-center text-white">Chargement...</div>;
+    return <div className="min-h-screen bg-app-bg flex items-center justify-center text-app-text">Chargement...</div>;
   }
 
   return (
-    <div className="min-h-screen bg-black text-white pb-20 sm:pb-8">
+    <div className="min-h-screen bg-app-bg text-app-text pb-20 sm:pb-8">
         
       {/* Header Mobile / Desktop */}
-      <header className="sticky top-0 z-30 bg-black/80 backdrop-blur-md border-b border-zinc-800 px-6 py-4 flex justify-between items-center">
+      <header className="sticky top-0 z-30 bg-app-bg/80 backdrop-blur-md border-b border-app-border px-6 py-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
            {/* Navigation Mois */}
-           <div className="flex items-center gap-2 bg-zinc-900 rounded-full p-1 border border-zinc-800">
+           <div className="flex items-center gap-2 bg-app-surface rounded-full p-1 border border-app-border">
               <button 
                   onClick={() => changeMonth(-1)} 
-                  className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800"
+                  className="p-1 rounded-full text-app-text-secondary hover:text-app-text hover:bg-app-surface"
               >
                   <ChevronLeft className="h-5 w-5" />
               </button>
@@ -244,7 +244,7 @@ export default function DashboardPage() {
               </span>
               <button 
                   onClick={() => changeMonth(1)}
-                  className="p-1 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800"
+                  className="p-1 rounded-full text-app-text-secondary hover:text-app-text hover:bg-app-surface"
               >
                   <ChevronRight className="h-5 w-5" />
               </button>
@@ -255,7 +255,7 @@ export default function DashboardPage() {
             {/* 1. Évolution (Graphique) */}
             <button 
                 onClick={() => router.push('/evolution')}
-                className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-amber-500 transition-colors"
+                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-amber-500 transition-colors"
                 title="Évolution des dépenses"
             >
                 <TrendingUp className="h-5 w-5" />
@@ -264,7 +264,7 @@ export default function DashboardPage() {
             {/* 2. Historique (Liste) */}
             <button 
                 onClick={() => router.push('/history')}
-                className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors"
                 title="Historique Global"
             >
                 <List className="h-5 w-5" />
@@ -273,7 +273,7 @@ export default function DashboardPage() {
             {/* 5. Cash Flow (Sankey) */}
             <button 
                 onClick={() => router.push('/cashflow')}
-                className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-emerald-500 transition-colors"
+                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-emerald-500 transition-colors"
                 title="Cash Flow"
             >
                 <Workflow className="h-5 w-5" />
@@ -282,7 +282,7 @@ export default function DashboardPage() {
             {/* 3. Paramètres */}
             <button 
                 onClick={() => router.push('/settings')}
-                className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors"
                 title="Paramètres"
             >
                 <Settings className="h-5 w-5" />
@@ -291,7 +291,7 @@ export default function DashboardPage() {
             {/* 4. Déconnexion */}
             <button 
                 onClick={handleLogout} 
-                className="p-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-red-500 transition-colors"
+                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-red-500 transition-colors"
                 title="Se déconnecter"
             >
                 <LogOut className="h-5 w-5" />
@@ -302,26 +302,26 @@ export default function DashboardPage() {
       <main className="max-w-4xl mx-auto p-4 space-y-8">
         
         {/* Résumé du Mois (Card Principale) */}
-        <section className="bg-gradient-to-br from-zinc-900 to-amber-950/30 border border-zinc-800/80 rounded-3xl p-5 relative overflow-hidden shadow-2xl">
+        <section className="bg-gradient-to-br from-gray-300/70 to-amber-200/40 dark:from-zinc-900 dark:to-amber-950/30 rounded-3xl p-5 relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 right-0 p-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             
-            <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-1 py-3">
-                <span className="text-zinc-400 text-xs font-medium tracking-wide uppercase">Reste disponible</span>
-                <h2 className={`text-4xl font-extrabold tracking-tighter ${currentMonthBalance < 0 ? 'text-red-500' : 'text-white'}`}>
-                    {currentMonthBalance.toFixed(2)} <span className="text-2xl text-zinc-500">€</span>
+            <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-1 py-3" aria-live="polite">
+                <span className="text-app-text-secondary text-xs font-medium tracking-wide uppercase">Reste disponible</span>
+                <h2 className={`text-4xl font-extrabold tracking-tighter ${currentMonthBalance < 0 ? 'text-red-500' : 'text-app-text'}`}>
+                    {currentMonthBalance.toFixed(2)} <span className="text-2xl text-app-text-secondary">€</span>
                 </h2>
-                <div className="text-xs text-zinc-500">
+                <div className="text-xs text-app-text-secondary">
                     Sur {monthlyTotalAvailable.toFixed(0)} € prévus
                 </div>
             </div>
 
             {/* Global Progress Bar */}
             <div className="mt-6 space-y-1.5">
-                <div className="flex justify-between text-xs font-medium text-zinc-400">
+                <div className="flex justify-between text-xs font-medium text-app-text-secondary">
                     <span>Dépenses : {totalSpentEnvelopes.toFixed(2)} €</span>
                     <span>{globalProgress.toFixed(0)}%</span>
                 </div>
-                <div className="h-3 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-3 bg-black/10 dark:bg-app-surface rounded-full overflow-hidden">
                     <div 
                         className={`h-full rounded-full transition-all duration-1000 ease-out ${globalProgress > 100 ? 'bg-red-500' : 'bg-gradient-to-r from-amber-400 to-orange-600'}`}
                         style={{ width: `${Math.min(globalProgress, 100)}%` }}
@@ -346,8 +346,8 @@ export default function DashboardPage() {
         {/* Grille des Enveloppes */}
         <section>
             <div className="flex justify-between items-end mb-4 px-2">
-                <h3 className="text-lg font-bold text-zinc-200">Mes Enveloppes</h3>
-                <span className="text-xs text-zinc-500">{envelopes.length} catégories</span>
+                <h3 className="text-lg font-bold text-app-text">Mes Enveloppes</h3>
+                <span className="text-xs text-app-text-secondary">{envelopes.length} catégories</span>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -360,15 +360,16 @@ export default function DashboardPage() {
                         <div 
                             key={env.id} 
                             onClick={() => router.push(`/envelopes/${env.id}?date=${currentDate.toISOString()}`)}
-                            className="bg-zinc-900/50 border border-zinc-800/50 hover:border-zinc-700 p-4 rounded-xl transition-all group relative cursor-pointer active:scale-95 z-0"
+                            className="relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-zinc-950 dark:to-zinc-900 p-4 rounded-xl transition-all duration-200 group cursor-pointer active:scale-95 z-0 border border-gray-200/60 dark:border-0 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.55)] hover:-translate-y-0.5"
                         >
+                            <div className={`absolute inset-0 rounded-xl ${env.color} opacity-10 dark:opacity-[0.13] pointer-events-none`} />
                             <div className="relative z-10">
                                 <div className="flex justify-between items-center mb-3">
                                     <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-lg border border-zinc-800 ${env.color} text-white`}>
+                                        <div className={`p-2 rounded-lg border border-app-border ${env.color} text-app-text`}>
                                             <Icon className="h-5 w-5" />
                                         </div>
-                                        <h4 className="font-semibold text-base text-zinc-100 truncate max-w-[140px]">{env.name}</h4>
+                                        <h4 className="font-semibold text-base text-app-text truncate max-w-[140px]">{env.name}</h4>
                                     </div>
                                     
                                     {/* Menu des enveloppes */}
@@ -378,14 +379,14 @@ export default function DashboardPage() {
                                                 e.stopPropagation();
                                                 setOpenMenuId(openMenuId === env.id ? null : env.id);
                                             }}
-                                            className={`p-1.5 rounded-lg transition-colors ${openMenuId === env.id ? 'bg-zinc-800 text-white' : 'text-zinc-600 hover:text-white hover:bg-zinc-800/50'}`}
+                                            className={`p-1.5 rounded-lg transition-colors ${openMenuId === env.id ? 'bg-app-surface text-app-text' : 'text-app-text-secondary hover:text-app-text hover:bg-app-surface/50'}`}
                                             title="Options"
                                         >
                                             <MoreHorizontal className="h-5 w-5" />
                                         </button>
 
                                         {openMenuId === env.id && (
-                                            <div className="absolute right-0 top-full mt-2 w-56 bg-zinc-900 border border-zinc-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col p-1">
+                                            <div className="absolute right-0 top-full mt-2 w-56 bg-app-surface border border-app-border rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col p-1">
                                                 <button 
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -393,7 +394,7 @@ export default function DashboardPage() {
                                                         setIsTxModalOpen(true);
                                                         setOpenMenuId(null);
                                                     }}
-                                                    className="flex items-center gap-3 px-3 py-3 text-sm font-bold text-amber-500 hover:bg-zinc-800 rounded-lg transition-colors text-left"
+                                                    className="flex items-center gap-3 px-3 py-3 text-sm font-bold text-amber-500 hover:bg-app-surface rounded-lg transition-colors text-left"
                                                 >
                                                     <Plus className="h-4 w-4" /> Nouvelle Dépense
                                                 </button>
@@ -402,7 +403,7 @@ export default function DashboardPage() {
                                                         e.stopPropagation();
                                                         router.push(`/envelopes/${env.id}?date=${currentDate.toISOString()}`);
                                                      }}
-                                                    className="flex items-center gap-3 px-3 py-3 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 rounded-lg transition-colors text-left"
+                                                    className="flex items-center gap-3 px-3 py-3 text-sm text-app-text-secondary hover:text-app-text hover:bg-app-surface rounded-lg transition-colors text-left"
                                                 >
                                                     <TrendingUp className="h-4 w-4" /> Détails & Historique
                                                 </button>
@@ -413,23 +414,23 @@ export default function DashboardPage() {
 
                                 <div className="space-y-0.5">
                                     <div className="flex justify-between items-baseline">
-                                        <span className={`text-xl font-bold ${remaining < 0 ? 'text-red-500' : 'text-zinc-200'}`}>
+                                        <span className={`text-xl font-bold ${remaining < 0 ? 'text-red-500' : 'text-app-text'}`}>
                                             {remaining.toFixed(2)}€
                                         </span>
-                                        <span className="text-xs text-zinc-500">
+                                        <span className="text-xs text-app-text-secondary">
                                             sur {env.budget.toFixed(2)}€
                                         </span>
                                     </div>
                                 </div>
                                 
                                 {/* Mini Progress Bar interne */}
-                                <div className="mt-2 flex h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                <div className="mt-2 flex h-1.5 w-full bg-black/10 dark:bg-app-surface rounded-full overflow-hidden">
                                      {transactions
                                         .filter(t => t.envelopeId === env.id)
                                         .map((tx) => (
                                             <div 
                                                 key={tx.id}
-                                                className={`h-full ${env.color} border-r-2 border-zinc-900/80 box-border`}
+                                                className={`h-full ${env.color} border-r-2 border-white/20 dark:border-zinc-900/80 box-border`}
                                                 style={{ width: `${(tx.amount / env.budget) * 100}%` }}
                                                 title={`${tx.description || 'Dépense'}: ${Number(tx.amount).toFixed(2)}€`}
                                             />
@@ -447,15 +448,16 @@ export default function DashboardPage() {
       {/* Floating Action Button (FAB) - Quick Add */}
       <button 
         onClick={() => setIsTxModalOpen(true)}
-        className="fixed bottom-6 right-6 p-4 bg-amber-500 hover:bg-amber-600 text-white rounded-full shadow-lg shadow-amber-900/20 transition-transform hover:scale-105 active:scale-95 z-40"
+                aria-label="Ajouter une transaction"
+        className="fixed bottom-6 right-6 p-4 bg-amber-500 hover:bg-amber-600 text-app-text rounded-full shadow-lg shadow-amber-900/20 transition-transform hover:scale-105 active:scale-95 z-40"
       >
         <Plus className="h-8 w-8" />
       </button>
       
       {/* Popup Notification */}
       {showNotifPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-           <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4 animate-in fade-in">
+           <div className="w-full max-w-sm bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl relative overflow-hidden">
              
               <div className="absolute top-0 right-0 p-4 opacity-10">
                   <Bell className="w-24 h-24 text-amber-500 -rotate-12 transform translate-x-4 -translate-y-4" />
@@ -466,9 +468,9 @@ export default function DashboardPage() {
                      <Bell className="w-6 h-6" />
                   </div>
                   
-                  <h2 className="text-xl font-bold text-white">Ne loupez aucune dépense !</h2>
+                  <h2 className="text-xl font-bold text-app-text">Ne loupez aucune dépense !</h2>
                   
-                  <p className="text-zinc-400 text-sm">
+                  <p className="text-app-text-secondary text-sm">
                      Activez le rappel quotidien de 19h pour garder votre budget à jour. 
                      C'est le meilleur moyen de tenir ses objectifs ! 🎯
                   </p>
@@ -476,13 +478,13 @@ export default function DashboardPage() {
                   <div className="flex flex-col gap-3 pt-4">
                       <button 
                           onClick={() => router.push('/settings')}
-                          className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-amber-900/20"
+                          className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-app-text font-bold rounded-xl transition-colors shadow-lg shadow-amber-900/20"
                       >
                           Aller activer les notifications
                       </button>
                       <button 
                           onClick={() => setShowNotifPopup(false)}
-                          className="w-full py-2 px-4 text-zinc-500 hover:text-white text-sm font-medium transition-colors"
+                          className="w-full py-2 px-4 text-app-text-secondary hover:text-app-text text-sm font-medium transition-colors"
                       >
                           Peut-être plus tard
                       </button>
@@ -494,8 +496,8 @@ export default function DashboardPage() {
 
       {/* Install App Popup (iOS) */}
       {showInstallPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-           <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4 animate-in fade-in">
+           <div className="w-full max-w-sm bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl relative overflow-hidden">
              
               <div className="absolute top-0 right-0 p-4 opacity-10">
                   <Share className="w-24 h-24 text-blue-500 -rotate-12 transform translate-x-4 -translate-y-4" />
@@ -506,13 +508,13 @@ export default function DashboardPage() {
                      <Share className="w-6 h-6" />
                   </div>
                   
-                  <h2 className="text-xl font-bold text-white">Installez l'application</h2>
+                  <h2 className="text-xl font-bold text-app-text">Installez l'application</h2>
                   
-                  <p className="text-zinc-400 text-sm">
+                  <p className="text-app-text-secondary text-sm">
                      Pour une meilleure expérience, ajoutez BudgetFlow à votre écran d'accueil.
                   </p>
                   
-                  <div className="bg-zinc-800/50 rounded-lg p-4 text-left text-sm text-zinc-300 space-y-2">
+                  <div className="bg-app-surface/50 rounded-lg p-4 text-left text-sm text-zinc-300 space-y-2">
                       <div className="flex items-center gap-3">
                           <span className="flex items-center justify-center w-6 h-6 rounded-full bg-zinc-700 text-xs font-bold">1</span>
                           <span>Touchez le bouton <span className="font-bold text-blue-400">Partager</span> <Share className="w-3 h-3 inline" /></span>
@@ -526,7 +528,7 @@ export default function DashboardPage() {
                   <div className="pt-2">
                       <button 
                           onClick={() => setShowInstallPopup(false)}
-                          className="w-full py-3 px-4 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-xl transition-colors"
+                          className="w-full py-3 px-4 bg-app-surface hover:bg-app-surface text-app-text font-medium rounded-xl transition-colors"
                       >
                           Compris
                       </button>

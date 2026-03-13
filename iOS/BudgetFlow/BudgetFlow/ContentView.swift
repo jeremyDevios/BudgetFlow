@@ -1,24 +1,70 @@
 import SwiftUI
 import SwiftData
+import FirebaseAuth
 
 struct ContentView: View {
     @Query private var userSettings: [UserSettings]
     @Environment(\.modelContext) private var modelContext
-    
-    // Check if onboarding is done either via @AppStorage or checking if settings exist
-    // Using AppStorage for simple boolean flag is common for onboarding
-    @AppStorage("isOnboardingCompleted") private var isOnboardingCompleted = false
+    @Environment(SyncService.self) private var syncService
+    @Environment(FirebaseManager.self) private var firebaseManager
+    @AppStorage("isOnboarded") private var isOnboarded = false
+
+    /// Affiché pendant la vérification Firestore au démarrage
+    @State private var isCheckingOnlineData = false
 
     var body: some View {
         Group {
-            if isOnboardingCompleted {
-                // If settings exist, pass them, otherwise we might have an issue
-                // But Onboarding should have created one. 
-                DashboardView()
+            if isCheckingOnlineData {
+                ZStack {
+                    Color.appBackground.ignoresSafeArea()
+                    ProgressView()
+                        .tint(Color.appAccent)
+                }
+            } else if isOnboarded {
+                MainTabView()
+                    .task {
+                        guard let settings = userSettings.first,
+                              settings.isOnlineMode,
+                              !settings.firebaseUserId.isEmpty else { return }
+                        try? await syncService.loadFromFirestore(
+                            userId: settings.firebaseUserId,
+                            into: modelContext
+                        )
+                    }
             } else {
-                // Pass a binding to a new settings object or handle creation in Onboarding
                 OnboardingWrapper()
             }
+        }
+        // Déclenché une seule fois quand Firebase a fini de restaurer sa session
+        .onChange(of: firebaseManager.isAuthLoaded) { _, loaded in
+            guard loaded, !isOnboarded, let user = firebaseManager.currentUser else { return }
+            Task { await checkAndLoadFirestoreData(for: user.uid) }
+        }
+    }
+
+    /// Vérifie si des données existent sur Firestore pour cet utilisateur.
+    /// Si oui, les charge et passe directement au Dashboard sans onboarding.
+    @MainActor
+    private func checkAndLoadFirestoreData(for userId: String) async {
+        isCheckingOnlineData = true
+        defer { isCheckingOnlineData = false }
+
+        guard await syncService.checkDataExists(for: userId) else { return }
+
+        do {
+            try await syncService.loadFromFirestore(userId: userId, into: modelContext)
+            let descriptor = FetchDescriptor<UserSettings>()
+            if let settings = try? modelContext.fetch(descriptor).first {
+                settings.isOnlineMode = true
+                settings.firebaseUserId = userId
+                settings.isOnboarded = true
+                try? modelContext.save()
+            }
+            isOnboarded = true
+        } catch {
+#if DEBUG
+            print("ContentView: Firestore load error: \(error)")
+#endif
         }
     }
 }
@@ -26,9 +72,8 @@ struct ContentView: View {
 struct OnboardingWrapper: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var existingSettings: [UserSettings]
-    
     @State private var tempSettings: UserSettings?
-    
+
     var body: some View {
         if let settings = tempSettings {
             OnboardingView(settings: Binding(
@@ -38,7 +83,6 @@ struct OnboardingWrapper: View {
         } else {
             ProgressView()
                 .onAppear {
-                    // Check if we already have one
                     if let first = existingSettings.first {
                         tempSettings = first
                     } else {
@@ -54,5 +98,6 @@ struct OnboardingWrapper: View {
 #Preview {
     ContentView()
         .modelContainer(for: [UserSettings.self, Envelope.self, Transaction.self], inMemory: true)
+        .environment(SyncService())
 }
 
