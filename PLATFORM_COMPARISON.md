@@ -1,6 +1,6 @@
 # BudgetFlow — Comparatif Web vs iOS
 
-> Généré le 8 mars 2026 — Parité globale : ~80%
+> Mis à jour le 13 mars 2026 — Parité globale : ~90%
 
 Les deux apps partagent le même workflow de base (enveloppes budgétaires, suivi des dépenses, visualisations). Les différences sont surtout architecturales et sur quelques fonctionnalités périphériques.
 
@@ -21,7 +21,10 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | Onboarding | ✅ 2 étapes | ✅ 3 étapes |
 | Détail enveloppe | ✅ | ✅ |
 | Paramètres (revenus, charges fixes, épargne) | ✅ | ✅ |
-| Thème sombre | ✅ | ✅ |
+| Thème sombre / clair (adaptatif) | ✅ | ✅ |
+| Bordures colorées sur les enveloppes | ✅ | ✅ |
+| Solde restant dans la modal transaction | ✅ | ✅ |
+| Tests unitaires | ✅ Jest | ✅ XCTest |
 
 ---
 
@@ -29,9 +32,8 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 
 | Fonctionnalité | Détail |
 |---|---|
-| **Authentification** | Login email/mot de passe + OAuth Google (Firebase Auth) |
-| **Cloud sync** | Données stockées sur Firestore — accessibles partout |
-| **Push notifications** | Firebase Cloud Messaging, déclenchement cron automatique |
+| **Authentification cloud** | Login email/mot de passe + OAuth Google (Firebase Auth) — iOS en cours |
+| **Push notifications FCM** | Firebase Cloud Messaging, déclenchement cron automatique |
 | **Validation serveur** | Endpoint API `/api/validate/transaction` |
 | **PWA** | Service worker pour une expérience app-like dans le navigateur |
 
@@ -46,6 +48,7 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | **Gestures natives** | Swipe-to-delete, drag-and-drop, retours haptiques |
 | **Barre de progression** | Affichée sur le détail d'enveloppe |
 | **Warnings budgétaires** | Mise en rouge en temps réel si le budget est dépassé |
+| **Notifications locales** | Rappels hebdomadaires programmés via `NotificationService` |
 | **Accessibilité** | Labels VoiceOver sur les éléments interactifs |
 
 ---
@@ -54,18 +57,23 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 
 | | Web | iOS |
 |---|---|---|
-| **Framework** | Next.js (React) | SwiftUI |
-| **Stockage** | Firestore (cloud) | SwiftData (local) |
-| **Auth** | Firebase Auth | ⚠️ Absent (W.I.P.) |
+| **Framework** | Next.js 16 (React) | SwiftUI |
+| **Stockage** | Firestore (cloud) | SwiftData (local, offline-first) |
+| **Auth** | Firebase Auth | ⚠️ En cours (AuthView + FirebaseManager) |
 | **Charts** | Recharts | Apple Charts |
 | **Icônes** | Lucide React | SF Symbols |
-| **Styling** | Tailwind CSS | SwiftUI modifiers |
-| **Notifications** | Firebase Cloud Messaging | ❌ Non disponible |
+| **Styling** | Tailwind CSS (tokens adaptatifs) | DesignSystem.swift (UIColor adaptatif) |
+| **Notifications** | Firebase Cloud Messaging | Notifications locales (UNUserNotificationCenter) |
 | **Offline** | Browser cache + service worker | ✅ Natif (offline-first) |
-| **Synchro multi-plateforme** | ✅ Oui | ❌ Non |
+| **Synchro multi-plateforme** | ✅ Oui | ⚠️ Disponible en mode en ligne (SyncService) |
+| **Tests** | Jest + @testing-library | XCTest |
 
 ---
 
-## Point de friction principal
+## Synchronisation Web ↔ iOS
 
-Les deux apps **ne partagent pas leurs données** — l'iOS est entièrement local (SwiftData), sans lien avec le backend Firebase du Web. Un utilisateur qui saisit des transactions sur iOS ne les verra pas sur le Web, et vice versa.
+L'iOS fonctionne en **deux modes** :
+- **Mode local** (par défaut) : données stockées uniquement dans SwiftData, aucune connexion requise
+- **Mode en ligne** : `SyncService.swift` synchronise avec Firestore — les données sont alors partagées avec la Web App
+
+En mode local, les données d'un utilisateur iOS ne sont pas visibles sur le Web, et vice versa. En mode en ligne, la parité des données est assurée via le schéma Firestore partagé.
