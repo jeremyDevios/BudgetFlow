@@ -2,28 +2,6 @@ import SwiftUI
 import SwiftData
 import FirebaseAuth
 
-// MARK: - Extensions for Keyboard Dismissal
-extension View {
-    func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-    }
-}
-
-// Extension to help color/icon management
-extension Color {
-    // Helper to get hex string
-    func toHexString() -> String? {
-        // Implement if needed for standard colors, but the Extensions.swift likely covers .toHex()
-        // We will assume .toHex() exists from previous context
-        let uic = UIColor(self)
-        guard let components = uic.cgColor.components, components.count >= 3 else { return nil }
-        let r = Float(components[0])
-        let g = Float(components[1])
-        let b = Float(components[2])
-        return String(format: "%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
-    }
-}
-
 private struct PageFlipModifier: ViewModifier {
     let angle: Double
     let anchor: UnitPoint

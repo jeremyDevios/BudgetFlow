@@ -22,6 +22,19 @@ private func isoString(_ date: Date) -> String {
     ISO8601DateFormatter().string(from: date)
 }
 
+// MARK: - SyncService Protocol (for dependency injection & testing)
+protocol SyncServiceProtocol: AnyObject {
+    var isSyncing: Bool { get }
+    func checkDataExists(for userId: String) async -> Bool
+    @MainActor func loadFromFirestore(userId: String, into context: ModelContext) async throws
+    @MainActor func saveToFirestore(settings: UserSettings, envelopes: [Envelope], userId: String) async throws
+    func syncSettings(_ settings: UserSettings, userId: String) async
+    func syncEnvelope(_ envelope: Envelope, userId: String) async throws
+    func syncTransaction(_ transaction: Transaction, userId: String) async
+    func deleteEnvelope(firestoreId: String, userId: String) async
+    func deleteTransaction(firestoreId: String, userId: String) async
+}
+
 @Observable
 class SyncService {
     var isSyncing: Bool = false
@@ -361,3 +374,6 @@ class SyncService {
         listeners.removeAll()
     }
 }
+
+// MARK: - Protocol Conformance
+extension SyncService: SyncServiceProtocol {}

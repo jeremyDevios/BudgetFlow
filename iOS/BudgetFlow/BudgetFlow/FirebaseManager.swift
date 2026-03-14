@@ -5,6 +5,15 @@ import GoogleSignIn
 import GoogleSignInSwift
 import UIKit
 
+// MARK: - FirebaseAuth Protocol (for dependency injection & testing)
+/// Represents the auth state observable by views and testable via mocks.
+protocol FirebaseAuthProtocol: AnyObject {
+    /// True when a Firebase user is authenticated.
+    var isAuthenticated: Bool { get }
+    /// True after the first auth-state listener callback fires (session restored or not).
+    var isAuthLoaded: Bool { get }
+}
+
 @Observable
 class FirebaseManager {
     var currentUser: FirebaseAuth.User? = nil
@@ -81,3 +90,6 @@ class FirebaseManager {
         return top
     }
 }
+
+// MARK: - Protocol Conformance
+extension FirebaseManager: FirebaseAuthProtocol {}

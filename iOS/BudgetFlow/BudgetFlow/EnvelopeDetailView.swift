@@ -38,6 +38,7 @@ struct EnvelopeDetailView: View {
 
                         VStack(spacing: 4) {
                             Text(selectedMonth, format: .dateTime.month(.wide).year())
+                                .environment(\.locale, Locale(identifier: "fr_FR"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .textCase(.none)

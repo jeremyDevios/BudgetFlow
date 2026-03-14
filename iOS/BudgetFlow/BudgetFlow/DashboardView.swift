@@ -154,6 +154,14 @@ struct DashboardView: View {
 private struct MonthSelectorPill: View {
     @Binding var selectedMonth: Date
 
+    private var monthDisplayText: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.dateFormat = "MMMM yyyy"
+        let str = formatter.string(from: selectedMonth)
+        return str.prefix(1).uppercased() + str.dropFirst()
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Button { changeMonth(-1) } label: {
@@ -163,7 +171,7 @@ private struct MonthSelectorPill: View {
             }
             .accessibilityLabel("Mois précédent")
 
-            Text(selectedMonth, format: .dateTime.month(.wide).year())
+            Text(monthDisplayText)
                 .font(.subheadline.bold())
                 .frame(minWidth: 130)
                 .textCase(.none)
