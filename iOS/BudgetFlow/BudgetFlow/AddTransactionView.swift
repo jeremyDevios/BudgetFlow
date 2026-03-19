@@ -2,6 +2,10 @@ import SwiftUI
 import SwiftData
 
 struct AddTransactionView: View {
+    private enum SavePhase: Equatable {
+        case idle, loading, success
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(SyncService.self) private var syncService
@@ -9,18 +13,24 @@ struct AddTransactionView: View {
     @Query private var userSettingsList: [UserSettings]
 
     var envelopes: [Envelope]
+    var onTransactionSaved: ((Envelope, Double) -> Void)? = nil
 
     @State private var amount: String = ""
     @State private var selectedEnvelope: Envelope?
     @State private var desc: String = ""
     @State private var date: Date = Date()
+    @State private var savePhase: SavePhase = .idle
+    @State private var saveButtonScale: CGFloat = 1.0
+    @State private var successRingScale: CGFloat = 0.3
+    @State private var successRingOpacity: Double = 0
     @FocusState private var amountFocused: Bool
 
     let columns = [GridItem(.adaptive(minimum: 100))]
 
-    init(envelopes: [Envelope], preselectedEnvelope: Envelope? = nil) {
+    init(envelopes: [Envelope], preselectedEnvelope: Envelope? = nil, onTransactionSaved: ((Envelope, Double) -> Void)? = nil) {
         self.envelopes = envelopes
         _selectedEnvelope = State(initialValue: preselectedEnvelope)
+        self.onTransactionSaved = onTransactionSaved
     }
 
     private var currentMonthRange: (start: Date, end: Date) {
@@ -45,6 +55,17 @@ struct AddTransactionView: View {
 
     private var willExceedBudget: Bool {
         selectedEnvelope != nil && enteredAmount > envelopeRemaining
+    }
+
+    private var buttonBackgroundColor: Color {
+        switch savePhase {
+        case .idle:
+            return (amount.isEmpty || selectedEnvelope == nil) ? Color.appSurface : Color(hex: "#F59E0B")
+        case .loading:
+            return Color(hex: "#E08800")
+        case .success:
+            return Color.appGreen
+        }
     }
 
     private func sectionHeader(_ title: String) -> some View {
@@ -136,7 +157,11 @@ struct AddTransactionView: View {
 
                         LazyVGrid(columns: columns, spacing: 10) {
                             ForEach(envelopes) { envelope in
-                                Button(action: { selectedEnvelope = envelope }) {
+                                Button(action: {
+                                    withAnimation(.bouncy(duration: 0.3)) {
+                                        selectedEnvelope = envelope
+                                    }
+                                }) {
                                     VStack {
                                         EnvelopeIconView(icon: envelope.icon, colorString: envelope.color, size: 32)
                                             .padding(.bottom, 2)
@@ -162,9 +187,12 @@ struct AddTransactionView: View {
                                                 lineWidth: 2
                                             )
                                     )
+                                    .scaleEffect(selectedEnvelope?.id == envelope.id ? 1.06 : 1.0)
+                                    .animation(.bouncy(duration: 0.3), value: selectedEnvelope?.id)
                                 }
                             }
                         }
+                        .sensoryFeedback(.selection, trigger: selectedEnvelope?.id)
                     }
                     .padding(.horizontal)
 
@@ -210,30 +238,66 @@ struct AddTransactionView: View {
                     }
                     .padding(.horizontal)
 
-                    Button(action: saveTransaction) {
-                        Text("Valider la dépense")
-                            .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(amount.isEmpty || selectedEnvelope == nil ? Color.appSecondaryText.opacity(0.5) : Color.white)
+                    ZStack {
+                        Capsule()
+                            .fill(Color.appGreen.opacity(successRingOpacity))
                             .frame(maxWidth: .infinity)
                             .frame(height: 56)
-                            .background(
-                                Group {
-                                    if amount.isEmpty || selectedEnvelope == nil {
-                                        Color.appSurface
-                                    } else {
-                                        LinearGradient(
-                                            colors: [Color(hex: "#F4941A"), Color(hex: "#F59E0B")],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
+                            .scaleEffect(x: successRingScale, y: 1.0)
+                            .padding(.horizontal, 20)
+
+                        Button(action: handleSaveTap) {
+                            ZStack {
+                                if savePhase == .idle {
+                                    Text("Valider la dépense")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundStyle(
+                                            amount.isEmpty || selectedEnvelope == nil
+                                                ? Color.appSecondaryText.opacity(0.5)
+                                                : Color.white
                                         )
-                                    }
+                                        .transition(.opacity.combined(with: .scale(scale: 0.85)))
                                 }
-                            )
+
+                                if savePhase == .loading {
+                                    HStack(spacing: 10) {
+                                        ProgressView()
+                                            .tint(.white)
+                                            .scaleEffect(0.9)
+                                        Text("Enregistrement...")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundStyle(.white)
+                                    }
+                                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                                }
+
+                                if savePhase == .success {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.system(size: 20, weight: .semibold))
+                                        Text("Dépense ajoutée !")
+                                            .font(.system(size: 17, weight: .semibold))
+                                    }
+                                    .foregroundStyle(.white)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.85)))
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 56)
+                            .background {
+                                Capsule()
+                                    .fill(buttonBackgroundColor)
+                            }
                             .clipShape(Capsule())
+                            .scaleEffect(saveButtonScale)
+                            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: savePhase)
+                        }
+                        .disabled(amount.isEmpty || selectedEnvelope == nil || savePhase != .idle)
+                        .padding(.horizontal, 20)
                     }
-                    .disabled(amount.isEmpty || selectedEnvelope == nil)
-                    .padding(.horizontal, 20)
                     .padding(.bottom, 16)
+                    .sensoryFeedback(.impact, trigger: savePhase == .loading)
+                    .sensoryFeedback(.success, trigger: savePhase == .success)
 
                     Spacer()
                 }
@@ -256,7 +320,40 @@ struct AddTransactionView: View {
         }
     }
 
-    private func saveTransaction() {
+    private func handleSaveTap() {
+        guard savePhase == .idle else { return }
+
+        withAnimation(.spring(response: 0.12, dampingFraction: 0.6)) {
+            saveButtonScale = 0.94
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
+                saveButtonScale = 1.0
+                savePhase = .loading
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.1) {
+            saveTransactionData()
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+                savePhase = .success
+            }
+            withAnimation(.easeOut(duration: 0.5).delay(0.05)) {
+                successRingScale = 1.05
+                successRingOpacity = 0.25
+            }
+            withAnimation(.easeOut(duration: 0.4).delay(0.35)) {
+                successRingOpacity = 0
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.3) {
+            dismiss()
+        }
+    }
+
+    private func saveTransactionData() {
         let cleanAmount = amount.replacingOccurrences(of: ",", with: ".")
         guard let amountVal = Double(cleanAmount),
               let envelope = selectedEnvelope else { return }
@@ -264,6 +361,7 @@ struct AddTransactionView: View {
         let transaction = Transaction(amount: amountVal, note: desc, date: date, envelope: envelope)
         modelContext.insert(transaction)
         envelope.spent += amountVal
+        onTransactionSaved?(envelope, amountVal)
 
         if let settings = userSettingsList.first,
            settings.isOnlineMode,
@@ -274,8 +372,6 @@ struct AddTransactionView: View {
                 try? await syncService.syncEnvelope(envelope, userId: userId)
             }
         }
-
-        dismiss()
     }
 }
 

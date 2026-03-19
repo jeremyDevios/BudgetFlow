@@ -11,6 +11,9 @@ struct EnvelopeDetailView: View {
     @State private var showingEditSheet = false
     @State private var showingAddTransaction = false
     @State private var editingTransaction: Transaction? = nil
+    @State private var transactionsAppeared = false
+    @State private var fabPulsing = false
+    @State private var deletedTxCount = 0
 
     var monthRange: (start: Date, end: Date) {
         (Calendar.current.startOfMonth(for: selectedMonth),
@@ -75,7 +78,7 @@ struct EnvelopeDetailView: View {
                             .padding()
                             .listRowBackground(Color.appSurface)
                     } else {
-                        ForEach(filteredTransactions) { tx in
+                        ForEach(Array(filteredTransactions.enumerated()), id: \.element.id) { index, tx in
                             TransactionDetailRow(transaction: tx)
                                 .contentShape(Rectangle())
                                 .onTapGesture { editingTransaction = tx }
@@ -87,6 +90,12 @@ struct EnvelopeDetailView: View {
                                     }
                                 }
                                 .listRowBackground(Color.appSurface)
+                                .opacity(transactionsAppeared ? 1 : 0)
+                                .offset(y: transactionsAppeared ? 0 : 16)
+                                .animation(
+                                    .smooth(duration: 0.35).delay(Double(index) * 0.05),
+                                    value: transactionsAppeared
+                                )
                         }
                     }
                 } header: {
@@ -106,6 +115,15 @@ struct EnvelopeDetailView: View {
                 )
                 .ignoresSafeArea()
             )
+            .onAppear {
+                transactionsAppeared = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation { transactionsAppeared = true }
+                }
+            }
+            .onDisappear {
+                transactionsAppeared = false
+            }
 
             // FAB
             Button {
@@ -115,14 +133,21 @@ struct EnvelopeDetailView: View {
                     .font(.title2.bold())
                     .foregroundStyle(.black)
                     .frame(width: 56, height: 56)
-                        .background(Color.appAccent)
+                    .background(Color.appAccent)
                     .clipShape(Circle())
-                        .shadow(color: Color.appAccent.opacity(0.4), radius: 12, y: 4)
+                    .scaleEffect(fabPulsing ? 1.06 : 1.0)
+                    .shadow(color: Color.appAccent.opacity(fabPulsing ? 0.65 : 0.35), radius: fabPulsing ? 20 : 12, y: 4)
+            }
+            .onAppear {
+                withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                    fabPulsing = true
+                }
             }
             .padding(.trailing, 20)
             .padding(.bottom, 20)
             .accessibilityLabel("Nouvelle dépense")
         }
+        .sensoryFeedback(.warning, trigger: deletedTxCount)
         .navigationTitle(envelope.name)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -144,7 +169,10 @@ struct EnvelopeDetailView: View {
 
     private func deleteTransaction(_ tx: Transaction) {
         envelope.spent = max(0, envelope.spent - tx.amount)
-        modelContext.delete(tx)
+        withAnimation(.smooth(duration: 0.35)) {
+            modelContext.delete(tx)
+        }
+        deletedTxCount += 1
     }
 }
 

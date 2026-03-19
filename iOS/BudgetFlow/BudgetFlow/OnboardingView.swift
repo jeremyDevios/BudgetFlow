@@ -53,6 +53,7 @@ struct OnboardingView: View {
     @State private var showAuthSheet: Bool = false
     @State private var firebaseUser: FirebaseAuth.User? = nil
     @State private var isFinishing: Bool = false
+    @State private var showCompletionBurst = false
     
     // Transitions
     @Namespace private var animation
@@ -142,6 +143,57 @@ struct OnboardingView: View {
                         .transition(.pageFlip(forward: isMovingForward))
                 }
             }
+
+            // Completion celebration overlay
+            if showCompletionBurst {
+                ZStack {
+                    Color.appBackground.opacity(0.85)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+
+                    VStack(spacing: 24) {
+                        ZStack {
+                            // Burst rings (3 expanding circles)
+                            ForEach(0..<3) { i in
+                                Circle()
+                                    .stroke(Color.appGreen.opacity(showCompletionBurst ? 0 : 0.6), lineWidth: 2)
+                                    .scaleEffect(showCompletionBurst ? CGFloat(2.0 + Double(i) * 0.5) : 0.5)
+                                    .animation(
+                                        .easeOut(duration: 0.8).delay(Double(i) * 0.12),
+                                        value: showCompletionBurst
+                                    )
+                            }
+
+                            // Checkmark circle
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 80))
+                                .foregroundStyle(Color.appGreen)
+                                .scaleEffect(showCompletionBurst ? 1.0 : 0.3)
+                                .opacity(showCompletionBurst ? 1.0 : 0)
+                                .animation(.bouncy(duration: 0.5).delay(0.1), value: showCompletionBurst)
+                        }
+                        .frame(width: 120, height: 120)
+
+                        VStack(spacing: 8) {
+                            Text("Budget configuré !")
+                                .font(.title2.bold())
+                                .foregroundStyle(Color.appText)
+                                .opacity(showCompletionBurst ? 1 : 0)
+                                .offset(y: showCompletionBurst ? 0 : 20)
+                                .animation(.smooth(duration: 0.4).delay(0.3), value: showCompletionBurst)
+
+                            Text("Votre espace est prêt")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.appSecondaryText)
+                                .opacity(showCompletionBurst ? 1 : 0)
+                                .offset(y: showCompletionBurst ? 0 : 15)
+                                .animation(.smooth(duration: 0.4).delay(0.45), value: showCompletionBurst)
+                        }
+                    }
+                }
+                .transition(.opacity)
+                .zIndex(10)
+            }
         }
         .sheet(isPresented: $showAuthSheet) {
             AuthView(
@@ -214,6 +266,11 @@ struct OnboardingView: View {
         }
 
         isFinishing = false
+        // Show celebration, then transition to app
+        withAnimation(.easeIn(duration: 0.2)) {
+            showCompletionBurst = true
+        }
+        try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s
         isOnboarded = true
     }
 }
@@ -432,6 +489,7 @@ struct EnvelopeEditorSheet: View {
 // MARK: - Step 0: Welcome
 struct WelcomeView: View {
     var onStart: () -> Void
+    @State private var animate = false
     
     var body: some View {
         ZStack {
@@ -449,6 +507,9 @@ struct WelcomeView: View {
                 .font(.system(size: 42, weight: .black))
                 .multilineTextAlignment(.center)
                 .shadow(color: .appAccent.opacity(0.3), radius: 20, x: 0, y: 10)
+                .opacity(animate ? 1 : 0)
+                .offset(y: animate ? 0 : 20)
+                .animation(.smooth(duration: 0.5).delay(0.2), value: animate)
 
                 
                 Text("La méthode des enveloppes, revisitée. Calculez le montant idéal de vos enveloppes selon vos revenus, charges et objectifs d'épargne. Un budget sur-mesure pour maîtriser vos dépenses et réaliser vos rêves.")
@@ -457,14 +518,26 @@ struct WelcomeView: View {
                     .foregroundColor(.gray)
                     .padding(.horizontal, 30)
                     .padding(.top, 20)
+                    .opacity(animate ? 1 : 0)
+                    .offset(y: animate ? 0 : 16)
+                    .animation(.smooth(duration: 0.5).delay(0.4), value: animate)
                 
                 Spacer()
                 
                 PrimaryButton(title: "Commencer", icon: "arrow.right", action: onStart)
                     .padding(.horizontal, 40)
                     .padding(.bottom, 50)
+                    .opacity(animate ? 1 : 0)
+                    .offset(y: animate ? 0 : 24)
+                    .animation(.smooth(duration: 0.5).delay(0.6), value: animate)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onAppear {
+            animate = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation { animate = true }
+            }
         }
     }
 }

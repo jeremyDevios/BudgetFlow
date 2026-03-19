@@ -13,15 +13,20 @@ struct ContentView: View {
     @State private var isCheckingOnlineData = false
 
     var body: some View {
-        Group {
+        ZStack {
             if isCheckingOnlineData {
                 ZStack {
                     Color.appBackground.ignoresSafeArea()
                     ProgressView()
                         .tint(Color.appAccent)
                 }
+                .transition(.opacity)
             } else if isOnboarded {
                 MainTabView()
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .opacity
+                    ))
                     .task {
                         guard let settings = userSettings.first,
                               settings.isOnlineMode,
@@ -33,8 +38,14 @@ struct ContentView: View {
                     }
             } else {
                 OnboardingWrapper()
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .opacity
+                    ))
             }
         }
+        .animation(.smooth(duration: 0.5), value: isCheckingOnlineData)
+        .animation(.smooth(duration: 0.55), value: isOnboarded)
         // Déclenché une seule fois quand Firebase a fini de restaurer sa session
         .onChange(of: firebaseManager.isAuthLoaded) { _, loaded in
             guard loaded, !isOnboarded, let user = firebaseManager.currentUser else { return }
