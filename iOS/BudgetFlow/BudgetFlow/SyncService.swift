@@ -3,7 +3,7 @@ import Foundation
 import Observation
 import SwiftData
 
-private func parseDate(_ value: Any?) -> Date {
+func parseDate(_ value: Any?) -> Date {
     if let str = value as? String {
         // Format web : "2026-03-10T15:30:00.000Z" (avec millisecondes)
         let formatterWithMs = ISO8601DateFormatter()
@@ -18,8 +18,15 @@ private func parseDate(_ value: Any?) -> Date {
     return Date()
 }
 
-private func isoString(_ date: Date) -> String {
+func isoString(_ date: Date) -> String {
     ISO8601DateFormatter().string(from: date)
+}
+
+func firestoreDouble(_ data: [String: Any], _ key: String, fallback: Double) -> Double {
+    if let d = data[key] as? Double { return d }
+    if let i = data[key] as? Int { return Double(i) }
+    if let i = data[key] as? Int64 { return Double(i) }
+    return fallback
 }
 
 // MARK: - SyncService Protocol (for dependency injection & testing)
@@ -42,13 +49,6 @@ class SyncService {
 
     private let db = Firestore.firestore()
     private let settingsDocumentId = "general"
-
-    private func firestoreDouble(_ data: [String: Any], _ key: String, fallback: Double) -> Double {
-        if let d = data[key] as? Double { return d }
-        if let i = data[key] as? Int { return Double(i) }
-        if let i = data[key] as? Int64 { return Double(i) }
-        return fallback
-    }
 
     func checkDataExists(for userId: String) async -> Bool {
         do {
