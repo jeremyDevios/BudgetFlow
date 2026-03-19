@@ -230,6 +230,8 @@ struct TempEnvelope: Identifiable, Equatable {
 // MARK: - Custom Envelope Editor Sheet
 struct EnvelopeEditorSheet: View {
     @Binding var envelope: TempEnvelope
+    var isNew: Bool = false
+    var availableBudget: Double = 0
     var onSave: (TempEnvelope) -> Void
     var onCancel: () -> Void
     
@@ -264,7 +266,7 @@ struct EnvelopeEditorSheet: View {
                 }
             
             VStack(alignment: .leading, spacing: 20) {
-                Text("Modifier l'enveloppe")
+                Text(isNew ? "Ajout d'enveloppe" : "Modifier l'enveloppe")
                     .font(.title2)
                     .bold()
                     .foregroundColor(.appText)
@@ -276,27 +278,66 @@ struct EnvelopeEditorSheet: View {
                         .padding()
                         .background(Color.appBackground)
                         .cornerRadius(8)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.appBorder, lineWidth: 1))
                         .foregroundColor(.appText)
                 }
                 
                 // Amount
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Budget Mensuel").font(.caption).foregroundColor(.gray)
+                    HStack {
+                        Text("Budget Mensuel").font(.caption).foregroundColor(.gray)
+                        Spacer()
+                        // Available budget indicator
+                        HStack(spacing: 4) {
+                            Text("Disponible :")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            Text((availableBudget - (convertToDouble(editedAmountText) ?? 0)), format: .currency(code: "EUR"))
+                                .font(.caption.bold())
+                                .foregroundColor(
+                                    (convertToDouble(editedAmountText) ?? 0) > availableBudget
+                                        ? .red
+                                        : .appGreen
+                                )
+                        }
+                    }
                     HStack {
                         TextField("0", text: $editedAmountText)
                             .keyboardType(.decimalPad)
                             .foregroundColor(.appText)
-                            .onChange(of: editedAmountText) { oldValue, newValue in
-                                // No need to update anything here, convertToDouble will handle it in onSave
-                            }
                         Text("€").foregroundColor(.gray)
                     }
                     .padding()
                     .background(Color.appBackground)
                     .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(
+                                (convertToDouble(editedAmountText) ?? 0) > availableBudget
+                                    ? Color.orange
+                                    : Color.appBorder,
+                                lineWidth: 1
+                            )
+                    )
+
+                    // Over-budget warning pill
+                    if (convertToDouble(editedAmountText) ?? 0) > availableBudget {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            Text("Dépasse le budget disponible (\(availableBudget, specifier: "%.0f") € max)")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.orange.opacity(0.12))
+                        .cornerRadius(8)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
+                .animation(.easeInOut(duration: 0.2), value: (convertToDouble(editedAmountText) ?? 0) > availableBudget)
                 
                 // Icon Picker
                 VStack(alignment: .leading, spacing: 8) {
@@ -360,10 +401,10 @@ struct EnvelopeEditorSheet: View {
                     }) {
                         Text("Sauvegarder")
                             .fontWeight(.bold)
-                            .foregroundColor(isSaveDisabled ? .gray : .black)
+                            .foregroundColor(isSaveDisabled ? Color.appSecondaryText : Color.black)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(isSaveDisabled ? Color.gray.opacity(0.3) : Color.white)
+                            .background(isSaveDisabled ? Color.appSurface : Color.appAccent)
                             .cornerRadius(12)
                     }
                     .disabled(isSaveDisabled)
@@ -655,6 +696,7 @@ struct StepEnvelopesView: View {
     // User wants popup logic for editing.
     // Let's use a selectedEnvelope state.
     @State private var selectedEnvelopeId: UUID? = nil
+    @State private var isNewEnvelope: Bool = false
     
     var totalBudget: Double { max(0, income - fixedCosts - savings) }
     var allocated: Double { envelopes.reduce(0) { $0 + $1.amount } }
@@ -697,6 +739,7 @@ struct StepEnvelopesView: View {
                                     env: $env, 
                                     onTap: {
                                         selectedEnvelopeId = env.id
+                                        isNewEnvelope = false
                                     },
                                     onDelete: {
                                         withAnimation {
@@ -711,6 +754,7 @@ struct StepEnvelopesView: View {
                                 let new = TempEnvelope(name: "", icon: "pencil", color: "Blue", amount: 0)
                                 envelopes.append(new)
                                 selectedEnvelopeId = new.id
+                                isNewEnvelope = true
                             }) {
                                 HStack {
                                     Image(systemName: "plus")
@@ -750,12 +794,21 @@ struct StepEnvelopesView: View {
                 
                 EnvelopeEditorSheet(
                     envelope: $envelopes[index],
+                    isNew: isNewEnvelope,
+                    availableBudget: remaining + envelopes[index].amount,
                     onSave: { newEnv in
                         envelopes[index] = newEnv
                         selectedEnvelopeId = nil
+                        isNewEnvelope = false
                     },
                     onCancel: {
-                         selectedEnvelopeId = nil
+                        if isNewEnvelope {
+                            withAnimation {
+                                envelopes.removeAll { $0.id == selectedEnvelopeId }
+                            }
+                        }
+                        selectedEnvelopeId = nil
+                        isNewEnvelope = false
                     }
                 )
             }
@@ -831,7 +884,7 @@ struct OnboardingEnvelopeRow: View {
                 .padding(.vertical, 8)
                 .background(Color.appBackground.opacity(0.5))
                 .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.appBorder, lineWidth: 1))
                 
                 // Delete Button
                 Button(action: {
@@ -848,7 +901,7 @@ struct OnboardingEnvelopeRow: View {
             .padding(16)
             .background(Color.appSurface)
             .cornerRadius(16)
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.appBorder, lineWidth: 1))
             .offset(x: offset)
             .gesture(
                 DragGesture()
@@ -933,10 +986,10 @@ struct BottomActionBar: View {
                 }
                 .font(.headline)
                 .fontWeight(.bold)
-                .foregroundColor(.appText)
+                .foregroundColor(isMainDisabled ? Color.appSecondaryText : Color.black)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(isMainDisabled ? Color.gray : Color.appAccent)
+                .background(isMainDisabled ? Color.appSurface : Color.appAccent)
                 .cornerRadius(12)
             }
             .disabled(isMainDisabled)
@@ -977,7 +1030,7 @@ struct ExpensePill: View {
         .background(Color.appSurface)
         .cornerRadius(30)
         .shadow(color: .black.opacity(0.2), radius: 5, x: 0, y: 2)
-        .overlay(RoundedRectangle(cornerRadius: 30).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 30).stroke(Color.appBorder, lineWidth: 1))
     }
 }
 

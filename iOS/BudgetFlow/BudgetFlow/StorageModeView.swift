@@ -27,7 +27,7 @@ struct StorageModeView: View {
 
                     Text("Vos donnees")
                         .font(.system(size: 34, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.appText)
 
                     Text("ou les stocker ?")
                         .font(.system(size: 34, weight: .bold))
@@ -102,7 +102,7 @@ struct StorageModeView: View {
                 Text(title)
                     .font(.headline)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.appText)
 
                 Text(subtitle)
                     .font(.caption)
@@ -114,7 +114,7 @@ struct StorageModeView: View {
             .background(isSelected ? Color.appYellow.opacity(0.12) : Color.appSurface)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? Color.appYellow : Color.white.opacity(0.1), lineWidth: isSelected ? 2 : 1)
+                    .stroke(isSelected ? Color.appYellow : Color.appBorder, lineWidth: isSelected ? 2 : 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: 16))
         }
