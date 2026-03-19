@@ -2,28 +2,6 @@ import SwiftUI
 import SwiftData
 import FirebaseAuth
 
-// MARK: - Extensions for Keyboard Dismissal
-extension View {
-    func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-    }
-}
-
-// Extension to help color/icon management
-extension Color {
-    // Helper to get hex string
-    func toHexString() -> String? {
-        // Implement if needed for standard colors, but the Extensions.swift likely covers .toHex()
-        // We will assume .toHex() exists from previous context
-        let uic = UIColor(self)
-        guard let components = uic.cgColor.components, components.count >= 3 else { return nil }
-        let r = Float(components[0])
-        let g = Float(components[1])
-        let b = Float(components[2])
-        return String(format: "%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
-    }
-}
-
 private struct PageFlipModifier: ViewModifier {
     let angle: Double
     let anchor: UnitPoint
@@ -75,6 +53,7 @@ struct OnboardingView: View {
     @State private var showAuthSheet: Bool = false
     @State private var firebaseUser: FirebaseAuth.User? = nil
     @State private var isFinishing: Bool = false
+    @State private var showCompletionBurst = false
     
     // Transitions
     @Namespace private var animation
@@ -164,6 +143,57 @@ struct OnboardingView: View {
                         .transition(.pageFlip(forward: isMovingForward))
                 }
             }
+
+            // Completion celebration overlay
+            if showCompletionBurst {
+                ZStack {
+                    Color.appBackground.opacity(0.85)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+
+                    VStack(spacing: 24) {
+                        ZStack {
+                            // Burst rings (3 expanding circles)
+                            ForEach(0..<3) { i in
+                                Circle()
+                                    .stroke(Color.appGreen.opacity(showCompletionBurst ? 0 : 0.6), lineWidth: 2)
+                                    .scaleEffect(showCompletionBurst ? CGFloat(2.0 + Double(i) * 0.5) : 0.5)
+                                    .animation(
+                                        .easeOut(duration: 0.8).delay(Double(i) * 0.12),
+                                        value: showCompletionBurst
+                                    )
+                            }
+
+                            // Checkmark circle
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 80))
+                                .foregroundStyle(Color.appGreen)
+                                .scaleEffect(showCompletionBurst ? 1.0 : 0.3)
+                                .opacity(showCompletionBurst ? 1.0 : 0)
+                                .animation(.bouncy(duration: 0.5).delay(0.1), value: showCompletionBurst)
+                        }
+                        .frame(width: 120, height: 120)
+
+                        VStack(spacing: 8) {
+                            Text("Budget configuré !")
+                                .font(.title2.bold())
+                                .foregroundStyle(Color.appText)
+                                .opacity(showCompletionBurst ? 1 : 0)
+                                .offset(y: showCompletionBurst ? 0 : 20)
+                                .animation(.smooth(duration: 0.4).delay(0.3), value: showCompletionBurst)
+
+                            Text("Votre espace est prêt")
+                                .font(.subheadline)
+                                .foregroundStyle(Color.appSecondaryText)
+                                .opacity(showCompletionBurst ? 1 : 0)
+                                .offset(y: showCompletionBurst ? 0 : 15)
+                                .animation(.smooth(duration: 0.4).delay(0.45), value: showCompletionBurst)
+                        }
+                    }
+                }
+                .transition(.opacity)
+                .zIndex(10)
+            }
         }
         .sheet(isPresented: $showAuthSheet) {
             AuthView(
@@ -236,6 +266,11 @@ struct OnboardingView: View {
         }
 
         isFinishing = false
+        // Show celebration, then transition to app
+        withAnimation(.easeIn(duration: 0.2)) {
+            showCompletionBurst = true
+        }
+        try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5s
         isOnboarded = true
     }
 }
@@ -252,6 +287,8 @@ struct TempEnvelope: Identifiable, Equatable {
 // MARK: - Custom Envelope Editor Sheet
 struct EnvelopeEditorSheet: View {
     @Binding var envelope: TempEnvelope
+    var isNew: Bool = false
+    var availableBudget: Double = 0
     var onSave: (TempEnvelope) -> Void
     var onCancel: () -> Void
     
@@ -286,7 +323,7 @@ struct EnvelopeEditorSheet: View {
                 }
             
             VStack(alignment: .leading, spacing: 20) {
-                Text("Modifier l'enveloppe")
+                Text(isNew ? "Ajout d'enveloppe" : "Modifier l'enveloppe")
                     .font(.title2)
                     .bold()
                     .foregroundColor(.appText)
@@ -298,27 +335,66 @@ struct EnvelopeEditorSheet: View {
                         .padding()
                         .background(Color.appBackground)
                         .cornerRadius(8)
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.appBorder, lineWidth: 1))
                         .foregroundColor(.appText)
                 }
                 
                 // Amount
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Budget Mensuel").font(.caption).foregroundColor(.gray)
+                    HStack {
+                        Text("Budget Mensuel").font(.caption).foregroundColor(.gray)
+                        Spacer()
+                        // Available budget indicator
+                        HStack(spacing: 4) {
+                            Text("Disponible :")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            Text((availableBudget - (convertToDouble(editedAmountText) ?? 0)), format: .currency(code: "EUR"))
+                                .font(.caption.bold())
+                                .foregroundColor(
+                                    (convertToDouble(editedAmountText) ?? 0) > availableBudget
+                                        ? .red
+                                        : .appGreen
+                                )
+                        }
+                    }
                     HStack {
                         TextField("0", text: $editedAmountText)
                             .keyboardType(.decimalPad)
                             .foregroundColor(.appText)
-                            .onChange(of: editedAmountText) { oldValue, newValue in
-                                // No need to update anything here, convertToDouble will handle it in onSave
-                            }
                         Text("€").foregroundColor(.gray)
                     }
                     .padding()
                     .background(Color.appBackground)
                     .cornerRadius(8)
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(
+                                (convertToDouble(editedAmountText) ?? 0) > availableBudget
+                                    ? Color.orange
+                                    : Color.appBorder,
+                                lineWidth: 1
+                            )
+                    )
+
+                    // Over-budget warning pill
+                    if (convertToDouble(editedAmountText) ?? 0) > availableBudget {
+                        HStack(spacing: 8) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            Text("Dépasse le budget disponible (\(availableBudget, specifier: "%.0f") € max)")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color.orange.opacity(0.12))
+                        .cornerRadius(8)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
+                .animation(.easeInOut(duration: 0.2), value: (convertToDouble(editedAmountText) ?? 0) > availableBudget)
                 
                 // Icon Picker
                 VStack(alignment: .leading, spacing: 8) {
@@ -382,10 +458,10 @@ struct EnvelopeEditorSheet: View {
                     }) {
                         Text("Sauvegarder")
                             .fontWeight(.bold)
-                            .foregroundColor(isSaveDisabled ? .gray : .black)
+                            .foregroundColor(isSaveDisabled ? Color.appSecondaryText : Color.black)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(isSaveDisabled ? Color.gray.opacity(0.3) : Color.white)
+                            .background(isSaveDisabled ? Color.appSurface : Color.appAccent)
                             .cornerRadius(12)
                     }
                     .disabled(isSaveDisabled)
@@ -413,6 +489,7 @@ struct EnvelopeEditorSheet: View {
 // MARK: - Step 0: Welcome
 struct WelcomeView: View {
     var onStart: () -> Void
+    @State private var animate = false
     
     var body: some View {
         ZStack {
@@ -430,6 +507,9 @@ struct WelcomeView: View {
                 .font(.system(size: 42, weight: .black))
                 .multilineTextAlignment(.center)
                 .shadow(color: .appAccent.opacity(0.3), radius: 20, x: 0, y: 10)
+                .opacity(animate ? 1 : 0)
+                .offset(y: animate ? 0 : 20)
+                .animation(.smooth(duration: 0.5).delay(0.2), value: animate)
 
                 
                 Text("La méthode des enveloppes, revisitée. Calculez le montant idéal de vos enveloppes selon vos revenus, charges et objectifs d'épargne. Un budget sur-mesure pour maîtriser vos dépenses et réaliser vos rêves.")
@@ -438,14 +518,26 @@ struct WelcomeView: View {
                     .foregroundColor(.gray)
                     .padding(.horizontal, 30)
                     .padding(.top, 20)
+                    .opacity(animate ? 1 : 0)
+                    .offset(y: animate ? 0 : 16)
+                    .animation(.smooth(duration: 0.5).delay(0.4), value: animate)
                 
                 Spacer()
                 
                 PrimaryButton(title: "Commencer", icon: "arrow.right", action: onStart)
                     .padding(.horizontal, 40)
                     .padding(.bottom, 50)
+                    .opacity(animate ? 1 : 0)
+                    .offset(y: animate ? 0 : 24)
+                    .animation(.smooth(duration: 0.5).delay(0.6), value: animate)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onAppear {
+            animate = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation { animate = true }
+            }
         }
     }
 }
@@ -677,6 +769,7 @@ struct StepEnvelopesView: View {
     // User wants popup logic for editing.
     // Let's use a selectedEnvelope state.
     @State private var selectedEnvelopeId: UUID? = nil
+    @State private var isNewEnvelope: Bool = false
     
     var totalBudget: Double { max(0, income - fixedCosts - savings) }
     var allocated: Double { envelopes.reduce(0) { $0 + $1.amount } }
@@ -719,6 +812,7 @@ struct StepEnvelopesView: View {
                                     env: $env, 
                                     onTap: {
                                         selectedEnvelopeId = env.id
+                                        isNewEnvelope = false
                                     },
                                     onDelete: {
                                         withAnimation {
@@ -733,6 +827,7 @@ struct StepEnvelopesView: View {
                                 let new = TempEnvelope(name: "", icon: "pencil", color: "Blue", amount: 0)
                                 envelopes.append(new)
                                 selectedEnvelopeId = new.id
+                                isNewEnvelope = true
                             }) {
                                 HStack {
                                     Image(systemName: "plus")
@@ -772,12 +867,21 @@ struct StepEnvelopesView: View {
                 
                 EnvelopeEditorSheet(
                     envelope: $envelopes[index],
+                    isNew: isNewEnvelope,
+                    availableBudget: remaining + envelopes[index].amount,
                     onSave: { newEnv in
                         envelopes[index] = newEnv
                         selectedEnvelopeId = nil
+                        isNewEnvelope = false
                     },
                     onCancel: {
-                         selectedEnvelopeId = nil
+                        if isNewEnvelope {
+                            withAnimation {
+                                envelopes.removeAll { $0.id == selectedEnvelopeId }
+                            }
+                        }
+                        selectedEnvelopeId = nil
+                        isNewEnvelope = false
                     }
                 )
             }
@@ -853,7 +957,7 @@ struct OnboardingEnvelopeRow: View {
                 .padding(.vertical, 8)
                 .background(Color.appBackground.opacity(0.5))
                 .cornerRadius(8)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.appBorder, lineWidth: 1))
                 
                 // Delete Button
                 Button(action: {
@@ -870,7 +974,7 @@ struct OnboardingEnvelopeRow: View {
             .padding(16)
             .background(Color.appSurface)
             .cornerRadius(16)
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.appBorder, lineWidth: 1))
             .offset(x: offset)
             .gesture(
                 DragGesture()
@@ -955,10 +1059,10 @@ struct BottomActionBar: View {
                 }
                 .font(.headline)
                 .fontWeight(.bold)
-                .foregroundColor(.appText)
+                .foregroundColor(isMainDisabled ? Color.appSecondaryText : Color.black)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(isMainDisabled ? Color.gray : Color.appAccent)
+                .background(isMainDisabled ? Color.appSurface : Color.appAccent)
                 .cornerRadius(12)
             }
             .disabled(isMainDisabled)
@@ -999,7 +1103,7 @@ struct ExpensePill: View {
         .background(Color.appSurface)
         .cornerRadius(30)
         .shadow(color: .black.opacity(0.2), radius: 5, x: 0, y: 2)
-        .overlay(RoundedRectangle(cornerRadius: 30).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 30).stroke(Color.appBorder, lineWidth: 1))
     }
 }
 

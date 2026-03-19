@@ -5,6 +5,8 @@ struct EnvelopeGridSection: View {
     let spentPerEnvelope: [UUID: Double]
     let monthRange: (start: Date, end: Date)
     let onAddTransaction: (Envelope) -> Void
+    let highlightedEnvelopeId: UUID?
+    @State private var appeared = false
 
     private let columns = [GridItem(.flexible()), GridItem(.flexible())]
 
@@ -29,17 +31,33 @@ struct EnvelopeGridSection: View {
                 .foregroundStyle(.secondary)
             } else {
                 LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(envelopes) { envelope in
+                    ForEach(Array(envelopes.enumerated()), id: \.element.id) { index, envelope in
                         NavigationLink(value: envelope) {
                             EnvelopeCard(
                                 envelope: envelope,
                                 spentThisMonth: spentPerEnvelope[envelope.id, default: 0],
                                 monthRange: monthRange,
-                                onAddTransaction: { onAddTransaction(envelope) }
+                                onAddTransaction: { onAddTransaction(envelope) },
+                                isHighlighted: highlightedEnvelopeId == envelope.id
                             )
                         }
                         .buttonStyle(.plain)
+                        .opacity(appeared ? 1 : 0)
+                        .offset(y: appeared ? 0 : 24)
+                        .animation(
+                            .smooth(duration: 0.4).delay(Double(index) * 0.06),
+                            value: appeared
+                        )
                     }
+                }
+                .onAppear {
+                    appeared = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                        withAnimation { appeared = true }
+                    }
+                }
+                .onDisappear {
+                    appeared = false
                 }
             }
         }
@@ -54,6 +72,8 @@ private struct EnvelopeCard: View {
     let spentThisMonth: Double
     let monthRange: (start: Date, end: Date)
     let onAddTransaction: () -> Void
+    let isHighlighted: Bool
+    @State private var cardPulsing = false
 
     var remaining: Double { envelope.budget - spentThisMonth }
     var cardColor: Color { Color.fromString(envelope.color) }
@@ -130,6 +150,23 @@ private struct EnvelopeCard: View {
             radius: 4, x: 0, y: 2
         )
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.appGreen.opacity(isHighlighted ? 0.8 : 0), lineWidth: 2)
+        )
+        .shadow(color: Color.appGreen.opacity(isHighlighted ? 0.4 : 0), radius: isHighlighted ? 14 : 0)
+        .animation(.easeInOut(duration: 0.3), value: isHighlighted)
+        .scaleEffect(cardPulsing ? 1.03 : 1.0)
+        .onChange(of: spentThisMonth) { _, _ in
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                cardPulsing = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    cardPulsing = false
+                }
+            }
+        }
     }
 }
 

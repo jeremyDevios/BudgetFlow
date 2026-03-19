@@ -147,9 +147,11 @@ private struct SankeyDiagramView: View {
             let leftFrame = leftNodeFrame(for: geometry.size)
             let rightX = geometry.size.width - padding - nodeWidth
             let entries = layoutEntries(for: geometry.size, nodes: rightNodes)
+            let totalFlowHeight = entries.reduce(CGFloat(0)) { $0 + $1.height }
+            let adjustedLeftFrame = CGRect(x: leftFrame.minX, y: leftFrame.minY, width: leftFrame.width, height: totalFlowHeight)
 
             Canvas { context, size in
-                drawSankey(context: &context, leftFrame: leftFrame, rightX: rightX, entries: entries)
+                drawSankey(context: &context, leftFrame: adjustedLeftFrame, rightX: rightX, entries: entries)
             }
             .background {
                 RoundedRectangle(cornerRadius: 20)
@@ -162,7 +164,7 @@ private struct SankeyDiagramView: View {
             .overlay {
                 SankeyLabelsOverlay(
                     settings: settings,
-                    leftFrame: leftFrame,
+                    leftFrame: adjustedLeftFrame,
                     rightX: rightX,
                     entries: entries
                 )
@@ -255,8 +257,35 @@ private struct SankeyLabelsOverlay: View {
     let rightX: CGFloat
     let entries: [SankeyLayoutEntry]
 
+    private static let minLabelGap: CGFloat = 26
+    private let nodeWidth: CGFloat = 16
+    private let dotSize: CGFloat = 7
+
+    private var resolvedYPositions: [CGFloat] {
+        guard !entries.isEmpty else { return [] }
+        var pos = entries.map { $0.y + $0.height / 2.0 }
+        for i in 1..<pos.count {
+            let needed = pos[i - 1] + Self.minLabelGap
+            if pos[i] < needed { pos[i] = needed }
+        }
+        for i in stride(from: pos.count - 2, through: 0, by: -1) {
+            let maxAllowed = pos[i + 1] - Self.minLabelGap
+            if pos[i] > maxAllowed { pos[i] = maxAllowed }
+        }
+        return pos
+    }
+
     var body: some View {
+        let resolved = resolvedYPositions
+        // dot center X: just left of the right node bar
+        let dotCenterX = rightX - dotSize / 2 - 3
+        // node bar mid X: center of the right node bars
+        let barMidX = rightX + nodeWidth / 2
+        // label center X: 84-wide text block ending just left of the dot
+        let labelCenterX = dotCenterX - dotSize / 2 - 4 - 42
+
         ZStack(alignment: .topLeading) {
+            // Left income label
             VStack(alignment: .leading, spacing: 1) {
                 Text("Revenu")
                     .font(.caption.bold())
@@ -265,24 +294,46 @@ private struct SankeyLabelsOverlay: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
-            .position(
-                x: leftFrame.maxX + 42,
-                y: leftFrame.midY
-            )
+            .position(x: leftFrame.maxX + 42, y: leftFrame.midY)
 
-            ForEach(entries) { entry in
-                VStack(alignment: .trailing, spacing: 1) {
+            // Leader lines drawn in Canvas (behind labels)
+            Canvas { context, _ in
+                for (index, entry) in entries.enumerated() {
+                    let naturalY = entry.y + entry.height / 2
+                    let labelY = index < resolved.count ? resolved[index] : naturalY
+                    guard abs(labelY - naturalY) > 3 else { continue }
+                    var path = Path()
+                    path.move(to: CGPoint(x: dotCenterX, y: labelY))
+                    path.addLine(to: CGPoint(x: barMidX, y: naturalY))
+                    context.stroke(path, with: .color(entry.node.color.opacity(0.65)), lineWidth: 1)
+                }
+            }
+
+            // Labels + dots
+            ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+                let naturalY = entry.y + entry.height / 2
+                let labelY = index < resolved.count ? resolved[index] : naturalY
+
+                // Colored dot at the label's Y position
+                Circle()
+                    .fill(entry.node.color)
+                    .frame(width: dotSize, height: dotSize)
+                    .position(x: dotCenterX, y: labelY)
+
+                // Label text
+                VStack(alignment: .trailing, spacing: 0) {
                     Text(entry.node.label)
                         .font(.caption.bold())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                         .foregroundStyle(entry.node.color)
                     Text(entry.node.amount, format: .currency(code: "EUR"))
-                        .font(.caption2)
+                        .font(.system(size: 9))
+                        .lineLimit(1)
                         .foregroundStyle(.secondary)
                 }
-                .position(
-                    x: rightX - 46,
-                    y: entry.y + entry.height / 2
-                )
+                .frame(width: 84, alignment: .trailing)
+                .position(x: labelCenterX, y: labelY)
             }
         }
     }

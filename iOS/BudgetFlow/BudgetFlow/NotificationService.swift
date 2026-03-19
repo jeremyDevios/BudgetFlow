@@ -3,9 +3,9 @@ import UserNotifications
 
 final class NotificationService {
     static let shared = NotificationService()
-    private init() {}
+    init() {}
 
-    private func identifier(for weekday: Int) -> String {
+    func identifier(for weekday: Int) -> String {
         "budgetflow-weekly-\(weekday)"
     }
 

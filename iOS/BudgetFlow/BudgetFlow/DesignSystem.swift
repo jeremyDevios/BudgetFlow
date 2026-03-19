@@ -152,10 +152,10 @@ struct PrimaryButton: View {
                         .bold()
                 }
             }
-            .foregroundColor(isDisabled ? .gray : .white) // Or black text on yellow? Image has white text on orange button usually, but checking image again... actually it looks like white text on orange button. Wait, typically yellow buttons have black text for contrast. Let's look at the image again. Ah, the image provided has White Text on Orange Button.
+            .foregroundColor(isDisabled ? Color.appSecondaryText : Color.black)
             .frame(maxWidth: .infinity)
             .padding()
-            .background(isDisabled ? Color.gray.opacity(0.3) : Color.appAccent)
+            .background(isDisabled ? Color.appSurface : Color.appAccent)
             .cornerRadius(12)
         }
         .disabled(isDisabled)

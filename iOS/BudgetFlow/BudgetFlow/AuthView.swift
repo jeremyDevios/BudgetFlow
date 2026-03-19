@@ -24,7 +24,7 @@ struct AuthView: View {
                     Button(action: onDismiss) {
                         Image(systemName: "xmark")
                             .font(.headline)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.appSecondaryText)
                             .padding(10)
                             .background(Color.appSurface)
                             .clipShape(Circle())
@@ -39,7 +39,7 @@ struct AuthView: View {
                 Text(isSignIn ? "Se connecter" : "Creer un compte")
                     .font(.title)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.appText)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Email")
@@ -50,7 +50,7 @@ struct AuthView: View {
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
                         .autocorrectionDisabled()
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.appText)
                         .padding()
                         .background(Color.appSurface)
                         .cornerRadius(12)
@@ -62,7 +62,7 @@ struct AuthView: View {
                         .foregroundStyle(Color.appSecondaryText)
 
                     SecureField("••••••••", text: $password)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.appText)
                         .padding()
                         .background(Color.appSurface)
                         .cornerRadius(12)
@@ -88,13 +88,13 @@ struct AuthView: View {
 
                 HStack(spacing: 12) {
                     Rectangle()
-                        .fill(Color.white.opacity(0.1))
+                        .fill(Color.appBorder)
                         .frame(height: 1)
                     Text("ou")
                         .font(.caption)
                         .foregroundStyle(Color.appSecondaryText)
                     Rectangle()
-                        .fill(Color.white.opacity(0.1))
+                        .fill(Color.appBorder)
                         .frame(height: 1)
                 }
 
@@ -105,10 +105,10 @@ struct AuthView: View {
                 }) {
                     HStack(spacing: 12) {
                         Image(systemName: "globe")
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.appText)
                         Text("Continuer avec Google")
                             .fontWeight(.semibold)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.appText)
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -116,7 +116,7 @@ struct AuthView: View {
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            .stroke(Color.appBorder, lineWidth: 1)
                     )
                 }
                 .disabled(isLoading)

@@ -8,6 +8,8 @@ struct HistoryView: View {
     @Query private var userSettingsList: [UserSettings]
 
     @State private var editingTransaction: Transaction? = nil
+    @State private var deletedCount = 0
+    @State private var listAppeared = false
 
     // Group transactions by month (descending)
     var groupedTransactions: [(String, [Transaction])] {
@@ -27,6 +29,19 @@ struct HistoryView: View {
             }
     }
 
+    /// Global flat index for each transaction ID, used to stagger entrance
+    var flatIndices: [PersistentIdentifier: Int] {
+        var result: [PersistentIdentifier: Int] = [:]
+        var i = 0
+        for (_, transactions) in groupedTransactions {
+            for tx in transactions {
+                result[tx.persistentModelID] = i
+                i += 1
+            }
+        }
+        return result
+    }
+
     var body: some View {
         ZStack {
             LinearGradient(
@@ -43,6 +58,7 @@ struct HistoryView: View {
                     description: Text("Vos dépenses apparaîtront ici.")
                 )
             } else {
+                let indices = flatIndices
                 List {
                     ForEach(groupedTransactions, id: \.0) { (monthLabel, transactions) in
                         Section {
@@ -60,6 +76,19 @@ struct HistoryView: View {
                                     .accessibilityAction(named: "Supprimer") {
                                         deleteSingleTransaction(tx)
                                     }
+                                    .transition(
+                                        .asymmetric(
+                                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                                            removal: .move(edge: .leading).combined(with: .opacity)
+                                        )
+                                    )
+                                    .opacity(listAppeared ? 1.0 : 0.0)
+                                    .offset(y: listAppeared ? 0 : 20)
+                                    .animation(
+                                        .smooth(duration: 0.45)
+                                            .delay(Double(min(indices[tx.persistentModelID, default: 0], 18)) * 0.045),
+                                        value: listAppeared
+                                    )
                             }
                         } header: {
                             Text(monthLabel)
@@ -71,6 +100,13 @@ struct HistoryView: View {
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
+                .onAppear {
+                    listAppeared = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                        withAnimation { listAppeared = true }
+                    }
+                }
+                .onDisappear { listAppeared = false }
             }
         }
         .navigationTitle("Historique")
@@ -79,13 +115,17 @@ struct HistoryView: View {
         .sheet(item: $editingTransaction) { tx in
             TransactionEditSheet(transaction: tx)
         }
+        .sensoryFeedback(.warning, trigger: deletedCount)
     }
 
     private func deleteSingleTransaction(_ tx: Transaction) {
         let txId = tx.firestoreId
         let envelope = tx.envelope
-        tx.envelope?.spent = max(0, (tx.envelope?.spent ?? 0) - tx.amount)
-        modelContext.delete(tx)
+        withAnimation(.smooth(duration: 0.35)) {
+            tx.envelope?.spent = max(0, (tx.envelope?.spent ?? 0) - tx.amount)
+            modelContext.delete(tx)
+        }
+        deletedCount += 1
 
         if let settings = userSettingsList.first,
            settings.isOnlineMode,
