@@ -27,7 +27,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "export",
   // Masquer les outils de développement (Toast et indicateurs) si non activés explicitement
   devIndicators: process.env.SHOW_DEV_TOOLS === 'true' ? undefined : false,
   async headers() {
