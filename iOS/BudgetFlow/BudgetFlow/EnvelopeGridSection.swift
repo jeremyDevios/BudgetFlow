@@ -51,9 +51,8 @@ struct EnvelopeGridSection: View {
                     }
                 }
                 .onAppear {
-                    appeared = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        withAnimation { appeared = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(.smooth(duration: 0.4)) { appeared = true }
                     }
                 }
                 .onDisappear {

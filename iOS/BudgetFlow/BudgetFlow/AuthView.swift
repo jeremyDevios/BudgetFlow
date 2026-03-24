@@ -7,9 +7,6 @@ struct AuthView: View {
     var onSuccess: (FirebaseAuth.User) -> Void
     var onDismiss: () -> Void
 
-    @State private var email = ""
-    @State private var password = ""
-    @State private var isSignIn = true
     @State private var isLoading = false
     @State private var errorMessage = ""
 
@@ -18,7 +15,9 @@ struct AuthView: View {
             Color.appBackground
                 .ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: 32) {
+
+                // Dismiss button
                 HStack {
                     Spacer()
                     Button(action: onDismiss) {
@@ -32,143 +31,107 @@ struct AuthView: View {
                     .accessibilityLabel("Fermer")
                 }
 
-                Image(systemName: "lock.shield")
-                    .font(.system(size: 48))
-                    .foregroundStyle(Color.appYellow)
+                Spacer()
 
-                Text(isSignIn ? "Se connecter" : "Creer un compte")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.appText)
+                // Logo / Icon
+                VStack(spacing: 16) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 24)
+                            .fill(Color.appYellow.opacity(0.12))
+                            .frame(width: 88, height: 88)
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(Color.appYellow.opacity(0.25), lineWidth: 1)
+                            .frame(width: 88, height: 88)
+                        Image(systemName: "chart.pie.fill")
+                            .font(.system(size: 40))
+                            .foregroundStyle(Color.appYellow)
+                    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Email")
-                        .font(.caption)
-                        .foregroundStyle(Color.appSecondaryText)
+                    VStack(spacing: 6) {
+                        Text("BudgetFlow")
+                            .font(.largeTitle.bold())
+                            .foregroundStyle(Color.appText)
 
-                    TextField("votre@email.com", text: $email)
-                        .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
-                        .autocorrectionDisabled()
-                        .foregroundStyle(Color.appText)
-                        .padding()
-                        .background(Color.appSurface)
-                        .cornerRadius(12)
+                        Text("Gérez votre budget en toute simplicité")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.appSecondaryText)
+                            .multilineTextAlignment(.center)
+                    }
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Mot de passe")
-                        .font(.caption)
-                        .foregroundStyle(Color.appSecondaryText)
+                Spacer()
 
-                    SecureField("••••••••", text: $password)
-                        .foregroundStyle(Color.appText)
-                        .padding()
-                        .background(Color.appSurface)
-                        .cornerRadius(12)
-                }
-
+                // Error message
                 if !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .foregroundStyle(.red)
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(12)
+                    .background(Color.red.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.red.opacity(0.3), lineWidth: 1)
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
 
-                PrimaryButton(
-                    title: isSignIn ? "Se connecter" : "Creer un compte",
-                    icon: nil,
-                    action: {
-                        Task {
-                            await performEmailAuth()
-                        }
-                    },
-                    isDisabled: isLoading || email.isEmpty || password.isEmpty
-                )
-
-                HStack(spacing: 12) {
-                    Rectangle()
-                        .fill(Color.appBorder)
-                        .frame(height: 1)
-                    Text("ou")
-                        .font(.caption)
-                        .foregroundStyle(Color.appSecondaryText)
-                    Rectangle()
-                        .fill(Color.appBorder)
-                        .frame(height: 1)
-                }
-
+                // Google Sign-In Button
                 Button(action: {
                     Task {
                         await performGoogleSignIn()
                     }
                 }) {
                     HStack(spacing: 12) {
-                        Image(systemName: "globe")
-                            .foregroundStyle(Color.appText)
-                        Text("Continuer avec Google")
-                            .fontWeight(.semibold)
+                        if isLoading {
+                            ProgressView()
+                                .tint(Color.appText)
+                                .scaleEffect(0.9)
+                        } else {
+                            // Google "G" logo using SF Symbol approximation
+                            Image(systemName: "globe")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(Color.appText)
+                        }
+                        Text(isLoading ? "Connexion en cours..." : "Continuer avec Google")
+                            .font(.body.weight(.semibold))
                             .foregroundStyle(Color.appText)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding()
+                    .padding(.vertical, 16)
                     .background(Color.appSurface)
-                    .cornerRadius(12)
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: 14)
                             .stroke(Color.appBorder, lineWidth: 1)
                     )
+                    .scaleEffect(isLoading ? 0.98 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isLoading)
                 }
                 .disabled(isLoading)
+                .accessibilityLabel("Se connecter avec Google")
 
-                Spacer()
-
-                Button(action: {
-                    isSignIn.toggle()
-                    errorMessage = ""
-                }) {
-                    Text(isSignIn ? "Pas encore de compte ? S'inscrire" : "Deja un compte ? Se connecter")
-                        .font(.footnote)
-                        .foregroundStyle(Color.appYellow)
-                }
-                .disabled(isLoading)
+                // Legal note
+                Text("En vous connectant, vos données sont stockées de façon sécurisée via Firebase.")
+                    .font(.caption2)
+                    .foregroundStyle(Color.appSecondaryText)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 8)
             }
             .padding(24)
+            .animation(.spring(response: 0.35, dampingFraction: 0.75), value: errorMessage)
 
+            // Loading overlay
             if isLoading {
-                Color.black.opacity(0.4)
+                Color.black.opacity(0.35)
                     .ignoresSafeArea()
-
-                ProgressView()
-                    .tint(Color.appYellow)
-            }
-        }
-    }
-
-    private func performEmailAuth() async {
-        guard !email.isEmpty, !password.isEmpty else { return }
-
-        await MainActor.run {
-            isLoading = true
-            errorMessage = ""
-        }
-
-        do {
-            let user: FirebaseAuth.User
-            if isSignIn {
-                user = try await firebaseManager.signIn(email: email, password: password)
-            } else {
-                user = try await firebaseManager.register(email: email, password: password)
-            }
-
-            await MainActor.run {
-                isLoading = false
-                onSuccess(user)
-            }
-        } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                isLoading = false
+                    .allowsHitTesting(true)
             }
         }
     }
@@ -188,7 +151,7 @@ struct AuthView: View {
             }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                errorMessage = "Erreur de connexion Google. Veuillez réessayer."
                 isLoading = false
             }
         }

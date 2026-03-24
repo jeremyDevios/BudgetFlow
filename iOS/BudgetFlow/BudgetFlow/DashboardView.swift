@@ -18,6 +18,9 @@ struct DashboardView: View {
     @State private var toastMessage: String? = nil
     @State private var showToast = false
     @State private var highlightedEnvelopeId: UUID? = nil
+    @State private var searchQuery = ""
+    @State private var searchBarAppeared = false
+    @FocusState private var isSearchFocused: Bool
 
     var settings: UserSettings? { userSettings.first }
 
@@ -33,6 +36,47 @@ struct DashboardView: View {
     }
 
     var totalSpentThisMonth: Double { spentPerEnvelope.values.reduce(0, +) }
+
+    fileprivate var allMonthlyTransactions: [DashboardSearchResult] {
+        envelopes
+            .flatMap { envelope in
+                envelope.transactions
+                    .filter { $0.date >= monthRange.start && $0.date <= monthRange.end }
+                    .map { DashboardSearchResult(envelope: envelope, transaction: $0) }
+            }
+            .sorted { $0.transaction.date > $1.transaction.date }
+    }
+
+    var normalizedSearchQuery: String {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var showSearchResults: Bool { !normalizedSearchQuery.isEmpty }
+
+    fileprivate var filteredSearchResults: [DashboardSearchResult] {
+        guard showSearchResults else { return [] }
+        let query = normalizedSearchQuery.localizedLowercase
+        return allMonthlyTransactions
+            .filter { result in
+                result.transaction.note.localizedLowercase.contains(query)
+                || result.envelope.name.localizedLowercase.contains(query)
+                || amountMatches(result.transaction.amount, query: searchQuery)
+            }
+            .prefix(6)
+            .map { $0 }
+    }
+
+    private func amountMatches(_ amount: Double, query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        // Match against integer part (e.g. "25" matches 25.50)
+        let intStr = String(Int(amount))
+        // Match against full decimal with dot (e.g. "25.5")
+        let dotStr = String(format: "%.2f", amount)
+        // Match against full decimal with comma (French style, "25,50")
+        let commaStr = dotStr.replacingOccurrences(of: ".", with: ",")
+        return intStr.contains(trimmed) || dotStr.contains(trimmed) || commaStr.contains(trimmed)
+    }
 
     var availablePlanned: Double {
         guard let s = settings else { return 0 }
@@ -78,16 +122,35 @@ struct DashboardView: View {
                         spentPerEnvelope: spentPerEnvelope
                     )
 
-                    EnvelopeGridSection(
-                        envelopes: envelopes,
-                        spentPerEnvelope: spentPerEnvelope,
-                        monthRange: monthRange,
-                        onAddTransaction: { envelope in
-                            selectedEnvelopeForTransaction = envelope
-                            showingAddTransaction = true
-                        },
-                        highlightedEnvelopeId: highlightedEnvelopeId
+                    DashboardSearchBar(
+                        query: $searchQuery,
+                        isFocused: $isSearchFocused
                     )
+                    .opacity(searchBarAppeared ? 1 : 0)
+                    .offset(y: searchBarAppeared ? 0 : 16)
+                    .animation(.smooth(duration: 0.35), value: searchBarAppeared)
+
+                    ZStack(alignment: .top) {
+                        EnvelopeGridSection(
+                            envelopes: envelopes,
+                            spentPerEnvelope: spentPerEnvelope,
+                            monthRange: monthRange,
+                            onAddTransaction: { envelope in
+                                selectedEnvelopeForTransaction = envelope
+                                showingAddTransaction = true
+                            },
+                            highlightedEnvelopeId: highlightedEnvelopeId
+                        )
+
+                        if showSearchResults {
+                            DashboardSearchResultsOverlay(
+                                results: filteredSearchResults,
+                                query: normalizedSearchQuery
+                            )
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
+                    .animation(.spring(response: 0.35, dampingFraction: 0.75), value: showSearchResults)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 100)
@@ -103,6 +166,14 @@ struct DashboardView: View {
                     userId: settings.firebaseUserId,
                     into: modelContext
                 )
+            }
+            .onAppear {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.smooth(duration: 0.35)) { searchBarAppeared = true }
+                }
+            }
+            .onDisappear {
+                searchBarAppeared = false
             }
 
             // FAB
@@ -193,6 +264,135 @@ struct DashboardView: View {
                 SettingsView(settings: s)
             }
         }
+    }
+}
+
+fileprivate struct DashboardSearchResult: Identifiable {
+    let envelope: Envelope
+    let transaction: Transaction
+
+    var id: UUID { transaction.id }
+}
+
+private struct DashboardSearchBar: View {
+    @Binding var query: String
+    @FocusState.Binding var isFocused: Bool
+
+    private var isActive: Bool {
+        isFocused || !query.isEmpty
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(Color.appSecondaryText)
+
+            TextField(
+                "",
+                text: $query,
+                prompt: Text("Rechercher ce mois...")
+                    .foregroundStyle(Color.appSecondaryText)
+            )
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .focused($isFocused)
+            .tint(Color.appYellow)
+
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Color.appSecondaryText)
+                }
+                .buttonStyle(.plain)
+                .sensoryFeedback(.selection, trigger: query)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.appSurface, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(isActive ? Color.appYellow : Color.appBorder, lineWidth: 1)
+        )
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: query)
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isFocused)
+    }
+}
+
+private struct DashboardSearchResultsOverlay: View {
+    let results: [DashboardSearchResult]
+    let query: String
+
+    var body: some View {
+        VStack(spacing: 8) {
+            if results.isEmpty {
+                Text("Aucun résultat")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+            } else {
+                ForEach(Array(results.enumerated()), id: \.element.id) { index, result in
+                    NavigationLink(value: result.envelope) {
+                        DashboardSearchResultRow(result: result)
+                    }
+                    .buttonStyle(DashboardSearchResultPressStyle())
+                    .opacity(1)
+                    .offset(y: 0)
+                    .animation(.smooth(duration: 0.35).delay(Double(index) * 0.05), value: query)
+                }
+            }
+        }
+        .padding(10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.appBorder, lineWidth: 1)
+        )
+        .padding(.top, 2)
+    }
+}
+
+private struct DashboardSearchResultRow: View {
+    let result: DashboardSearchResult
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(Color.fromString(result.envelope.color))
+                .frame(width: 10, height: 10)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(result.transaction.note.isEmpty ? "Dépense sans note" : result.transaction.note)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.appText)
+                    .lineLimit(1)
+
+                Text(result.envelope.name)
+                    .font(.caption)
+                    .foregroundStyle(Color.appSecondaryText)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+
+            Text("-\(result.transaction.amount.formatted(.currency(code: "EUR")))")
+                .font(.subheadline.bold())
+                .foregroundStyle(.red)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Color.appSurface.opacity(0.8), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct DashboardSearchResultPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.spring(response: 0.22, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
 

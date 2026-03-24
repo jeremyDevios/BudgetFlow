@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { ChevronLeft, Workflow, Loader2 } from "lucide-react";
-import { Sankey, Tooltip, ResponsiveContainer, Layer, Rectangle } from 'recharts';
+import { Sankey, Tooltip, ResponsiveContainer, Layer } from 'recharts';
 import { logger } from "@/lib/logger";
 
 interface UserSettings {
@@ -161,14 +162,24 @@ export default function CashFlowPage() {
       return (
         <Layer key={`CustomNode${index}`}>
           {/* Main Node Rectangle */}
-          <Rectangle 
+          <motion.rect
             x={x} 
             y={y} 
             width={width} 
             height={height} 
             fill={color} 
-            fillOpacity="1" 
-            radius={[4, 4, 4, 4]} 
+            fillOpacity="1"
+            rx={4}
+            ry={4}
+            initial={{ scaleY: 0, opacity: 0 }}
+            animate={{ scaleY: 1, opacity: 1 }}
+            style={{ transformOrigin: `${x + width / 2}px ${y}px` }}
+            transition={{
+              type: "spring",
+              stiffness: 300,
+              damping: 25,
+              delay: (index ?? 0) * 0.1,
+            }}
           />
           
           {/* External Label */}
@@ -207,6 +218,7 @@ export default function CashFlowPage() {
       sourceControlX,
       targetControlX,
       linkWidth,
+      index,
       payload
     } = props;
 
@@ -214,12 +226,19 @@ export default function CashFlowPage() {
     const d = `M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`;
 
     return (
-      <path
+      <motion.path
         d={d}
         stroke={strokeColor}
         strokeOpacity={0.35}
         strokeWidth={Math.max(1, linkWidth)}
         fill="none"
+        initial={{ pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{
+          duration: 0.9,
+          delay: (index ?? 0) * 0.12,
+          ease: "easeInOut",
+        }}
       />
     );
   };
@@ -274,16 +293,41 @@ export default function CashFlowPage() {
       </div>
 
        {/* Legend / Summary */}
-       <div className="mt-8 grid grid-cols-2 gap-4 text-center">
-             <div className="bg-app-surface/50 p-4 rounded-2xl border border-app-border">
+       <motion.div
+         className="mt-8 grid grid-cols-2 gap-4 text-center"
+         initial="hidden"
+         animate="visible"
+         variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
+       >
+             <motion.div
+               className="bg-app-surface/50 p-4 rounded-2xl border border-app-border"
+               variants={{
+                 hidden: { opacity: 0, y: 20 },
+                 visible: {
+                   opacity: 1,
+                   y: 0,
+                   transition: { type: "spring", stiffness: 280, damping: 22 },
+                 },
+               }}
+             >
                  <span className="block text-app-text-secondary text-xs uppercase mb-1">Revenu Total</span>
                  <span className="text-2xl font-bold text-emerald-400">{settings.monthlyIncome} €</span>
-             </div>
-             <div className="bg-app-surface/50 p-4 rounded-2xl border border-app-border">
+             </motion.div>
+             <motion.div
+               className="bg-app-surface/50 p-4 rounded-2xl border border-app-border"
+               variants={{
+                 hidden: { opacity: 0, y: 20 },
+                 visible: {
+                   opacity: 1,
+                   y: 0,
+                   transition: { type: "spring", stiffness: 280, damping: 22 },
+                 },
+               }}
+             >
                  <span className="block text-app-text-secondary text-xs uppercase mb-1">Total Alloué</span>
                  <span className="text-2xl font-bold text-amber-500">{totalAllocated} €</span>
-             </div>
-       </div>
+             </motion.div>
+       </motion.div>
 
     </div>
   );

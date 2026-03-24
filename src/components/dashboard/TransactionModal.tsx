@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, 
   X, 
@@ -42,6 +43,7 @@ interface TransactionModalProps {
 export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId }: TransactionModalProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -62,6 +64,8 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             setSelectedEnvelopeId(defaultEnvelopeId || envelopes[0]?.id || "");
             setDate(new Date().toISOString().split('T')[0]);
         }
+    } else {
+      setSaveSuccess(false);
     }
   }, [isOpen, transactionToEdit, envelopes, defaultEnvelopeId]);
 
@@ -79,8 +83,6 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
       : remainingRatio !== null && remainingRatio <= 0.2
         ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
         : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,6 +146,8 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
       }
 
       refreshData();
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 1500);
       onClose();
     } catch (error) {
       logger.sanitizedError("Transaction operation failed", error);
@@ -185,8 +189,25 @@ const handleDelete = async () => {
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="modal-title" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-md bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl animate-in slide-in-from-bottom-10 duration-300">
+    <AnimatePresence>
+      {isOpen && (
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4"
+      >
+      <motion.div
+        initial={{ opacity: 0, y: 40, scale: 0.97 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 40, scale: 0.97 }}
+        transition={{ type: "spring", stiffness: 350, damping: 28 }}
+        className="w-full max-w-md bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl"
+      >
         <div className="flex justify-between items-center mb-6">
           <h2 id="modal-title" className="text-xl font-bold text-app-text">{transactionToEdit ? "Modifier Dépense" : "Nouvelle Dépense"}</h2>
           <div className="flex gap-2">
@@ -210,20 +231,22 @@ const handleDelete = async () => {
           {/* Montant */}
           <div>
             <label className="block text-sm font-medium text-app-text-secondary mb-1">Montant</label>
-            <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary font-bold text-xl">€</span>
-                <input
-                    type="number"
+            <div>
+              <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary font-bold text-xl">€</span>
+                  <input
+                      type="number"
                   aria-label="Montant de la transaction"
-                    inputMode="decimal"
-                    step="0.01"
-                    required
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    className="w-full bg-app-bg border border-app-border rounded-xl py-4 pl-10 pr-4 text-2xl font-bold text-app-text focus:ring-2 focus:ring-amber-500 focus:outline-none"
-                    placeholder="0.00"
-                    autoFocus
-                />
+                      inputMode="decimal"
+                      step="0.01"
+                      required
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="w-full bg-app-bg border border-app-border rounded-xl py-4 pl-10 pr-4 text-2xl font-bold text-app-text focus:ring-2 focus:ring-amber-500/60 focus:border-amber-500 transition-all duration-200 focus:outline-none"
+                      placeholder="0.00"
+                      autoFocus
+                  />
+              </div>
             </div>
           </div>
 
@@ -232,23 +255,33 @@ const handleDelete = async () => {
              <label className="block text-sm font-medium text-app-text-secondary mb-1">Enveloppe</label>
              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-700">
                 {envelopes.map(env => (
-                    <button
+                    <motion.button
                         key={env.id}
                         type="button"
                         onClick={() => setSelectedEnvelopeId(env.id)}
+                        whileTap={{ scale: 0.95 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
                         className={`p-3 rounded-lg border text-left flex items-center gap-2 transition-all ${selectedEnvelopeId === env.id ? 'bg-app-surface border-amber-500 ring-1 ring-amber-500' : 'bg-app-bg border-app-border hover:bg-app-surface'}`}
                     >
                         <div className={`w-3 h-3 rounded-full ${env.color}`} />
                         <span className={`truncate text-sm ${selectedEnvelopeId === env.id ? 'text-app-text font-medium' : 'text-app-text-secondary'}`}>{env.name}</span>
-                    </button>
+                    </motion.button>
                 ))}
             </div>
 
-            {selectedEnv && envRemaining !== null && (
-              <div className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${remainingToneClass}`}>
-                Reste disponible : {envRemaining.toFixed(2)} €
-              </div>
-            )}
+            <AnimatePresence>
+              {selectedEnv && envRemaining !== null && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${remainingToneClass}`}
+                >
+                  Reste disponible : {envRemaining.toFixed(2)} €
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Description & Date */}
@@ -277,15 +310,43 @@ const handleDelete = async () => {
              </div>
           </div>
 
-          <button
+          <motion.button
             type="submit"
             disabled={loading}
-            className="w-full mt-4 bg-amber-500 hover:bg-amber-600 text-app-text font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors"
+            whileTap={!loading ? { scale: 0.97 } : {}}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            className={`w-full mt-4 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors ${
+              saveSuccess
+                ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                : "bg-amber-500 hover:bg-amber-600 text-app-text"
+            }`}
           >
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Ajouter"}
-          </button>
+            <AnimatePresence mode="wait">
+              {loading ? (
+                <motion.span key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </motion.span>
+              ) : saveSuccess ? (
+                <motion.span
+                  key="success"
+                  initial={{ scale: 0.5, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-2"
+                >
+                  ✓ Ajouté !
+                </motion.span>
+              ) : (
+                <motion.span key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  {transactionToEdit ? "Modifier" : "Ajouter"}
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

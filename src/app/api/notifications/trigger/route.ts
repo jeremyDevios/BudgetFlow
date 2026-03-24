@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminDb, adminMessaging } from "@/lib/firebaseAdmin";
 
-export const dynamic = 'force-dynamic'; // Prevent caching
-
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   // 1. Security Check
   const key = request.headers.get("x-cron-secret");
   if (!key || key !== process.env.CRON_SECRET) {

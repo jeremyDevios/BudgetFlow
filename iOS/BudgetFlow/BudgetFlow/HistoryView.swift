@@ -10,14 +10,42 @@ struct HistoryView: View {
     @State private var editingTransaction: Transaction? = nil
     @State private var deletedCount = 0
     @State private var listAppeared = false
+    @State private var searchQuery = ""
 
     // Group transactions by month (descending)
     var groupedTransactions: [(String, [Transaction])] {
+        groupedTransactions(for: allTransactions)
+    }
+
+    var filteredGroupedTransactions: [(String, [Transaction])] {
+        guard !searchQuery.isEmpty else {
+            return groupedTransactions
+        }
+
+        let filtered = allTransactions.filter { tx in
+            (tx.note).localizedCaseInsensitiveContains(searchQuery)
+            || (tx.envelope?.name ?? "").localizedCaseInsensitiveContains(searchQuery)
+            || amountMatches(tx.amount, query: searchQuery)
+        }
+
+        return groupedTransactions(for: filtered)
+    }
+
+    private func amountMatches(_ amount: Double, query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        let intStr = String(Int(amount))
+        let dotStr = String(format: "%.2f", amount)
+        let commaStr = dotStr.replacingOccurrences(of: ".", with: ",")
+        return intStr.contains(trimmed) || dotStr.contains(trimmed) || commaStr.contains(trimmed)
+    }
+
+    private func groupedTransactions(for transactions: [Transaction]) -> [(String, [Transaction])] {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "MMMM yyyy"
 
-        let grouped = Dictionary(grouping: allTransactions) { tx in
+        let grouped = Dictionary(grouping: transactions) { tx in
             Calendar.current.startOfMonth(for: tx.date)
         }
 
@@ -33,7 +61,7 @@ struct HistoryView: View {
     var flatIndices: [PersistentIdentifier: Int] {
         var result: [PersistentIdentifier: Int] = [:]
         var i = 0
-        for (_, transactions) in groupedTransactions {
+        for (_, transactions) in filteredGroupedTransactions {
             for tx in transactions {
                 result[tx.persistentModelID] = i
                 i += 1
@@ -51,19 +79,27 @@ struct HistoryView: View {
             )
             .ignoresSafeArea()
 
-            if allTransactions.isEmpty {
-                ContentUnavailableView(
-                    "Aucune transaction",
-                    systemImage: "list.bullet.rectangle",
-                    description: Text("Vos dépenses apparaîtront ici.")
-                )
+            if filteredGroupedTransactions.isEmpty {
+                if searchQuery.isEmpty {
+                    ContentUnavailableView(
+                        "Aucune transaction",
+                        systemImage: "list.bullet.rectangle",
+                        description: Text("Vos dépenses apparaîtront ici.")
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "Aucun résultat",
+                        systemImage: "magnifyingglass",
+                        description: Text("Aucune dépense ne correspond à \"\(searchQuery)\"")
+                    )
+                }
             } else {
                 let indices = flatIndices
                 List {
-                    ForEach(groupedTransactions, id: \.0) { (monthLabel, transactions) in
+                    ForEach(filteredGroupedTransactions, id: \.0) { (monthLabel, transactions) in
                         Section {
                             ForEach(transactions) { tx in
-                                TransactionHistoryRow(transaction: tx)
+                                TransactionHistoryRow(transaction: tx, searchQuery: searchQuery)
                                     .contentShape(Rectangle())
                                     .onTapGesture { editingTransaction = tx }
                                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -111,6 +147,18 @@ struct HistoryView: View {
         }
         .navigationTitle("Historique")
         .navigationBarTitleDisplayMode(.large)
+        .searchable(
+            text: $searchQuery,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Rechercher une dépense..."
+        )
+        .onChange(of: searchQuery) { _, _ in
+            listAppeared = false
+            Task {
+                try? await Task.sleep(for: .milliseconds(50))
+                listAppeared = true
+            }
+        }
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .sheet(item: $editingTransaction) { tx in
             TransactionEditSheet(transaction: tx)
@@ -147,9 +195,32 @@ struct HistoryView: View {
 
 private struct TransactionHistoryRow: View {
     let transaction: Transaction
+    let searchQuery: String
 
     var envelopeColor: Color {
         Color.fromString(transaction.envelope?.color ?? "gray")
+    }
+
+    var noteText: String {
+        transaction.note.isEmpty ? "Dépense" : transaction.note
+    }
+
+    var highlightedNote: AttributedString {
+        var attributed = AttributedString(noteText)
+        attributed.foregroundColor = .appText
+
+        guard !searchQuery.isEmpty,
+              let range = attributed.range(
+                of: searchQuery,
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: Locale(identifier: "fr_FR")
+              )
+        else {
+            return attributed
+        }
+
+        attributed[range].foregroundColor = .appAccent
+        return attributed
     }
 
     var body: some View {
@@ -176,9 +247,8 @@ private struct TransactionHistoryRow: View {
                 Text(transaction.envelope?.name ?? "Enveloppe supprimée")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(transaction.note.isEmpty ? "Dépense" : transaction.note)
+                Text(highlightedNote)
                     .font(.body)
-                    .foregroundStyle(Color.appText)
                 Text(transaction.date, format: .dateTime.day().month().year())
                     .font(.caption2)
                     .foregroundStyle(.tertiary)

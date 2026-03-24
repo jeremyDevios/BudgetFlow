@@ -1,70 +1,137 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
+
+    // ── Auth ─────────────────────────────────────────────────────────────────
+
+    // Require a live Google Sign-In session.
+    // Explicitly checking the provider prevents any accidentally re-enabled
+    // auth method (e.g. email/password) from silently granting access.
+    function isGoogleAuth() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
 
-    // Helper function to check if the user ID matches the document owner
-    function isUserOwner(userId) {
+    function isOwner(userId) {
       return request.auth.uid == userId;
     }
 
-    // Helper function to validate email format
-    function isValidEmail(email) {
-      return email.matches('^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$');
+    // ── Validators ───────────────────────────────────────────────────────────
+
+    // User profile: /users/{userId}
+    // Required: email, displayName, lastLogin
+    // Optional: photoURL, fcmToken, notificationsEnabled, lastTokenUpdate
+    function isValidUserData(data) {
+      return data.keys().hasOnly([
+            'email', 'displayName', 'photoURL',
+            'fcmToken', 'notificationsEnabled',
+            'lastLogin', 'lastTokenUpdate'
+          ])
+        && data.email       is string && data.email.size()       >= 3  && data.email.size()       <= 254
+        && data.displayName is string && data.displayName.size() >= 1  && data.displayName.size() <= 100
+        && data.lastLogin   is string && data.lastLogin.size()   >= 1  && data.lastLogin.size()   <= 30
+        && (!('photoURL'            in data) || (data.photoURL           is string && data.photoURL.size()        <= 2048))
+        && (!('fcmToken'            in data) || (data.fcmToken           is string && data.fcmToken.size()        <= 512))
+        && (!('lastTokenUpdate'     in data) || (data.lastTokenUpdate    is string && data.lastTokenUpdate.size() <= 30))
+        && (!('notificationsEnabled' in data) || data.notificationsEnabled is bool);
     }
 
+    // App settings: /users/{userId}/settings/general
+    // Required: monthlyIncome, fixedCosts, monthlySavings, isOnboarded
+    // Optional: currency, createdAt, updatedAt
+    function isValidSettingsData(data) {
+      return data.keys().hasOnly([
+            'monthlyIncome', 'fixedCosts', 'monthlySavings',
+            'currency', 'isOnboarded', 'createdAt', 'updatedAt'
+          ])
+        && data.monthlyIncome  is number && data.monthlyIncome  >= 0 && data.monthlyIncome  <= 100000000
+        && data.fixedCosts     is number && data.fixedCosts     >= 0 && data.fixedCosts     <= 100000000
+        && data.monthlySavings is number && data.monthlySavings >= 0 && data.monthlySavings <= 100000000
+        && data.isOnboarded    is bool
+        && (!('currency'  in data) || (data.currency  is string && data.currency.size()  >= 1 && data.currency.size()  <= 10))
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30))
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 30));
+    }
+
+    // Envelope: /users/{userId}/envelopes/{envelopeId}
+    // Required: name, budget, spent, icon, color, order
+    // Optional: createdAt
     function isValidEnvelopeData(data) {
-      return data.budget is number
-        && data.budget > 0
-        && data.budget <= 1000000
-        && data.name is string
-        && data.name.size() >= 1
-        && data.name.size() <= 50;
+      return data.keys().hasOnly([
+            'name', 'budget', 'spent', 'icon', 'color', 'order', 'createdAt'
+          ])
+        && data.name   is string && data.name.size()  >= 1 && data.name.size()  <= 50
+        && data.icon   is string && data.icon.size()  >= 1 && data.icon.size()  <= 100
+        && data.color  is string && data.color.size() >= 1 && data.color.size() <= 100
+        && data.budget is number && data.budget > 0         && data.budget <= 1000000
+        && data.spent  is number && data.spent  >= 0        && data.spent  <= 1000000
+        && data.order  is number && data.order  >= 0        && data.order  <= 10000
+        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30));
     }
 
+    // Transaction: /users/{userId}/transactions/{transactionId}
+    // Required: amount, envelopeId, date, createdAt
+    // Optional: description, note (note retained for backward-compat with pre-rename iOS clients)
     function isValidTransactionData(data) {
-      return data.amount is number
-        && data.amount > 0
-        && data.amount <= 1000000
-        && (!("note" in data) || (data.note is string && data.note.size() <= 255))
-        && (!("description" in data) || (data.description is string && data.description.size() <= 255));
+      return data.keys().hasOnly([
+            'amount', 'envelopeId', 'date', 'createdAt', 'description', 'note'
+          ])
+        && data.amount     is number && data.amount > 0             && data.amount     <= 1000000
+        && data.envelopeId is string && data.envelopeId.size() >= 1 && data.envelopeId.size() <= 128
+        && data.date       is string && data.date.size()       >= 1 && data.date.size()       <= 30
+        && data.createdAt  is string && data.createdAt.size()  >= 1 && data.createdAt.size()  <= 30
+        && (!('description' in data) || (data.description is string && data.description.size() <= 255))
+        && (!('note'        in data) || (data.note        is string && data.note.size()        <= 255));
     }
 
-    // --- USER COLLECTION RULES ---
+    // ── User document ────────────────────────────────────────────────────────
+
     match /users/{userId} {
-      // Allow users to read/write only their own document
-      allow read: if isAuthenticated() && isUserOwner(userId);
-      allow write: if isAuthenticated() && isUserOwner(userId);
-      
-      allow create: if isAuthenticated() && isUserOwner(userId);
+      allow read:   if isGoogleAuth() && isOwner(userId);
+      allow create: if isGoogleAuth() && isOwner(userId)
+                       && isValidUserData(request.resource.data);
+      allow update: if isGoogleAuth() && isOwner(userId)
+                       && isValidUserData(request.resource.data);
+      // delete intentionally absent — account deletion must be performed
+      // server-side via the Admin SDK to atomically remove subcollections
+      // and the Firebase Auth entry.
 
-      // --- SETTINGS SUBCOLLECTION ---
-      match /settings/{document=**} {
-        allow read: if isAuthenticated() && isUserOwner(userId);
-        allow write: if isAuthenticated() && isUserOwner(userId);
+      // ── Settings subcollection ─────────────────────────────────────────────
+      // Only the single document 'general' is ever written.
+      match /settings/{document} {
+        allow read:   if isGoogleAuth() && isOwner(userId);
+        allow create: if isGoogleAuth() && isOwner(userId)
+                         && isValidSettingsData(request.resource.data);
+        allow update: if isGoogleAuth() && isOwner(userId)
+                         && isValidSettingsData(request.resource.data);
+        // delete intentionally absent — a missing settings doc breaks the
+        // isOnboarded check and crashes app initialization.
       }
 
-      // --- ENVELOPES SUBCOLLECTION ---
+      // ── Envelopes subcollection ────────────────────────────────────────────
       match /envelopes/{envelopeId} {
-        allow read: if isAuthenticated() && isUserOwner(userId);
-        allow create: if isAuthenticated() && isUserOwner(userId) && isValidEnvelopeData(request.resource.data);
-        allow update: if isAuthenticated() && isUserOwner(userId) && isValidEnvelopeData(request.resource.data);
-        allow delete: if isAuthenticated() && isUserOwner(userId);
+        allow read:   if isGoogleAuth() && isOwner(userId);
+        allow create: if isGoogleAuth() && isOwner(userId)
+                         && isValidEnvelopeData(request.resource.data);
+        allow update: if isGoogleAuth() && isOwner(userId)
+                         && isValidEnvelopeData(request.resource.data);
+        allow delete: if isGoogleAuth() && isOwner(userId);
       }
 
-      // --- TRANSACTIONS SUBCOLLECTION ---
+      // ── Transactions subcollection ─────────────────────────────────────────
       match /transactions/{transactionId} {
-        allow read: if isAuthenticated() && isUserOwner(userId);
-        allow create: if isAuthenticated() && isUserOwner(userId) && isValidTransactionData(request.resource.data);
-        allow update: if isAuthenticated() && isUserOwner(userId) && isValidTransactionData(request.resource.data);
-        allow delete: if isAuthenticated() && isUserOwner(userId);
+        allow read:   if isGoogleAuth() && isOwner(userId);
+        allow create: if isGoogleAuth() && isOwner(userId)
+                         && isValidTransactionData(request.resource.data);
+        allow update: if isGoogleAuth() && isOwner(userId)
+                         && isValidTransactionData(request.resource.data)
+                         // createdAt is immutable — prevent audit-trail backdating.
+                         && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isGoogleAuth() && isOwner(userId);
       }
     }
 
-    // Deny everything by default
+    // Deny all unmatched paths by default
     match /{document=**} {
       allow read, write: if false;
     }

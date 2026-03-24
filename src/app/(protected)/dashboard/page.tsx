@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, getDocs, doc, getDoc, orderBy, limit, where } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
@@ -44,6 +44,8 @@ import {
 } from "lucide-react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
 import { logger } from "@/lib/logger";
+import { motion, AnimatePresence } from "framer-motion";
+import SearchDropdown from "@/components/dashboard/SearchDropdown";
 
 // --- Types ---
 type IconName = "ShoppingCart" | "Fuel" | "Utensils" | "Plane" | "Heart" | "Gamepad2" | "Bus" | "Shirt" | "Music" | "Coffee" | "Briefcase" | "GraduationCap" | "Baby" | "PawPrint" | "Gift" | "Smartphone" | "Wifi" | "Zap" | "Droplets" | "Hammer";
@@ -81,9 +83,12 @@ export default function DashboardPage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [showNotifPopup, setShowNotifPopup] = useState(false);
   const [showInstallPopup, setShowInstallPopup] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const moreMenuRef = useRef<HTMLDivElement>(null);
   
   // Gestion de la date sélectionnée (Mois)
   const [currentDate, setCurrentDate] = useState(new Date());
+    const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // --- Chargement des données ---
   const fetchData = async () => {
@@ -198,11 +203,26 @@ export default function DashboardPage() {
     fetchData();
   }, [user, currentDate]); // Recharger quand l'utilisateur OU la date change
 
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+                setShowMoreMenu(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
   const changeMonth = (offset: number) => {
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + offset);
     setCurrentDate(newDate);
   };
+
+    const showToast = (message: string) => {
+        setToastMessage(message);
+        setTimeout(() => setToastMessage(null), 3000);
+    };
 
   // --- Calculs globaux ---
   const totalBudgetEnvelopes = envelopes.reduce((acc, env) => acc + env.budget, 0);
@@ -229,75 +249,110 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-app-bg text-app-text pb-20 sm:pb-8">
         
       {/* Header Mobile / Desktop */}
-      <header className="sticky top-0 z-30 bg-app-bg/80 backdrop-blur-md border-b border-app-border px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-           {/* Navigation Mois */}
-           <div className="flex items-center gap-2 bg-app-surface rounded-full p-1 border border-app-border">
-              <button 
-                  onClick={() => changeMonth(-1)} 
-                  className="p-1 rounded-full text-app-text-secondary hover:text-app-text hover:bg-app-surface"
-              >
-                  <ChevronLeft className="h-5 w-5" />
-              </button>
-              <span className="text-sm font-semibold capitalize w-32 text-center select-none">
-                  {formatMonthYear(currentDate)}
-              </span>
-              <button 
-                  onClick={() => changeMonth(1)}
-                  className="p-1 rounded-full text-app-text-secondary hover:text-app-text hover:bg-app-surface"
-              >
-                  <ChevronRight className="h-5 w-5" />
-              </button>
-           </div>
-        </div>
-        
-        <div className="flex gap-2">
-            {/* 1. Évolution (Graphique) */}
-            <button 
-                onClick={() => router.push('/evolution')}
-                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-amber-500 transition-colors"
-                title="Évolution des dépenses"
-            >
-                <TrendingUp className="h-5 w-5" />
-            </button>
-            
-            {/* 2. Historique (Liste) */}
-            <button 
-                onClick={() => router.push('/history')}
-                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors"
-                title="Historique Global"
-            >
-                <List className="h-5 w-5" />
-            </button>
+            <header className="sticky top-0 z-30 bg-app-bg/80 backdrop-blur-md border-b border-app-border px-3 sm:px-6 py-3 sm:py-4 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 bg-app-surface rounded-full p-1 border border-app-border">
+                        <button
+                            onClick={() => changeMonth(-1)}
+                            className="p-1 rounded-full text-app-text-secondary hover:text-app-text hover:bg-app-surface active:scale-75"
+                        >
+                            <ChevronLeft className="h-5 w-5" />
+                        </button>
+                        <span className="text-sm font-semibold capitalize w-28 sm:w-32 text-center select-none">
+                            {formatMonthYear(currentDate)}
+                        </span>
+                        <button
+                            onClick={() => changeMonth(1)}
+                            className="p-1 rounded-full text-app-text-secondary hover:text-app-text hover:bg-app-surface active:scale-75"
+                        >
+                            <ChevronRight className="h-5 w-5" />
+                        </button>
+                    </div>
+                </div>
 
-            {/* 5. Cash Flow (Sankey) */}
-            <button 
-                onClick={() => router.push('/cashflow')}
-                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-emerald-500 transition-colors"
-                title="Cash Flow"
-            >
-                <Workflow className="h-5 w-5" />
-            </button>
+                <div className="flex items-center gap-1 sm:gap-2">
+                    {/* Desktop-only secondary icons */}
+                    <button
+                        onClick={() => router.push('/evolution')}
+                        className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-amber-500 transition-colors active:scale-90"
+                        title="Évolution des dépenses"
+                    >
+                        <TrendingUp className="h-5 w-5" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/history')}
+                        className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors active:scale-90"
+                        title="Historique Global"
+                    >
+                        <List className="h-5 w-5" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/cashflow')}
+                        className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-emerald-500 transition-colors active:scale-90"
+                        title="Cash Flow"
+                    >
+                        <Workflow className="h-5 w-5" />
+                    </button>
+                    <button
+                        onClick={() => router.push('/settings')}
+                        className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors active:scale-90"
+                        title="Paramètres"
+                    >
+                        <Settings className="h-5 w-5" />
+                    </button>
 
-            {/* 3. Paramètres */}
-            <button 
-                onClick={() => router.push('/settings')}
-                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors"
-                title="Paramètres"
-            >
-                <Settings className="h-5 w-5" />
-            </button>
+                    {/* Mobile-only: "More" dropdown */}
+                    <div className="relative sm:hidden" ref={moreMenuRef}>
+                        <button
+                            onClick={() => setShowMoreMenu(prev => !prev)}
+                            className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors active:scale-90"
+                            title="Plus d'options"
+                            aria-expanded={showMoreMenu}
+                            aria-haspopup="true"
+                        >
+                            <MoreHorizontal className="h-5 w-5" />
+                        </button>
+                        {showMoreMenu && (
+                            <div className="absolute right-0 top-full mt-2 w-52 bg-app-surface border border-app-border rounded-xl shadow-xl z-50 overflow-hidden p-1">
+                                <button
+                                    onClick={() => { router.push('/evolution'); setShowMoreMenu(false); }}
+                                    className="flex items-center gap-3 w-full px-3 py-3 text-sm text-app-text-secondary hover:text-amber-500 hover:bg-app-bg rounded-lg transition-colors text-left"
+                                >
+                                    <TrendingUp className="h-4 w-4 shrink-0" /> Évolution
+                                </button>
+                                <button
+                                    onClick={() => { router.push('/history'); setShowMoreMenu(false); }}
+                                    className="flex items-center gap-3 w-full px-3 py-3 text-sm text-app-text-secondary hover:text-app-text hover:bg-app-bg rounded-lg transition-colors text-left"
+                                >
+                                    <List className="h-4 w-4 shrink-0" /> Historique
+                                </button>
+                                <button
+                                    onClick={() => { router.push('/cashflow'); setShowMoreMenu(false); }}
+                                    className="flex items-center gap-3 w-full px-3 py-3 text-sm text-app-text-secondary hover:text-emerald-500 hover:bg-app-bg rounded-lg transition-colors text-left"
+                                >
+                                    <Workflow className="h-4 w-4 shrink-0" /> Cash Flow
+                                </button>
+                                <div className="h-px bg-app-border my-1" />
+                                <button
+                                    onClick={() => { router.push('/settings'); setShowMoreMenu(false); }}
+                                    className="flex items-center gap-3 w-full px-3 py-3 text-sm text-app-text-secondary hover:text-app-text hover:bg-app-bg rounded-lg transition-colors text-left"
+                                >
+                                    <Settings className="h-4 w-4 shrink-0" /> Paramètres
+                                </button>
+                            </div>
+                        )}
+                    </div>
 
-            {/* 4. Déconnexion */}
-            <button 
-                onClick={handleLogout} 
-                className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-red-500 transition-colors"
-                title="Se déconnecter"
-            >
-                <LogOut className="h-5 w-5" />
-            </button>
-        </div>
-      </header>
+                    {/* Logout: always visible */}
+                    <button
+                        onClick={handleLogout}
+                        className="p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-red-500 transition-colors active:scale-90"
+                        title="Se déconnecter"
+                    >
+                        <LogOut className="h-5 w-5" />
+                    </button>
+                </div>
+            </header>
 
       <main className="max-w-4xl mx-auto p-4 space-y-8">
         
@@ -343,6 +398,15 @@ export default function DashboardPage() {
             </div>
         </section>
 
+        {/* Recherche */}
+        <section aria-label="Rechercher une dépense">
+          <SearchDropdown 
+            transactions={transactions}
+            envelopes={envelopes}
+            currentDate={currentDate}
+          />
+        </section>
+
         {/* Grille des Enveloppes */}
         <section>
             <div className="flex justify-between items-end mb-4 px-2">
@@ -350,15 +414,23 @@ export default function DashboardPage() {
                 <span className="text-xs text-app-text-secondary">{envelopes.length} catégories</span>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <motion.div
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+                initial="hidden"
+                animate="visible"
+                variants={{ visible: { transition: { staggerChildren: 0.06 } } }}
+            >
                 {envelopes.map((env) => {
                     const progress = env.budget > 0 ? (env.spent / env.budget) * 100 : 0;
                     const remaining = env.budget - env.spent;
                     const Icon = ICON_MAP[env.icon] || ShoppingCart;
 
                     return (
+                        <motion.div
+                            key={env.id}
+                            variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } } }}
+                        >
                         <div 
-                            key={env.id} 
                             onClick={() => router.push(`/envelopes/${env.id}?date=${currentDate.toISOString()}`)}
                             className="relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-zinc-950 dark:to-zinc-900 p-4 rounded-xl transition-all duration-200 group cursor-pointer active:scale-95 z-0 border border-gray-200/60 dark:border-0 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.55)] hover:-translate-y-0.5"
                         >
@@ -438,9 +510,10 @@ export default function DashboardPage() {
                                 </div>
                             </div>
                         </div>
+                        </motion.div>
                     );
                 })}
-            </div>
+            </motion.div>
         </section>
 
       </main>
@@ -449,7 +522,7 @@ export default function DashboardPage() {
       <button 
         onClick={() => setIsTxModalOpen(true)}
                 aria-label="Ajouter une transaction"
-        className="fixed bottom-6 right-6 p-4 bg-amber-500 hover:bg-amber-600 text-app-text rounded-full shadow-lg shadow-amber-900/20 transition-transform hover:scale-105 active:scale-95 z-40"
+                className="fixed bottom-6 right-6 p-4 bg-amber-500 text-app-text rounded-full shadow-lg shadow-amber-900/20 transition-transform active:scale-95 z-40 animate-fab-pulse"
       >
         <Plus className="h-8 w-8" />
       </button>
@@ -546,9 +619,26 @@ export default function DashboardPage() {
             setDefaultEnvelopeId(undefined);
         }}
         envelopes={envelopes}
-        refreshData={fetchData}
+                refreshData={() => { fetchData(); showToast("Dépense ajoutée !"); }}
         defaultEnvelopeId={defaultEnvelopeId}
       />
+
+            {/* Toast notification */}
+            <AnimatePresence>
+                {toastMessage && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -60, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -60, scale: 0.9 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 28 }}
+                        className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500 text-white font-semibold text-sm px-5 py-2.5 rounded-full shadow-xl shadow-emerald-900/30 flex items-center gap-2"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        ✓ {toastMessage}
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
     </div>
   );

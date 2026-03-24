@@ -9,6 +9,7 @@ import { fr } from "date-fns/locale";
 import { ChevronLeft, TrendingUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface UserSettings {
   monthlyIncome: number;
@@ -229,14 +230,17 @@ export default function EvolutionPage() {
                     </defs>
                     
                     {/* Area path (Remplissage) */}
-                    <path 
+                    <motion.path 
                         d={getPath(svgPoints, true)}
                         fill="url(#gradientCurve)"
                         className="transition-all duration-1000 ease-out"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.8, delay: 0.5 }}
                     />
 
                     {/* Line path (Contour) */}
-                    <path 
+                    <motion.path 
                         d={getPath(svgPoints, false)}
                         fill="none"
                         stroke="#f59e0b" // Amber-500
@@ -244,6 +248,12 @@ export default function EvolutionPage() {
                         strokeLinecap="round"
                         strokeLinejoin="round"
                         className="drop-shadow-[0_0_15px_rgba(245,158,11,0.6)]"
+                        initial={{ pathLength: 0, opacity: 0 }}
+                        animate={{ pathLength: 1, opacity: 1 }}
+                        transition={{
+                            pathLength: { duration: 1.5, ease: "easeInOut" },
+                            opacity: { duration: 0.3 }
+                        }}
                     />
                     
                     {/* Ligne Zéro visuelle dans le SVG pour référence claire */}
@@ -286,19 +296,37 @@ export default function EvolutionPage() {
                                 }}
                             >
                                 {/* Tooltip */}
-                                <div className={`absolute ${tooltipPositionClass} bg-app-surface/90 border border-amber-500/30 px-3 py-2 rounded-xl shadow-2xl backdrop-blur-md text-center transform transition-all duration-200 ${hoveredIndex === i ? `scale-100 opacity-100 ${tooltipTransformEnd}` : `scale-90 opacity-0 ${tooltipTransformStart}`} pointer-events-none whitespace-nowrap z-30`}>
-                                    <span className="block text-xs text-app-text-secondary capitalize mb-1">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
-                                    <span className={`block text-lg font-bold ${d.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
-                                    </span>
-                                </div>
+                                <AnimatePresence>
+                                    {hoveredIndex === i && (
+                                        <motion.div
+                                            className={`absolute ${tooltipPositionClass} bg-app-surface/90 border border-amber-500/30 px-3 py-2 rounded-xl shadow-2xl backdrop-blur-md text-center transform pointer-events-none whitespace-nowrap z-30`}
+                                            initial={{ opacity: 0, scale: 0.9 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.9 }}
+                                            transition={{ duration: 0.2 }}
+                                        >
+                                            <span className="block text-xs text-app-text-secondary capitalize mb-1">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
+                                            <motion.span
+                                                className={`block text-lg font-bold tabular-nums ${d.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                                                initial={{ opacity: 0, scale: 0.9 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.05 }}
+                                            >
+                                                {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
+                                            </motion.span>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                                 
                                 {/* Point */}
-                                <div 
+                                <motion.div
                                     className={`w-3 h-3 rounded-full border-2 ${d.remaining >= 0 ? 'border-emerald-500 bg-emerald-950' : 'border-red-500 bg-red-950'} group-hover:bg-white group-hover:scale-150 transition-all cursor-pointer shadow-lg`}
                                     onMouseEnter={() => setHoveredIndex(i)}
                                     onMouseLeave={() => setHoveredIndex(null)}
                                     onClick={() => setHoveredIndex(i)}
+                                    initial={{ scale: 0, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    transition={{ type: "spring", stiffness: 400, damping: 20, delay: i * 0.08 + 0.8 }}
                                 />
                                 
                                 {/* Label Axe X (Mois) */}
@@ -319,8 +347,21 @@ export default function EvolutionPage() {
       {/* Liste détaillée en dessous */}
       <div className="mt-8 space-y-3">
           <h3 className="text-lg font-semibold text-app-text px-2">Détails mensuels</h3>
+          <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={{ visible: { transition: { staggerChildren: 0.07 } } }}
+              className="space-y-3"
+          >
           {data.slice().reverse().map((d, i) => (
-              <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-app-surface/30 border border-app-border hover:border-app-border hover:bg-app-surface/60 transition-all rounded-2xl group gap-4">
+              <motion.div
+                  key={i}
+                  variants={{
+                      hidden: { opacity: 0, y: 16 },
+                      visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 24 } }
+                  }}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-app-surface/30 border border-app-border hover:border-app-border hover:bg-app-surface/60 transition-all rounded-2xl group gap-4"
+              >
                   
                   {/* Mois (Gauche) */}
                   <div className="flex items-center gap-3">
@@ -334,21 +375,32 @@ export default function EvolutionPage() {
                       {/* Dépenses */}
                       <div className="flex justify-between sm:flex-col sm:items-end sm:text-right">
                            <span className="text-xs text-app-text-secondary uppercase tracking-wider block mb-1">Dépenses</span>
-                           <span className="font-bold font-mono text-amber-500 text-lg leading-none">
+                           <motion.span
+                               className="font-bold font-mono text-amber-500 text-lg leading-none tabular-nums"
+                               initial={{ opacity: 0, scale: 0.9 }}
+                               animate={{ opacity: 1, scale: 1 }}
+                               transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.3 + i * 0.04 }}
+                           >
                                {d.totalSpent.toFixed(2)} €
-                           </span>
+                           </motion.span>
                       </div>
 
                       {/* Économie */}
                       <div className="flex justify-between sm:flex-col sm:items-end sm:text-right">
                            <span className="text-xs text-app-text-secondary uppercase tracking-wider block mb-1">Économie</span>
-                           <span className={`font-bold font-mono text-lg leading-none ${d.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                           <motion.span
+                               className={`font-bold font-mono text-lg leading-none tabular-nums ${d.remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                               initial={{ opacity: 0, scale: 0.9 }}
+                               animate={{ opacity: 1, scale: 1 }}
+                               transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.35 + i * 0.04 }}
+                           >
                                {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
-                           </span>
+                           </motion.span>
                       </div>
                   </div>
-              </div>
+              </motion.div>
           ))}
+          </motion.div>
       </div>
     </div>
   );

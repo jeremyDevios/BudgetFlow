@@ -19,6 +19,7 @@ private struct SankeyLayoutEntry: Identifiable {
 struct CashFlowView: View {
     @Query(sort: \Envelope.order) private var envelopes: [Envelope]
     @Query private var userSettings: [UserSettings]
+    @State private var cardsAppeared = false
 
     private var settings: UserSettings? { userSettings.first }
 
@@ -49,6 +50,8 @@ struct CashFlowView: View {
                             SummaryCard(label: "Revenu Total", amount: settings.monthlyIncome, color: Color.appGreen)
                             SummaryCard(label: "Total Alloué", amount: totalAllocated, color: Color.appAccent)
                         }
+                        .opacity(cardsAppeared ? 1 : 0)
+                        .offset(y: cardsAppeared ? 0 : 20)
                         .padding(.horizontal, 16)
 
                         if unallocated < 0 {
@@ -71,6 +74,14 @@ struct CashFlowView: View {
                     .padding(.bottom, 40)
                 }
                 .scrollIndicators(.hidden)
+                .onAppear {
+                    withAnimation(.smooth(duration: 0.45).delay(1.5)) {
+                        cardsAppeared = true
+                    }
+                }
+                .onDisappear {
+                    cardsAppeared = false
+                }
             } else {
                 ContentUnavailableView(
                     "Aucun revenu configuré",
@@ -88,6 +99,7 @@ struct CashFlowView: View {
 private struct SankeyDiagramView: View {
     let settings: UserSettings
     let envelopes: [Envelope]
+    @State private var animProgress: CGFloat = 0
 
     private let padding: CGFloat = 16
     private let nodeWidth: CGFloat = 16
@@ -153,6 +165,13 @@ private struct SankeyDiagramView: View {
             Canvas { context, size in
                 drawSankey(context: &context, leftFrame: adjustedLeftFrame, rightX: rightX, entries: entries)
             }
+            .mask(alignment: .leading) {
+                GeometryReader { geo in
+                    Rectangle()
+                        .frame(width: geo.size.width * animProgress)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
             .background {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(Color.appSurface)
@@ -169,6 +188,14 @@ private struct SankeyDiagramView: View {
                     entries: entries
                 )
             }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.3).delay(0.15)) {
+                animProgress = 1.0
+            }
+        }
+        .onDisappear {
+            animProgress = 0
         }
     }
 
@@ -256,6 +283,7 @@ private struct SankeyLabelsOverlay: View {
     let leftFrame: CGRect
     let rightX: CGFloat
     let entries: [SankeyLayoutEntry]
+    @State private var appeared = false
 
     private static let minLabelGap: CGFloat = 26
     private let nodeWidth: CGFloat = 16
@@ -295,6 +323,8 @@ private struct SankeyLabelsOverlay: View {
                     .foregroundStyle(.secondary)
             }
             .position(x: leftFrame.maxX + 42, y: leftFrame.midY)
+            .opacity(appeared ? 1 : 0)
+            .animation(.smooth(duration: 0.4).delay(0.3), value: appeared)
 
             // Leader lines drawn in Canvas (behind labels)
             Canvas { context, _ in
@@ -319,6 +349,9 @@ private struct SankeyLabelsOverlay: View {
                     .fill(entry.node.color)
                     .frame(width: dotSize, height: dotSize)
                     .position(x: dotCenterX, y: labelY)
+                    .opacity(appeared ? 1 : 0)
+                    .scaleEffect(appeared ? 1 : 0.3)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.65).delay(Double(index) * 0.07), value: appeared)
 
                 // Label text
                 VStack(alignment: .trailing, spacing: 0) {
@@ -334,7 +367,18 @@ private struct SankeyLabelsOverlay: View {
                 }
                 .frame(width: 84, alignment: .trailing)
                 .position(x: labelCenterX, y: labelY)
+                .opacity(appeared ? 1 : 0)
+                .offset(x: appeared ? 0 : -12)
+                .animation(.smooth(duration: 0.35).delay(Double(index) * 0.07 + 0.05), value: appeared)
             }
+        }
+        .onAppear {
+            withAnimation(.smooth(duration: 0.4).delay(1.0)) {
+                appeared = true
+            }
+        }
+        .onDisappear {
+            appeared = false
         }
     }
 }
@@ -355,6 +399,7 @@ private struct SummaryCard: View {
             Text(amount, format: .currency(code: "EUR"))
                 .font(.title3.bold())
                 .foregroundStyle(color)
+                .contentTransition(.numericText())
         }
         .frame(maxWidth: .infinity)
         .padding(14)
