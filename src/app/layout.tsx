@@ -10,6 +10,10 @@ const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');var
 export const metadata: Metadata = {
   title: "BudgetFlow",
   description: "Gérez votre budget simplement",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -19,6 +23,10 @@ export default function RootLayout({
     <html lang="fr" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        <link rel="icon" href="/favicon.png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="BudgetFlow" />
       </head>
       <body className={inter.className}>
         <AuthProvider>{children}</AuthProvider>

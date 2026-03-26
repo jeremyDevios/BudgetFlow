@@ -22,16 +22,22 @@ export default function AuthPage() {
       const userCredential = await signInWithPopup(auth, provider);
 
       const user = userCredential.user;
-      await setDoc(doc(db, "users", user.uid), {
+      const userDocData: {
+        email: string | null;
+        displayName: string | null;
+        lastLogin: string;
+        photoURL?: string;
+      } = {
         email: user.email,
         displayName: user.displayName,
-        photoURL: user.photoURL,
         lastLogin: new Date().toISOString(),
-      }, { merge: true });
+      };
 
-      await setDoc(doc(db, "users", user.uid, "settings", "general"), {
-        updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      if (user.photoURL !== null) {
+        userDocData.photoURL = user.photoURL;
+      }
+
+      await setDoc(doc(db, "users", user.uid), userDocData, { merge: true });
 
       router.push("/dashboard");
     } catch (err: unknown) {

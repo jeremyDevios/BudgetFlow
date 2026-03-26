@@ -249,12 +249,12 @@ export default function OnboardingPage() {
         {step === 1 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Commençons par les bases</h1>
+              <h1 className="text-3xl font-bold text-app-text">Commençons par les bases</h1>
               <p className="mt-2 text-app-text-secondary">Pour établir votre budget, nous avons besoin de connaître vos flux mensuels fixes.</p>
             </div>
             
             {/* Affichage Somme Disponible (Prévisionnel) */}
-            <div className={`p-4 rounded-xl border ${availableAmount >= 0 ? 'bg-green-950/30 border-green-900' : 'bg-red-950/30 border-red-900'} transition-colors`}>
+            <div className={`p-4 rounded-xl border ${availableAmount >= 0 ? 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900' : 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900'} transition-colors`}>
                 <p className="text-sm text-app-text-secondary">Capacité pour vos enveloppes :</p>
                 <p className={`text-3xl font-bold ${availableAmount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                     {availableAmount.toFixed(2)} €
@@ -264,7 +264,7 @@ export default function OnboardingPage() {
             <div className="space-y-6">
               {/* Le Salaire */}
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+                <label className="flex items-center gap-2 text-sm font-medium text-app-text">
                   <Wallet className="h-4 w-4 text-green-500" />
                   Salaire Mensuel Net
                 </label>
@@ -283,12 +283,12 @@ export default function OnboardingPage() {
 
               {/* Charges Incompressibles */}
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+                <label className="flex items-center gap-2 text-sm font-medium text-app-text">
                   <Landmark className="h-4 w-4 text-red-500" />
                   Charges Incompressibles
                   <div className="group relative">
-                    <HelpCircle className="h-4 w-4 text-zinc-600 cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-app-surface border border-app-border rounded-lg text-xs text-zinc-300 hidden group-hover:block z-10 shadow-xl">
+                    <HelpCircle className="h-4 w-4 text-app-text-secondary cursor-help" />
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-app-surface border border-app-border rounded-lg text-xs text-app-text hidden group-hover:block z-10 shadow-xl">
                       Cumul des charges fixes : Loyer, Électricité, Internet, Assurances, Abonnements Netflix/Spotify, etc.
                     </div>
                   </div>
@@ -309,10 +309,10 @@ export default function OnboardingPage() {
 
               {/* Épargne */}
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm font-medium text-zinc-300">
+                <label className="flex items-center gap-2 text-sm font-medium text-app-text">
                   <PiggyBank className="h-4 w-4 text-blue-500" />
                   Objectif d'Épargne Mensuelle
-                  <span className="text-xs text-zinc-600 font-normal">(Crypto, Immo, Livret A...)</span>
+                  <span className="text-xs text-app-text-secondary font-normal">(Crypto, Immo, Livret A...)</span>
                 </label>
                 <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
@@ -340,20 +340,20 @@ export default function OnboardingPage() {
         {step === 2 && (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">Vos Enveloppes</h1>
+              <h1 className="text-3xl font-bold text-app-text">Vos Enveloppes</h1>
               <p className="mt-2 text-app-text-secondary">Définissez vos budgets pour les dépenses du quotidien (courses, sorties...).</p>
             </div>
 
             {/* Affichage Somme Disponible Dynamique */}
-            <div className={`sticky top-4 z-20 p-4 rounded-xl border backdrop-blur-md shadow-lg ${availableAmount >= 0 ? 'bg-green-950/80 border-green-900' : 'bg-red-950/80 border-red-900'} transition-all`}>
+            <div className={`sticky top-4 z-20 p-4 rounded-xl border backdrop-blur-md shadow-lg ${availableAmount >= 0 ? 'bg-green-50/95 border-green-200 dark:bg-green-950/80 dark:border-green-900' : 'bg-red-50/95 border-red-200 dark:bg-red-950/80 dark:border-red-900'} transition-all`}>
                 <div className="flex justify-between items-center">
-                    <p className="text-sm text-zinc-300">Reste à attribuer :</p>
-                    <p className={`text-2xl font-bold ${availableAmount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <p className="text-sm text-app-text-secondary">Reste à attribuer :</p>
+                <p className={`text-2xl font-bold ${availableAmount >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
                         {availableAmount.toFixed(2)} €
                     </p>
                 </div>
                 {availableAmount < 0 && (
-                    <p className="text-xs text-red-300 mt-1">
+                <p className="text-xs text-red-700 dark:text-red-300 mt-1">
                         Attention : Vous avez dépassé votre budget disponible !
                     </p>
                 )}
@@ -400,7 +400,7 @@ export default function OnboardingPage() {
                                     <button
                                         key={color}
                                         onClick={() => setEditEnvelopeColor(color)}
-                                        className={`w-6 h-6 rounded-full flex-shrink-0 ${color} ${editEnvelopeColor === color ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-900' : 'opacity-50 hover:opacity-100'}`}
+                                        className={`w-6 h-6 rounded-full flex-shrink-0 ${color} ${editEnvelopeColor === color ? 'ring-2 ring-zinc-900 dark:ring-white ring-offset-2 ring-offset-app-bg' : 'opacity-50 hover:opacity-100'}`}
                                     />
                                  ))}
                             </div>
@@ -447,14 +447,14 @@ export default function OnboardingPage() {
                   <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
                         onClick={() => startEditingEnvelope(env)}
-                        className="p-1 text-zinc-600 hover:text-amber-500"
+                        className="p-1 text-app-text-secondary hover:text-amber-500"
                         title="Modifier"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button 
                         onClick={() => removeEnvelope(env.id)}
-                        className="p-1 text-zinc-600 hover:text-red-500"
+                        className="p-1 text-app-text-secondary hover:text-red-500"
                         title="Supprimer"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -491,14 +491,14 @@ export default function OnboardingPage() {
                                 <button
                                     key={color}
                                     onClick={() => setNewEnvelopeColor(color)}
-                                    className={`w-6 h-6 rounded-full ${color} ${newEnvelopeColor === color ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-900' : 'opacity-50 hover:opacity-100'}`}
+                                    className={`w-6 h-6 rounded-full ${color} ${newEnvelopeColor === color ? 'ring-2 ring-zinc-900 dark:ring-white ring-offset-2 ring-offset-app-bg' : 'opacity-50 hover:opacity-100'}`}
                                 />
                              ))}
                         </div>
                         <div className="flex gap-2">
                             <button 
                                 onClick={addEnvelope}
-                                className="flex-1 bg-white text-black py-2 rounded-lg font-semibold hover:bg-zinc-200"
+                                  className="flex-1 bg-amber-500 text-zinc-950 py-2 rounded-lg font-semibold hover:bg-amber-600"
                             >
                                 Ajouter
                             </button>
