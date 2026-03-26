@@ -29,6 +29,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Masquer les outils de développement (Toast et indicateurs) si non activés explicitement
   devIndicators: process.env.SHOW_DEV_TOOLS === 'true' ? undefined : false,
+  allowedDevOrigins: ["budget.zikkis.fr", "*.zikkis.fr"],
   async headers() {
     return [
       {
@@ -37,11 +38,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  
-  // Optionnel: Permettre l'accès depuis des domaines spécifiques en mode dev (si bloqué)
-  // experimental: {
-  //   allowedDevOrigins: ["budget.zikkis.fr"],
-  // },
 };
 
 export default nextConfig;
