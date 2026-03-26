@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 8091 -H 0.0.0.0",
     "build": "next build",
-    "start": "next start -p 8091 -H 0.0.0.0",
+    "start": "next start -p 8095 -H 0.0.0.0",
     "lint": "next lint",
     "test": "jest",
     "test:coverage": "jest --coverage"
