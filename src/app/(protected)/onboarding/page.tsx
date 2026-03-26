@@ -151,6 +151,19 @@ export default function OnboardingPage() {
     setLoading(true);
 
     try {
+      const normalizedEnvelopes = envelopes
+        .map((env, index) => ({
+          ...env,
+          budget: parseFloat(env.amount) || 0,
+          order: index,
+        }))
+        .filter((env) => env.budget > 0);
+
+      if (normalizedEnvelopes.length === 0) {
+        alert("Ajoutez au moins une enveloppe avec un budget supérieur à 0 €.");
+        return;
+      }
+
       const batch = writeBatch(db);
       
       // 1. Sauvegarder les settings utilisateur
@@ -165,15 +178,16 @@ export default function OnboardingPage() {
       });
 
       // 2. Créer les enveloppes
-      envelopes.forEach(env => {
+      normalizedEnvelopes.forEach((env) => {
         const envRef = doc(collection(db, "users", user.uid, "envelopes"));
         batch.set(envRef, {
-            name: env.name,
-            budget: parseFloat(env.amount) || 0,
-            icon: env.icon,
-            color: env.color,
-            spent: 0,
-            createdAt: new Date().toISOString()
+        name: env.name,
+        budget: env.budget,
+        icon: env.icon,
+        color: env.color,
+        order: env.order,
+        spent: 0,
+        createdAt: new Date().toISOString()
         });
       });
 
