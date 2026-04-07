@@ -84,6 +84,14 @@ service cloud.firestore {
         && (!('note'        in data) || (data.note        is string && data.note.size()        <= 255));
     }
 
+    // Daily activity: /users/{userId}/dailyActivity/{date}
+    // Required: loggedIn, date
+    function isValidDailyActivityData(data) {
+      return data.keys().hasOnly(['loggedIn', 'date'])
+        && data.loggedIn is bool
+        && data.date is string && data.date.size() == 10;
+    }
+
     // ── User document ────────────────────────────────────────────────────────
 
     match /users/{userId} {
@@ -128,6 +136,13 @@ service cloud.firestore {
                          // createdAt is immutable — prevent audit-trail backdating.
                          && request.resource.data.createdAt == resource.data.createdAt;
         allow delete: if isGoogleAuth() && isOwner(userId);
+      }
+
+      // ── Daily activity subcollection ───────────────────────────────────────
+      match /dailyActivity/{date} {
+        allow read: if isGoogleAuth() && isOwner(userId);
+        allow create, update: if isGoogleAuth() && isOwner(userId)
+                                 && isValidDailyActivityData(request.resource.data);
       }
     }
 

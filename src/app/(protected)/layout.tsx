@@ -6,8 +6,9 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
 import { db } from "@/lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { usePathname } from "next/navigation";
+import { logger } from "@/lib/logger";
 
 export default function ProtectedLayout({
   children,
@@ -40,6 +41,36 @@ export default function ProtectedLayout({
         } catch (error) {
           // Ignorer les erreurs de permission ici pour éviter de spammer la console si le profile n'est pas encore prêt
           // console.warn("Onboarding check skipped:", error);
+        }
+
+        try {
+          const offsetDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000);
+          const todayString = offsetDate.toISOString().split("T")[0];
+          const activityKey = `activity_written_${user.uid}_${todayString}`;
+
+          if (!sessionStorage.getItem(activityKey)) {
+            const dailyActivityRef = doc(
+              db,
+              "users",
+              user.uid,
+              "dailyActivity",
+              todayString
+            );
+
+            void setDoc(
+              dailyActivityRef,
+              { loggedIn: true, date: todayString },
+              { merge: true }
+            )
+              .then(() => {
+                sessionStorage.setItem(activityKey, "true");
+              })
+              .catch(() => {
+                logger.warn("Daily activity write failed");
+              });
+          }
+        } catch (error) {
+          logger.warn("Daily activity tracking skipped");
         }
       }
     };

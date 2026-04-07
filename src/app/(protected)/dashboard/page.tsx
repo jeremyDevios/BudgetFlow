@@ -3,7 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, getDocs, doc, getDoc, orderBy, limit, where } from "firebase/firestore";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
@@ -46,6 +46,8 @@ import TransactionModal from "@/components/dashboard/TransactionModal";
 import { logger } from "@/lib/logger";
 import { motion, AnimatePresence } from "framer-motion";
 import SearchDropdown from "@/components/dashboard/SearchDropdown";
+import CalendarHeatmap from "@/components/dashboard/CalendarHeatmap";
+import { useCalendarHeatmap } from "@/hooks/useCalendarHeatmap";
 
 // --- Types ---
 type IconName = "ShoppingCart" | "Fuel" | "Utensils" | "Plane" | "Heart" | "Gamepad2" | "Bus" | "Shirt" | "Music" | "Coffee" | "Briefcase" | "GraduationCap" | "Baby" | "PawPrint" | "Gift" | "Smartphone" | "Wifi" | "Zap" | "Droplets" | "Hammer";
@@ -89,6 +91,19 @@ export default function DashboardPage() {
   // Gestion de la date sélectionnée (Mois)
   const [currentDate, setCurrentDate] = useState(new Date());
     const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const { loginDates, loading: heatmapLoading } = useCalendarHeatmap(
+    user?.uid ?? null,
+    currentDate
+  );
+
+  const transactionDates = useMemo(() => {
+    const set = new Set<string>();
+    transactions.forEach((tx) => {
+      const day = tx.date?.split("T")[0];
+      if (day) set.add(day);
+    });
+    return set;
+  }, [transactions]);
 
   // --- Chargement des données ---
   const fetchData = async () => {
@@ -397,6 +412,13 @@ export default function DashboardPage() {
                 </div>
             </div>
         </section>
+
+        <CalendarHeatmap
+          month={currentDate}
+          transactionDates={transactionDates}
+          loginDates={loginDates}
+          loading={heatmapLoading}
+        />
 
         {/* Recherche */}
         <section aria-label="Rechercher une dépense">
