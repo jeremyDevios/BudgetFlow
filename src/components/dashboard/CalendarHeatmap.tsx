@@ -92,7 +92,7 @@ export default function CalendarHeatmap({
         <div className="animate-pulse space-y-4">
           <div className="h-5 w-36 rounded bg-app-bg/60" />
           <div className="grid grid-cols-7 gap-1.5">
-            {Array.from({ length: 35 }).map((_, index) => (
+            {Array.from({ length: 42 }).map((_, index) => (
               <div key={index} className="aspect-square rounded-lg bg-app-bg/60" />
             ))}
           </div>
@@ -177,4 +177,3 @@ export default function CalendarHeatmap({
     </section>
   );
 }
-

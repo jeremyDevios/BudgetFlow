@@ -86,10 +86,11 @@ service cloud.firestore {
 
     // Daily activity: /users/{userId}/dailyActivity/{date}
     // Required: loggedIn, date
-    function isValidDailyActivityData(data) {
+    function isValidDailyActivityData(data, dateId) {
       return data.keys().hasOnly(['loggedIn', 'date'])
-        && data.loggedIn is bool
-        && data.date is string && data.date.size() == 10;
+        && data.loggedIn == true
+        && data.date is string && data.date.size() == 10
+        && data.date == dateId;
     }
 
     // ── User document ────────────────────────────────────────────────────────
@@ -141,8 +142,12 @@ service cloud.firestore {
       // ── Daily activity subcollection ───────────────────────────────────────
       match /dailyActivity/{date} {
         allow read: if isGoogleAuth() && isOwner(userId);
-        allow create, update: if isGoogleAuth() && isOwner(userId)
-                                 && isValidDailyActivityData(request.resource.data);
+        allow create: if isGoogleAuth() && isOwner(userId)
+                         && isValidDailyActivityData(request.resource.data, date);
+        allow update: if isGoogleAuth() && isOwner(userId)
+                         && isValidDailyActivityData(request.resource.data, date)
+                         // date is immutable — prevents history tampering.
+                         && request.resource.data.date == resource.data.date;
       }
     }
 

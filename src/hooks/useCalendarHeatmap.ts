@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
@@ -35,20 +35,21 @@ export function useCalendarHeatmap(
       setLoading(true);
 
       try {
-        const snapshot = await getDocs(
-          collection(db, "users", userId, "dailyActivity")
+        const start = `${monthKey}-01`;
+        const end = `${monthKey}-31`;
+        const q = query(
+          collection(db, "users", userId, "dailyActivity"),
+          where("date", ">=", start),
+          where("date", "<=", end)
         );
+        const snapshot = await getDocs(q);
 
         if (cancelled) return;
 
         const nextDates = new Set<string>();
         snapshot.forEach((activityDoc) => {
           const data = activityDoc.data();
-          if (
-            typeof data.date === "string" &&
-            data.date.startsWith(monthKey) &&
-            data.loggedIn === true
-          ) {
+          if (typeof data.date === "string" && data.loggedIn === true) {
             nextDates.add(data.date);
           }
         });
