@@ -9,7 +9,7 @@ services:
       - NODE_ENV=production
       - PORT=8095
     env_file:
-      - .env
+      - .env.local
     volumes:
       - .:/app
       - /app/node_modules
