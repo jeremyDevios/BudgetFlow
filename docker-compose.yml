@@ -10,6 +10,6 @@ services:
       - PORT=8095
     env_file:
       - .env.local
-    volumes:
-      - .:/app
-      - /app/node_modules
+    #volumes:
+    #  - .:/app
+    #  - /app/node_modules
