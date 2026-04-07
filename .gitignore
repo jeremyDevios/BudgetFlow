@@ -51,10 +51,7 @@ VULNERABILITIES.md
 *.swo
 
 # Xcode / iOS user data
-xcuserdata/
-*.xcuserstate
-*.xcscmblueprint
-DerivedData/
+iOS/BudgetFlowIOS
 
 # Firebase iOS config (contains API keys — ne jamais committer)
 **/GoogleService-Info.plist

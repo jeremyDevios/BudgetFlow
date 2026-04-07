@@ -69,6 +69,45 @@ node scripts/restore-firestore.js --input ./backups/backup-xxx.json --project mo
 
 ---
 
+### `migrate-user-from-backup-to-prod.js`
+
+Copie les donnees d'un utilisateur source present dans un backup JSON (dev)
+vers un utilisateur cible en **production**.
+
+Le script utilise explicitement `scripts/service-account-prod.json`.
+
+#### Usage
+
+```bash
+# Mode interactif (demande source userId et target userId)
+node scripts/migrate-user-from-backup-to-prod.js --input ./backups/backup-2026-03-26T16-56-45_full.json
+
+# Sans prompt userId (tout en arguments)
+node scripts/migrate-user-from-backup-to-prod.js \
+   --input ./backups/backup-2026-03-26T16-56-45_full.json \
+   --source-user <devUserId> \
+   --target-user <prodUserId>
+
+# Executer sans confirmation interactive finale
+node scripts/migrate-user-from-backup-to-prod.js \
+   --input ./backups/backup-2026-03-26T16-56-45_full.json \
+   --source-user <devUserId> \
+   --target-user <prodUserId> \
+   --yes
+
+# Copier aussi les champs profil (email, displayName, photoURL, etc.)
+node scripts/migrate-user-from-backup-to-prod.js --include-profile
+```
+
+#### Comportement
+
+- Par defaut, le document `users/{targetUserId}` conserve les champs profil de la cible.
+- Les sous-collections de la source (settings, envelopes, transactions, etc.) sont ecrites dans la cible.
+- Les champs de date (`date`, `createdAt`, etc.) sont conserves en **string** comme dans le backup.
+- Les documents deja presents dans la cible mais absents du backup **ne sont pas supprimes**.
+
+---
+
 ## Procédure de Disaster Recovery
 
 En cas de compromission de la base :
