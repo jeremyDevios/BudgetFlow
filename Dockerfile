@@ -1,5 +1,5 @@
 # On utilise une version légère de Node.js
-FROM node:18-slim
+FROM node:20-slim
 
 # On définit le dossier de travail dans le conteneur
 WORKDIR /app
