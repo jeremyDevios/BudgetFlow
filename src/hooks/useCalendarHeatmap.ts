@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, onSnapshot, query, where } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
@@ -29,23 +29,19 @@ export function useCalendarHeatmap(
       return;
     }
 
-    let cancelled = false;
+    setLoading(true);
 
-    const loadDailyActivity = async () => {
-      setLoading(true);
+    const start = `${monthKey}-01`;
+    const end = `${monthKey}-31`;
+    const q = query(
+      collection(db, "users", userId, "dailyActivity"),
+      where("date", ">=", start),
+      where("date", "<=", end)
+    );
 
-      try {
-        const start = `${monthKey}-01`;
-        const end = `${monthKey}-31`;
-        const q = query(
-          collection(db, "users", userId, "dailyActivity"),
-          where("date", ">=", start),
-          where("date", "<=", end)
-        );
-        const snapshot = await getDocs(q);
-
-        if (cancelled) return;
-
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
         const nextDates = new Set<string>();
         snapshot.forEach((activityDoc) => {
           const data = activityDoc.data();
@@ -55,23 +51,16 @@ export function useCalendarHeatmap(
         });
 
         setLoginDates(nextDates);
-      } catch (error) {
+        setLoading(false);
+      },
+      (error) => {
         logger.warn("Failed to load calendar heatmap activity");
-        if (!cancelled) {
-          setLoginDates(new Set());
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        setLoginDates(new Set());
+        setLoading(false);
       }
-    };
+    );
 
-    void loadDailyActivity();
-
-    return () => {
-      cancelled = true;
-    };
+    return unsubscribe;
   }, [userId, monthKey]);
 
   return { loginDates, loading };
