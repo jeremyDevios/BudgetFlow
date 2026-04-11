@@ -253,13 +253,10 @@ function DotRingBadge({ totalDots, filledDots, label, state }: DotRingBadgeProps
   );
 }
 
-function badgeStatusText(
-  state: MilestoneState,
-  sublabel: string
-): { text: string; color: string } {
-  if (state === "achieved") return { text: `${sublabel} · ACTIF`, color: "#F97316" };
-  if (state === "in-progress") return { text: `${sublabel} · En cours`, color: "#CA8A04" };
-  return { text: "Prochain défi", color: "#52525B" };
+function badgeStatusText(state: MilestoneState): { text: string; color: string } {
+  if (state === "achieved") return { text: "Complété", color: "#F97316" };
+  if (state === "in-progress") return { text: "En cours", color: "#CA8A04" };
+  return { text: "En cours", color: "#52525B" };
 }
 
 export default function CalendarHeatmap({
@@ -275,7 +272,7 @@ export default function CalendarHeatmap({
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const todayString = getLocalDateString(new Date());
   const columns = Math.ceil(daysInMonth / 3);
-  const maxGridWidth = columns * 30 + (columns - 1) * 4;
+  const maxGridWidth = columns * 22 + (columns - 1) * 4;
 
   const currentStreak = computeCurrentStreak(
     loginDates, transactionDates, year, monthIndex, daysInMonth
@@ -379,63 +376,63 @@ export default function CalendarHeatmap({
         padding: "16px",
       }}
     >
-      {/* Title */}
-      <h3 className="text-sm font-bold text-white tracking-tight mb-1">{title}</h3>
+      {/* Main row: two equal halves, each centered */}
+      <div className="flex flex-row items-center w-full">
 
-      {/* Legend */}
-      <div className="flex items-center gap-1 mb-3 flex-wrap text-[10px]">
-        <span className="text-zinc-500 mr-0.5">Légende :</span>
-        <span className="text-[#F97316] font-semibold">Orange</span>
-        <span className="text-zinc-600"> : Saisie de dépense</span>
-        <span className="text-zinc-600 mx-1">·</span>
-        <span className="text-[#EAB308] font-semibold">Jaune</span>
-        <span className="text-zinc-600"> : Connexion seulement</span>
-      </div>
+        {/* Left half: grid + legend centered */}
+        <div className="flex-1 flex flex-col items-center gap-2 pr-3 sm:pr-4">
+          {/* Heatmap grid */}
+          <div
+            style={{
+              maxWidth: `${maxGridWidth}px`,
+              width: "100%",
+              display: "grid",
+              gridTemplateColumns: `repeat(${columns}, 1fr)`,
+              gap: "4px",
+            }}
+          >
+            {cells.map((cell) => {
+              const state = getCellState(
+                cell.dateStr,
+                todayString,
+                transactionDates,
+                loginDates
+              );
+              return (
+                <div
+                  key={cell.dateStr}
+                  className="w-full aspect-square rounded-md border"
+                  style={getCellStyle(state)}
+                  title={cell.dateStr}
+                />
+              );
+            })}
+          </div>
 
-      {/* Main row: grid left, badges right */}
-      <div className="flex flex-row gap-4 items-center justify-center">
-
-        {/* Heatmap grid */}
-        <div
-          style={{
-            maxWidth: `${maxGridWidth}px`,
-            width: "100%",
-            display: "grid",
-            gridTemplateColumns: `repeat(${columns}, 1fr)`,
-            gap: "4px",
-          }}
-        >
-          {cells.map((cell) => {
-            const state = getCellState(
-              cell.dateStr,
-              todayString,
-              transactionDates,
-              loginDates
-            );
-            return (
-              <div
-                key={cell.dateStr}
-                className="w-full aspect-square rounded-md border"
-                style={getCellStyle(state)}
-                title={cell.dateStr}
-              />
-            );
-          })}
+          {/* Legend — only under the cells */}
+          <div className="flex items-center gap-1 flex-wrap text-[10px] self-start">
+            <span className="text-[#F97316] font-semibold">Orange</span>
+            <span className="text-zinc-600"> : Dépense</span>
+            <span className="text-zinc-600 mx-1">·</span>
+            <span className="text-[#EAB308] font-semibold">Jaune</span>
+            <span className="text-zinc-600"> : Connexion</span>
+          </div>
         </div>
 
-        {/* Badge panel */}
-        <div className="shrink-0 flex flex-col gap-1.5 pl-3 sm:pl-4 border-l border-[#3F3F46]">
+        {/* Badge panel — right half, centered between separator and edge */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-2.5 border-l border-[#3F3F46]">
+          <div className="flex flex-col gap-2.5 w-fit">
 
           {/* Série 1 — 7 jours */}
           <div className="flex items-center gap-2">
             <DotRingBadge totalDots={7} filledDots={s1Filled} label="7" state={s1State} />
             <div>
-              <p className="text-xs font-semibold text-white leading-tight">Série 1</p>
+              <p className="text-xs font-semibold text-white leading-tight">7 jours</p>
               <p
                 className="text-[10px] leading-tight mt-0.5 font-medium"
-                style={{ color: badgeStatusText(s1State, "Semaine").color }}
+                style={{ color: badgeStatusText(s1State).color }}
               >
-                {badgeStatusText(s1State, "Semaine").text}
+                {badgeStatusText(s1State).text}
               </p>
             </div>
           </div>
@@ -444,12 +441,12 @@ export default function CalendarHeatmap({
           <div className="flex items-center gap-2">
             <DotRingBadge totalDots={14} filledDots={s2Filled} label="14" state={s2State} />
             <div>
-              <p className="text-xs font-semibold text-white leading-tight">Série 2</p>
+              <p className="text-xs font-semibold text-white leading-tight">14 jours</p>
               <p
                 className="text-[10px] leading-tight mt-0.5 font-medium"
-                style={{ color: badgeStatusText(s2State, "Semaines").color }}
+                style={{ color: badgeStatusText(s2State).color }}
               >
-                {badgeStatusText(s2State, "Semaines").text}
+                {badgeStatusText(s2State).text}
               </p>
             </div>
           </div>
@@ -466,13 +463,14 @@ export default function CalendarHeatmap({
               <p className="text-xs font-semibold text-white leading-tight">Mois Complet</p>
               <p
                 className="text-[10px] leading-tight mt-0.5 font-medium"
-                style={{ color: badgeStatusText(monthState, "Mois").color }}
+                style={{ color: badgeStatusText(monthState).color }}
               >
-                {badgeStatusText(monthState, "Mois").text}
+                {badgeStatusText(monthState).text}
               </p>
             </div>
           </div>
 
+          </div>
         </div>
       </div>
     </section>
