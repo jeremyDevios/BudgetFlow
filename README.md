@@ -21,6 +21,10 @@
 - **Configuration complète** :
   - Revenus, charges fixes, épargne cible.
   - Indicateurs d'équilibre budgétaire.
+- **Parcours Fidélité (Gamification)** :
+  - Grille heatmap d'activité (Transactions = orange, Connexions = jaune).
+  - Badges jalons 7 jours, 14 jours et mois complet via un système SVG en anneau de points.
+  - Tuile dashboard unifiée avec la carte "Reste disponible" (responsive, dégradés clair/sombre).
 - **Tests unitaires** : Couverture ≥ 80 % sur la logique métier (Jest sur Web, XCTest sur iOS).
 
 ## Aperçu de l'interface

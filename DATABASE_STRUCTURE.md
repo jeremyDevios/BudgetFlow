@@ -97,6 +97,14 @@ One document per day (document ID = `YYYY-MM-DD`) used by the dashboard heatmap.
 | `loggedIn` | boolean | `true` when user logged in that day |
 | `date` | string (`YYYY-MM-DD`) | Local date key used for monthly filtering |
 
+### Note métier — Parcours Fidélité
+
+La logique de streak du Parcours Fidélité est actuellement calculée à la volée côté client à partir de deux ensembles de dates :
+- `transactionDates` : jours ayant au moins une transaction
+- `loginDates` : jours avec connexion utilisateur
+
+Les fonctions de calcul (`computeCurrentStreak`, `computeMaxStreak`, `computeFullMonthProgress`) ne reposent donc pas sur un compteur persistant en base à ce stade.
+
 ---
 
 ## iOS SwiftData Models

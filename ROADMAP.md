@@ -1,5 +1,12 @@
 # Roadmap: Enveloppes Budget (V2 - Perfection)
 
+## 0. Phase 1 — Parcours Fidélité & Tuile Dashboard (Terminé ✅)
+
+- **Parcours Fidélité**: Grille heatmap d'activité quotidienne (Transactions en orange, Connexions en jaune)
+- **Badges jalons**: Streak 7 jours, streak 14 jours et progression mois complet avec anneau SVG à points + animation heartbeat
+- **Tuile unifiée Dashboard**: Fusion de la heatmap avec la carte "Reste disponible" dans une tuile responsive unique avec dégradés dédiés clair/sombre
+- **Calcul local des streaks**: `computeCurrentStreak`, `computeMaxStreak`, `computeFullMonthProgress`
+
 ## 1. Design "Premium Dark" & Bento Layout
 
 - **Tableau de bord**: Mise en place d'un système de "Bento Grid" (tuiles de tailles variées)

@@ -99,6 +99,11 @@ Strict-Transport-Security: max-age=31536000
 - ✅ Valider les types et les contraintes
 - ❌ Ne jamais utiliser `allow read, write: if true;`
 
+### 6. Parcours Fidélité (calcul des streaks)
+- ✅ Le calcul des streaks est réalisé côté client pour une réactivité temps réel (UI heatmap et badges)
+- ✅ Les dates utilisées (`transactionDates`, `loginDates`) doivent rester validées côté règles Firestore et côté serveur quand applicable
+- ✅ En cas d'incohérence de fuseau horaire, normaliser les clés de date (`YYYY-MM-DD`) avant calcul
+
 ---
 
 ## 🚀 Déploiement en Production
