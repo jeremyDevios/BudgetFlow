@@ -24,6 +24,8 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | Thème sombre / clair (adaptatif) | ✅ | ✅ |
 | Bordures colorées sur les enveloppes | ✅ | ✅ |
 | Solde restant dans la modal transaction | ✅ | ✅ |
+| Parcours Fidélité (Heatmap & Streaks) | ✅ | ✅ |
+| Tuile unifiée Dashboard (Reste disponible + Heatmap) | ✅ | ✅ |
 | Tests unitaires | ✅ Jest | ✅ XCTest |
 
 ---

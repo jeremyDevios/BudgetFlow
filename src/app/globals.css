@@ -103,3 +103,27 @@
 .animate-toast-out {
   animation: toast-slide-down 0.25s ease reverse both;
 }
+
+/* CalendarHeatmap mode tokens */
+:root {
+  --hm-cell-inactive-bg: #E4E4E7;
+  --hm-cell-inactive-border: #D4D4D8;
+  --hm-cell-future-bg: rgba(0,0,0,0.04);
+  --hm-cell-future-border: rgba(0,0,0,0.06);
+  --hm-dim-dot: #D1D5DB;
+  --hm-section-bg: linear-gradient(135deg, rgba(209,213,219,0.70) 0%, rgba(253,230,138,0.40) 100%);
+}
+.dark {
+  --hm-cell-inactive-bg: #27272A;
+  --hm-cell-inactive-border: #3F3F46;
+  --hm-cell-future-bg: rgba(255,255,255,0.03);
+  --hm-cell-future-border: rgba(255,255,255,0.06);
+  --hm-dim-dot: #3A3A3E;
+  --hm-section-bg: radial-gradient(ellipse at 20% 60%, rgba(249,115,22,0.09) 0%, var(--color-surface) 65%);
+}
+.hm-section {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+.dark .hm-section {
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.05), 0 2px 8px rgba(0,0,0,0.4);
+}

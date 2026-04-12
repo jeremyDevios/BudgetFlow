@@ -50,6 +50,14 @@ src/__tests__/
 | `src/lib/validation.ts` | `validateAmount`, `validateDescription`, `validateEnvelopeName`, `validateEnvelopeId`, `validateDate`, `validateEmail`, `validatePassword` |
 | `src/lib/dateUtils.ts` | `getMonthBounds`, `formatMonthYear` |
 | `src/lib/logger.ts` | `info`, `warn`, `error`, `sanitizedError` (dev + prod behaviour) |
+| `src/components/dashboard/CalendarHeatmap.tsx` | `computeCurrentStreak`, `computeMaxStreak`, `computeFullMonthProgress`, rendu SVG de `DotRingBadge` |
+
+### Exigences de couverture supplémentaires (Parcours Fidélité)
+
+- Vérifier `computeCurrentStreak` sur les cas: continuité parfaite, jour manquant, mois vide, mélange transaction/login.
+- Vérifier `computeMaxStreak` sur les cas: plusieurs séries, égalités de longueurs, données non triées.
+- Vérifier `computeFullMonthProgress` sur les cas: mois complet, mois partiel, aucun jour actif.
+- Vérifier le composant `DotRingBadge`: nombre de points rendus, nombre de points remplis, état visuel (`locked`, `in-progress`, `unlocked`) et présence des attributs SVG attendus.
 
 ---
 

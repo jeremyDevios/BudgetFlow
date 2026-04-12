@@ -45,6 +45,15 @@ interface Envelope {
   order?: number;
 }
 
+function getInitials(displayName: string | null, email: string | null): string {
+    if (displayName) {
+        const parts = displayName.trim().split(/\s+/).slice(0, 2);
+        return parts.map((p) => p[0].toUpperCase()).join("");
+    }
+    if (email) return email[0].toUpperCase();
+    return "?";
+}
+
 
 function SortableEnvelopeRow({ 
   env, 
@@ -122,6 +131,7 @@ export default function SettingsPage() {
   const router = useRouter();
   const { permission, requestPermission, disableNotifications, loading: notifLoading } = useNotifications();
   const [dbNotifEnabled, setDbNotifEnabled] = useState(false); // État en base de données
+    const [imgError, setImgError] = useState(false);
 
   const [loading, setLoading] = useState(true);
 
@@ -324,6 +334,35 @@ export default function SettingsPage() {
       </header>
 
       <div className="max-w-3xl mx-auto space-y-8">
+
+        {/* Section Profil */}
+        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
+            <h2 className="text-xl font-bold mb-4">Profil</h2>
+            <div className="flex items-center gap-4">
+                {user?.photoURL && !imgError ? (
+                    <img
+                        src={user.photoURL}
+                        referrerPolicy="no-referrer"
+                        className="w-14 h-14 rounded-full object-cover"
+                        alt="avatar"
+                        onError={() => setImgError(true)}
+                    />
+                ) : (
+                    <div className="w-14 h-14 rounded-full bg-amber-500 flex items-center justify-center text-black font-bold text-lg">
+                        {getInitials(user?.displayName ?? null, user?.email ?? null)}
+                    </div>
+                )}
+
+                <div className="min-w-0">
+                    <p className="font-bold text-app-text truncate">
+                        {user?.displayName || "Utilisateur"}
+                    </p>
+                    <p className="text-sm text-app-text-secondary truncate">
+                        {user?.email || "Aucun email"}
+                    </p>
+                </div>
+            </div>
+        </section>
 
         {/* Section Apparence */}
         <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
