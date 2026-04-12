@@ -12,6 +12,7 @@ interface CalendarHeatmapProps {
   loading?: boolean;
   title?: string;
   className?: string;
+  embedded?: boolean;
 }
 
 interface DayCell {
@@ -40,27 +41,32 @@ const getCellStyle = (state: DayState): CSSProperties => {
   switch (state) {
     case "transaction":
       return {
-        background: "linear-gradient(135deg, #FB923C 0%, #EA580C 100%)",
-        borderColor: "transparent",
-        boxShadow: "0 0 7px 2px rgba(249,115,22,0.55), inset 0 1px 0 rgba(255,255,255,0.15)",
+        background: "var(--hm-orange-bg)",
+        borderColor: "#FF9C54",
+        borderRadius: "4px",
+        boxShadow:
+          "0 0 6px 1px rgba(255, 156, 84, 0.4), inset 0 0 4px 1px rgba(255, 156, 84, 0.8)",
       };
     case "login-only":
       return {
-        background: "linear-gradient(135deg, #FDE047 0%, #CA8A04 100%)",
-        borderColor: "transparent",
-        boxShadow: "0 0 6px 2px rgba(234,179,8,0.5), inset 0 1px 0 rgba(255,255,255,0.15)",
+        background: "var(--hm-yellow-bg)",
+        borderColor: "#FFE270",
+        borderRadius: "4px",
+        boxShadow:
+          "0 0 6px 1px rgba(255, 226, 112, 0.4), inset 0 0 4px 1px rgba(255, 226, 112, 0.8)",
       };
     case "inactive":
       return {
-        backgroundColor: "#27272A",
-        borderColor: "#3F3F46",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+        backgroundColor: "var(--hm-cell-inactive-bg)",
+        borderColor: "var(--hm-cell-inactive-border)",
+        borderRadius: "4px",
       };
     case "future":
     default:
       return {
-        backgroundColor: "rgba(255,255,255,0.03)",
-        borderColor: "rgba(255,255,255,0.06)",
+        backgroundColor: "var(--hm-cell-future-bg)",
+        borderColor: "var(--hm-cell-future-border)",
+        borderRadius: "4px",
       };
   }
 };
@@ -152,17 +158,17 @@ function DotRingBadge({ totalDots, filledDots, label, state }: DotRingBadgeProps
   const isAchieved = state === "achieved";
 
   const activeColor = isAchieved ? "#F97316" : "#EAB308";
-  const dimColor = "#3A3A3E";
+  const dimColor = "var(--hm-dim-dot)";
 
   const textColor = isAchieved ? "#FFFFFF" : state === "in-progress" ? "#EAB308" : "#71717A";
   const fontSize = label.length > 2 ? 9 : 12;
 
   const svgEl = (
     <svg
-      width={size}
-      height={size}
+      width="100%"
+      height="100%"
       viewBox={`0 0 ${size} ${size}`}
-      style={{ overflow: "visible", flexShrink: 0 }}
+      style={{ overflow: "visible", display: "block" }}
     >
       <defs>
         <radialGradient id={`fill-${label}`} cx="40%" cy="30%" r="70%">
@@ -197,13 +203,10 @@ function DotRingBadge({ totalDots, filledDots, label, state }: DotRingBadgeProps
             cx={x}
             cy={y}
             r={dotR}
-            fill={isFilled ? activeColor : dimColor}
             style={
               isFilled
-                ? {
-                    filter: `drop-shadow(0 0 3px ${activeColor}) drop-shadow(0 0 5px ${activeColor}90)`,
-                  }
-                : undefined
+                ? { fill: activeColor, filter: `drop-shadow(0 0 3px ${activeColor}) drop-shadow(0 0 5px ${activeColor}90)` }
+                : { fill: dimColor }
             }
           />
         );
@@ -225,12 +228,22 @@ function DotRingBadge({ totalDots, filledDots, label, state }: DotRingBadgeProps
     </svg>
   );
 
-  if (!isAchieved) return svgEl;
+  if (!isAchieved) return (
+    <div className="w-9 h-9 sm:w-12 sm:h-12 shrink-0">{svgEl}</div>
+  );
 
   // Heartbeat animation wrapper when achieved
   return (
     <>
       <style>{`
+        :root {
+          --hm-orange-bg: #D96922;
+          --hm-yellow-bg: #D4A820;
+        }
+        .dark {
+          --hm-orange-bg: #D05A14;
+          --hm-yellow-bg: #C99B12;
+        }
         @keyframes hb-beat {
           0%   { transform: scale(1); }
           14%  { transform: scale(1.18); }
@@ -241,9 +254,9 @@ function DotRingBadge({ totalDots, filledDots, label, state }: DotRingBadgeProps
         }
       `}</style>
       <div
+        className="w-9 h-9 sm:w-12 sm:h-12 shrink-0"
         style={{
           animation: "hb-beat 1.6s ease-in-out infinite",
-          flexShrink: 0,
           display: "inline-flex",
         }}
       >
@@ -266,6 +279,7 @@ export default function CalendarHeatmap({
   loading = false,
   title = "Votre Parcours Fidélité",
   className = "",
+  embedded = false,
 }: CalendarHeatmapProps) {
   const year = month.getFullYear();
   const monthIndex = month.getMonth();
@@ -320,6 +334,14 @@ export default function CalendarHeatmap({
     ? monthTotalDots
     : Math.round((activeDays / daysInMonth) * monthTotalDots);
 
+  const Outer = embedded ? "div" : "section";
+  const outerProps = embedded
+    ? { className }
+    : {
+        className: `hm-section border border-app-border rounded-[20px] overflow-hidden ${className}`,
+        style: { background: "var(--hm-section-bg)", padding: "16px" } as CSSProperties,
+      };
+
   const cells: DayCell[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = getLocalDateString(new Date(year, monthIndex, day));
@@ -328,13 +350,10 @@ export default function CalendarHeatmap({
 
   if (loading) {
     return (
-      <section
-        className={`border border-[#3F3F46] rounded-[20px] overflow-hidden ${className}`}
-        style={{ background: "#1C1C1E", padding: "16px" }}
-      >
+      <Outer {...outerProps}>
         <div className="animate-pulse space-y-3">
-          <div className="h-4 w-44 rounded-md bg-white/5" />
-          <div className="h-2.5 w-56 rounded-md bg-white/5" />
+          <div className="h-4 w-44 rounded-md bg-black/5 dark:bg-white/5" />
+          <div className="h-2.5 w-56 rounded-md bg-black/5 dark:bg-white/5" />
           <div className="flex flex-row gap-4 items-center justify-center">
             <div
               style={{
@@ -346,36 +365,28 @@ export default function CalendarHeatmap({
               }}
             >
               {Array.from({ length: daysInMonth }).map((_, i) => (
-                <div key={i} className="w-full aspect-square rounded-md bg-white/5" />
+                <div key={i} className="w-full aspect-square rounded-md bg-black/5 dark:bg-white/5" />
               ))}
             </div>
-            <div className="shrink-0 flex flex-col gap-3 pl-4 border-l border-[#3F3F46]">
+            <div className="shrink-0 flex flex-col gap-3 pl-4 border-l border-app-border">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="flex items-center gap-2.5">
-                  <div className="w-12 h-12 rounded-full bg-white/5 shrink-0" />
+                  <div className="w-12 h-12 rounded-full bg-black/5 dark:bg-white/5 shrink-0" />
                   <div className="space-y-1.5">
-                    <div className="h-2.5 w-14 rounded bg-white/5" />
-                    <div className="h-2 w-16 rounded bg-white/5" />
+                    <div className="h-2.5 w-14 rounded bg-black/5 dark:bg-white/5" />
+                    <div className="h-2 w-16 rounded bg-black/5 dark:bg-white/5" />
                   </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-      </section>
+      </Outer>
     );
   }
 
   return (
-    <section
-      className={`border border-[#3F3F46] rounded-[20px] overflow-hidden ${className}`}
-      style={{
-        background:
-          "radial-gradient(ellipse at 20% 60%, rgba(249,115,22,0.09) 0%, #1C1C1E 65%)",
-        boxShadow: "inset 0 1px 1px rgba(255,255,255,0.05), 0 2px 8px rgba(0,0,0,0.4)",
-        padding: "16px",
-      }}
-    >
+    <Outer {...outerProps}>
       {/* Main row: two equal halves, each centered */}
       <div className="flex flex-row items-center w-full">
 
@@ -412,22 +423,22 @@ export default function CalendarHeatmap({
           {/* Legend — only under the cells */}
           <div className="flex items-center gap-1 flex-wrap text-[10px] self-start">
             <span className="text-[#F97316] font-semibold">Orange</span>
-            <span className="text-zinc-600"> : Dépense</span>
-            <span className="text-zinc-600 mx-1">·</span>
+            <span className="text-app-text-secondary"> : Dépense</span>
+            <span className="text-app-text-secondary mx-1">·</span>
             <span className="text-[#EAB308] font-semibold">Jaune</span>
-            <span className="text-zinc-600"> : Connexion</span>
+            <span className="text-app-text-secondary"> : Connexion</span>
           </div>
         </div>
 
         {/* Badge panel — right half, centered between separator and edge */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-2.5 border-l border-[#3F3F46]">
+        <div className="flex-1 flex flex-col items-center justify-center gap-2.5 border-l border-app-border">
           <div className="flex flex-col gap-2.5 w-fit">
 
           {/* Série 1 — 7 jours */}
           <div className="flex items-center gap-2">
             <DotRingBadge totalDots={7} filledDots={s1Filled} label="7" state={s1State} />
             <div>
-              <p className="text-xs font-semibold text-white leading-tight">7 jours</p>
+              <p className="text-xs font-semibold text-app-text leading-tight">7 jours</p>
               <p
                 className="text-[10px] leading-tight mt-0.5 font-medium"
                 style={{ color: badgeStatusText(s1State).color }}
@@ -441,7 +452,7 @@ export default function CalendarHeatmap({
           <div className="flex items-center gap-2">
             <DotRingBadge totalDots={14} filledDots={s2Filled} label="14" state={s2State} />
             <div>
-              <p className="text-xs font-semibold text-white leading-tight">14 jours</p>
+              <p className="text-xs font-semibold text-app-text leading-tight">14 jours</p>
               <p
                 className="text-[10px] leading-tight mt-0.5 font-medium"
                 style={{ color: badgeStatusText(s2State).color }}
@@ -460,7 +471,7 @@ export default function CalendarHeatmap({
               state={monthState}
             />
             <div>
-              <p className="text-xs font-semibold text-white leading-tight">Mois Complet</p>
+              <p className="text-xs font-semibold text-app-text leading-tight">Mois Complet</p>
               <p
                 className="text-[10px] leading-tight mt-0.5 font-medium"
                 style={{ color: badgeStatusText(monthState).color }}
@@ -473,6 +484,6 @@ export default function CalendarHeatmap({
           </div>
         </div>
       </div>
-    </section>
+    </Outer>
   );
 }

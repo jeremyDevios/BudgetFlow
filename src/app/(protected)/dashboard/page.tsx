@@ -411,14 +411,16 @@ export default function DashboardPage() {
                     ))}
                 </div>
             </div>
-        </section>
+                        <div className="my-6 border-t border-black/10 dark:border-white/10 opacity-60" />
 
-        <CalendarHeatmap
-          month={currentDate}
-          transactionDates={transactionDates}
-          loginDates={loginDates}
-          loading={heatmapLoading}
-        />
+                        <CalendarHeatmap
+                            month={currentDate}
+                            transactionDates={transactionDates}
+                            loginDates={loginDates}
+                            loading={heatmapLoading}
+                            embedded
+                        />
+                </section>
 
         {/* Recherche */}
         <section aria-label="Rechercher une dépense">
