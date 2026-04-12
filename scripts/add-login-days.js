@@ -58,6 +58,7 @@ const SA_CANDIDATES = [
 ];
 
 let credential;
+let serviceAccount = null;
 if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
   credential = admin.credential.applicationDefault();
   console.log("🔑 Credentials : GOOGLE_APPLICATION_CREDENTIALS");
@@ -71,12 +72,12 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     );
     process.exit(1);
   }
-  const serviceAccount = JSON.parse(fs.readFileSync(found, "utf8"));
+  serviceAccount = JSON.parse(fs.readFileSync(found, "utf8"));
   credential = admin.credential.cert(serviceAccount);
   console.log(`🔑 Credentials : ${path.basename(found)}  (--env ${env})`);
 }
 
-const projectId = process.env.FIREBASE_PROJECT_ID || "budgetflow-86842";
+const projectId = process.env.FIREBASE_PROJECT_ID || serviceAccount?.project_id || "budgetflow-86842";
 
 if (!admin.apps.length) {
   admin.initializeApp({ credential, projectId });
