@@ -235,24 +235,6 @@ function DotRingBadge({ totalDots, filledDots, label, state }: DotRingBadgeProps
   // Heartbeat animation wrapper when achieved
   return (
     <>
-      <style>{`
-        :root {
-          --hm-orange-bg: #D96922;
-          --hm-yellow-bg: #D4A820;
-        }
-        .dark {
-          --hm-orange-bg: #D05A14;
-          --hm-yellow-bg: #C99B12;
-        }
-        @keyframes hb-beat {
-          0%   { transform: scale(1); }
-          14%  { transform: scale(1.18); }
-          28%  { transform: scale(1); }
-          42%  { transform: scale(1.10); }
-          70%  { transform: scale(1); }
-          100% { transform: scale(1); }
-        }
-      `}</style>
       <div
         className="w-9 h-9 sm:w-12 sm:h-12 shrink-0"
         style={{
