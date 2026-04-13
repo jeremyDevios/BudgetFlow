@@ -51,6 +51,7 @@ import CalendarHeatmap from "@/components/dashboard/CalendarHeatmap";
 import { useCalendarHeatmap } from "@/hooks/useCalendarHeatmap";
 import { useSpendingForecast } from "@/hooks/useSpendingForecast";
 import { ForecastTransaction } from "@/lib/forecasting";
+import { findExceptionalSpendingInsight } from "@/lib/spendingInsights";
 
 // --- Types ---
 type IconName = "ShoppingCart" | "Fuel" | "Utensils" | "Plane" | "Heart" | "Gamepad2" | "Bus" | "Shirt" | "Music" | "Coffee" | "Briefcase" | "GraduationCap" | "Baby" | "PawPrint" | "Gift" | "Smartphone" | "Wifi" | "Zap" | "Droplets" | "Hammer";
@@ -75,6 +76,14 @@ interface Envelope {
   color: string;
 }
 
+interface Transaction {
+  id: string;
+  amount: number;
+  description: string;
+  envelopeId: string;
+  date: string;
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -82,7 +91,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [defaultEnvelopeId, setDefaultEnvelopeId] = useState<string | undefined>(undefined);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -138,6 +147,21 @@ export default function DashboardPage() {
     monthlyBudget: monthlyTotalAvailable,
     isCurrentMonth,
   });
+
+  const exceptionalSpendingInsight = useMemo(
+    () =>
+      isCurrentMonth
+        ? findExceptionalSpendingInsight({
+            transactions,
+            envelopes: envelopes.map((envelope) => ({
+              id: envelope.id,
+              name: envelope.name,
+              budget: envelope.budget,
+            })),
+          })
+        : null,
+    [isCurrentMonth, transactions, envelopes]
+  );
 
   // --- Chargement des données ---
   const fetchData = async () => {
@@ -214,7 +238,7 @@ export default function DashboardPage() {
 
       // 3. Transactions du mois sélectionné
       const { start, end } = getMonthBounds(currentDate);
-      const txList: any[] = [];
+      const txList: Transaction[] = [];
       
       try {
           const txRef = collection(db, "users", user.uid, "transactions");
@@ -228,7 +252,13 @@ export default function DashboardPage() {
           
           txSnap.forEach((doc) => {
             const data = doc.data();
-            txList.push({ id: doc.id, ...data });
+            txList.push({
+                id: doc.id,
+                amount: Number(data.amount || 0),
+                description: typeof data.description === "string" ? data.description : "",
+                envelopeId: typeof data.envelopeId === "string" ? data.envelopeId : "",
+                date: typeof data.date === "string" ? data.date : "",
+            });
             
             // Ajouter au 'spent' de l'enveloppe correspondante
             const envIndex = envList.findIndex(e => e.id === data.envelopeId);
@@ -458,30 +488,90 @@ export default function DashboardPage() {
                                 <span>Pas assez de données pour une estimation (premier mois d&apos;utilisation)</span>
                               </div>
                             ) : globalForecast.willExceed ? (
-                              <div className="flex flex-col items-center gap-1">
-                                <div className="flex items-center gap-2 text-red-400 text-sm font-semibold">
-                                  <AlertTriangle className="h-4 w-4" />
-                                  <span>Risque de dépassement : +{globalForecast.excessAmount.toFixed(2)} €</span>
+                              <div
+                                className={
+                                  exceptionalSpendingInsight
+                                    ? "flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-4"
+                                    : "flex flex-col items-center gap-3"
+                                }
+                              >
+                                <div
+                                  className={
+                                    exceptionalSpendingInsight
+                                      ? "flex flex-1 flex-col items-center gap-1 text-center sm:justify-self-center"
+                                      : "flex w-full max-w-md flex-col items-center gap-1 text-center"
+                                  }
+                                >
+                                  <div className="flex items-center gap-2 text-red-400 text-sm font-semibold">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <span>Risque de dépassement : +{globalForecast.excessAmount.toFixed(2)} €</span>
+                                  </div>
+                                  <div className="text-xs text-app-text-secondary">
+                                    Projection fin de mois : {globalForecast.projectedTotal.toFixed(2)} € de dépenses
+                                  </div>
                                 </div>
-                                <div className="text-xs text-app-text-secondary">
-                                  Projection fin de mois : {globalForecast.projectedTotal.toFixed(2)} € de dépenses
-                                </div>
-                                <div className="text-xs text-app-text-secondary opacity-60">
-                                  Estimation basée sur {Math.round(globalForecast.confidenceScore * 3)} mois de données
-                                </div>
+                                {exceptionalSpendingInsight && (
+                                  <div className="mx-auto w-full max-w-[18rem] rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-left sm:justify-self-center sm:max-w-[15rem]">
+                                    <div className="flex items-start gap-1.5 text-red-300">
+                                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                      <div className="space-y-1">
+                                        <div className="text-[11px] leading-snug text-app-text">
+                                          <span className="font-semibold">&quot;{exceptionalSpendingInsight.transactionName}&quot;</span>{" "}
+                                          à {exceptionalSpendingInsight.amount.toFixed(2)} € dans{" "}
+                                          <span className="font-semibold">{exceptionalSpendingInsight.envelopeName}</span>
+                                        </div>
+                                        <div className="text-[10px] leading-snug text-app-text-secondary">
+                                          Cette dépense représente{" "}
+                                          {Math.round(exceptionalSpendingInsight.budgetRatio * 100)}% de l&apos;enveloppe
+                                          ({exceptionalSpendingInsight.envelopeBudget.toFixed(2)} €).
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             ) : (
-                              <div className="flex flex-col items-center gap-1">
-                                <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
-                                  <TrendingUp className="h-4 w-4" />
-                                  <span>Estimation fin de mois : {globalForecast.projectedRemaining.toFixed(2)} € restant</span>
+                              <div
+                                className={
+                                  exceptionalSpendingInsight
+                                    ? "flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-4"
+                                    : "flex flex-col items-center gap-3"
+                                }
+                              >
+                                <div
+                                  className={
+                                    exceptionalSpendingInsight
+                                      ? "flex flex-1 flex-col items-center gap-1 text-center sm:justify-self-center"
+                                      : "flex w-full max-w-md flex-col items-center gap-1 text-center"
+                                  }
+                                >
+                                  <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+                                    <TrendingUp className="h-4 w-4" />
+                                    <span>Estimation fin de mois : {globalForecast.projectedRemaining.toFixed(2)} € restant</span>
+                                  </div>
+                                  <div className="text-xs text-app-text-secondary">
+                                    Projection dépenses totales : {globalForecast.projectedTotal.toFixed(2)} €
+                                  </div>
                                 </div>
-                                <div className="text-xs text-app-text-secondary">
-                                  Projection dépenses totales : {globalForecast.projectedTotal.toFixed(2)} €
-                                </div>
-                                <div className="text-xs text-app-text-secondary opacity-60">
-                                  Estimation basée sur {Math.round(globalForecast.confidenceScore * 3)} mois de données
-                                </div>
+                                {exceptionalSpendingInsight && (
+                                  <div className="mx-auto w-full max-w-[18rem] rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-left sm:justify-self-center sm:max-w-[15rem]">
+                                    <div className="flex items-start gap-1.5 text-red-300">
+                                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                      <div className="space-y-1">
+                                        <div className="text-[11px] leading-snug text-app-text">
+                                          <span className="font-semibold">&quot;{exceptionalSpendingInsight.transactionName}&quot;</span>{" "}
+                                          à {exceptionalSpendingInsight.amount.toFixed(2)} € dans{" "}
+                                          <span className="font-semibold">{exceptionalSpendingInsight.envelopeName}</span>
+                                        </div>
+                                        <div className="text-[10px] leading-snug text-app-text-secondary">
+                                          Cette dépense représente{" "}
+                                          {Math.round(exceptionalSpendingInsight.budgetRatio * 100)}% de l&apos;enveloppe
+                                          ({exceptionalSpendingInsight.envelopeBudget.toFixed(2)} €).
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </motion.div>

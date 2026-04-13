@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 
 import {
@@ -51,6 +51,25 @@ export function useSpendingForecast(
     Record<string, EnvelopeForecast>
   >({});
   const [loading, setLoading] = useState(false);
+
+  const envelopeSignature = useMemo(
+    () =>
+      envelopes
+        .map((envelope) => `${envelope.id}:${envelope.budget}:${envelope.name}`)
+        .join("|"),
+    [envelopes]
+  );
+
+  const currentMonthTransactionSignature = useMemo(
+    () =>
+      currentMonthTransactions
+        .map(
+          (transaction) =>
+            `${transaction.envelopeId}:${transaction.amount}:${transaction.date}`
+        )
+        .join("|"),
+    [currentMonthTransactions]
+  );
 
   useEffect(() => {
     let isCancelled = false;
@@ -125,7 +144,14 @@ export function useSpendingForecast(
     return () => {
       isCancelled = true;
     };
-  }, [userId, isCurrentMonth, pastMonthCount, envelopes.length, monthlyBudget]);
+  }, [
+    userId,
+    isCurrentMonth,
+    pastMonthCount,
+    monthlyBudget,
+    envelopeSignature,
+    currentMonthTransactionSignature,
+  ]);
 
   if (!isCurrentMonth || !userId) {
     return { globalForecast: null, envelopeForecasts: {}, loading: false };
