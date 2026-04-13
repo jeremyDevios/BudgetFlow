@@ -7,13 +7,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
-import { 
+import {
   LogOut, 
   Settings, 
   Plus, 
   ChevronLeft,
   ChevronRight,
   TrendingUp, 
+  AlertTriangle,
   Wallet,
   ShoppingCart,
   Fuel,
@@ -48,6 +49,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import SearchDropdown from "@/components/dashboard/SearchDropdown";
 import CalendarHeatmap from "@/components/dashboard/CalendarHeatmap";
 import { useCalendarHeatmap } from "@/hooks/useCalendarHeatmap";
+import { useSpendingForecast } from "@/hooks/useSpendingForecast";
+import { ForecastTransaction } from "@/lib/forecasting";
 
 // --- Types ---
 type IconName = "ShoppingCart" | "Fuel" | "Utensils" | "Plane" | "Heart" | "Gamepad2" | "Bus" | "Shirt" | "Music" | "Coffee" | "Briefcase" | "GraduationCap" | "Baby" | "PawPrint" | "Gift" | "Smartphone" | "Wifi" | "Zap" | "Droplets" | "Hammer";
@@ -104,6 +107,37 @@ export default function DashboardPage() {
     });
     return set;
   }, [transactions]);
+
+  // --- Calculs globaux ---
+  const totalBudgetEnvelopes = envelopes.reduce((acc, env) => acc + env.budget, 0);
+  const totalSpentEnvelopes = envelopes.reduce((acc, env) => acc + env.spent, 0);
+  
+  // Reste à vivre réel (ce qu'il reste dans les enveloppes + surplus non alloué)
+  // Logic: Income - Fixed - Savings = Total Available for Month
+  // Current Balance = Total Available - Total Spent
+  const monthlyTotalAvailable = settings ? (settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings) : 0;
+  const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes;
+  
+  const globalProgress = monthlyTotalAvailable > 0 ? (totalSpentEnvelopes / monthlyTotalAvailable) * 100 : 0;
+
+  const today = new Date();
+  const isCurrentMonth =
+    currentDate.getFullYear() === today.getFullYear() &&
+    currentDate.getMonth() === today.getMonth();
+
+  const forecastTransactions: ForecastTransaction[] = transactions.map(tx => ({
+    envelopeId: tx.envelopeId || '',
+    amount: tx.amount || 0,
+    date: tx.date || '',
+  }));
+
+  const { globalForecast, envelopeForecasts, loading: forecastLoading } = useSpendingForecast({
+    userId: user?.uid ?? null,
+    envelopes: envelopes.map(e => ({ id: e.id, budget: e.budget, name: e.name })),
+    currentMonthTransactions: forecastTransactions,
+    monthlyBudget: monthlyTotalAvailable,
+    isCurrentMonth,
+  });
 
   // --- Chargement des données ---
   const fetchData = async () => {
@@ -238,18 +272,6 @@ export default function DashboardPage() {
         setToastMessage(message);
         setTimeout(() => setToastMessage(null), 3000);
     };
-
-  // --- Calculs globaux ---
-  const totalBudgetEnvelopes = envelopes.reduce((acc, env) => acc + env.budget, 0);
-  const totalSpentEnvelopes = envelopes.reduce((acc, env) => acc + env.spent, 0);
-  
-  // Reste à vivre réel (ce qu'il reste dans les enveloppes + surplus non alloué)
-  // Logic: Income - Fixed - Savings = Total Available for Month
-  // Current Balance = Total Available - Total Spent
-  const monthlyTotalAvailable = settings ? (settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings) : 0;
-  const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes;
-  
-  const globalProgress = monthlyTotalAvailable > 0 ? (totalSpentEnvelopes / monthlyTotalAvailable) * 100 : 0;
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -420,6 +442,50 @@ export default function DashboardPage() {
                             loading={heatmapLoading}
                             embedded
                         />
+                        {/* Forecast Estimation */}
+                        {isCurrentMonth && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4 }}
+                            className="mt-4 pt-4 border-t border-black/10 dark:border-white/10"
+                          >
+                            {forecastLoading ? (
+                              <div className="animate-pulse h-8 bg-black/10 dark:bg-white/10 rounded-lg w-3/4 mx-auto" />
+                            ) : !globalForecast || !globalForecast.hasEnoughData ? (
+                              <div className="flex items-center justify-center gap-2 text-app-text-secondary text-xs">
+                                <TrendingUp className="h-3.5 w-3.5" />
+                                <span>Pas assez de données pour une estimation (premier mois d&apos;utilisation)</span>
+                              </div>
+                            ) : globalForecast.willExceed ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="flex items-center gap-2 text-red-400 text-sm font-semibold">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <span>Risque de dépassement : +{globalForecast.excessAmount.toFixed(2)} €</span>
+                                </div>
+                                <div className="text-xs text-app-text-secondary">
+                                  Projection fin de mois : {globalForecast.projectedTotal.toFixed(2)} € de dépenses
+                                </div>
+                                <div className="text-xs text-app-text-secondary opacity-60">
+                                  Estimation basée sur {Math.round(globalForecast.confidenceScore * 3)} mois de données
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center gap-1">
+                                <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+                                  <TrendingUp className="h-4 w-4" />
+                                  <span>Estimation fin de mois : {globalForecast.projectedRemaining.toFixed(2)} € restant</span>
+                                </div>
+                                <div className="text-xs text-app-text-secondary">
+                                  Projection dépenses totales : {globalForecast.projectedTotal.toFixed(2)} €
+                                </div>
+                                <div className="text-xs text-app-text-secondary opacity-60">
+                                  Estimation basée sur {Math.round(globalForecast.confidenceScore * 3)} mois de données
+                                </div>
+                              </div>
+                            )}
+                          </motion.div>
+                        )}
                 </section>
 
         {/* Recherche */}
@@ -521,7 +587,7 @@ export default function DashboardPage() {
                                 
                                 {/* Mini Progress Bar interne */}
                                 <div className="mt-2 flex h-1.5 w-full bg-black/10 dark:bg-app-surface rounded-full overflow-hidden">
-                                     {transactions
+                                 {transactions
                                         .filter(t => t.envelopeId === env.id)
                                         .map((tx) => (
                                             <div 
@@ -532,6 +598,24 @@ export default function DashboardPage() {
                                             />
                                         ))}
                                 </div>
+                                {/* Per-envelope forecast mini indicator */}
+                                {isCurrentMonth && envelopeForecasts[env.id] && envelopeForecasts[env.id].hasData && (
+                                  <div className={`mt-1.5 flex items-center gap-1 text-xs ${
+                                    envelopeForecasts[env.id].willExceed ? 'text-red-400' : 'text-emerald-400'
+                                  }`}>
+                                    {envelopeForecasts[env.id].willExceed ? (
+                                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    ) : (
+                                      <TrendingUp className="h-3 w-3 shrink-0" />
+                                    )}
+                                    <span>
+                                      {envelopeForecasts[env.id].willExceed
+                                        ? `Dépassement estimé: +${envelopeForecasts[env.id].excessAmount.toFixed(0)}€`
+                                        : `Estimation: ${envelopeForecasts[env.id].projectedRemaining.toFixed(0)}€ restant`
+                                      }
+                                    </span>
+                                  </div>
+                                )}
                             </div>
                         </div>
                         </motion.div>
