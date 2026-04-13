@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User, setPersistence, browserSessionPersistence, signOut } from "firebase/auth";
+import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
 
@@ -19,11 +19,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Configurer la persistance
-    setPersistence(auth, browserSessionPersistence).catch(() => {
-      logger.warn("Persistence configuration failed");
-    });
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);

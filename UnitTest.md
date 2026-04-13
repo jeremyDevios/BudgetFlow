@@ -29,7 +29,7 @@ npm run test:coverage
 
 ### Coverage Report
 
-Coverage is collected for `src/lib/**/*.ts` and `src/hooks/**/*.ts` (excluding Firebase adapters). A minimum of **80% line coverage** is enforced.
+Coverage is currently collected for `src/lib/**/*.ts` (excluding Firebase adapters). A minimum of **80% line coverage** is enforced.
 
 After running `npm run test:coverage`, a detailed report is printed to the terminal. An HTML report is generated in the `coverage/` directory — open `coverage/lcov-report/index.html` in a browser for a line-by-line view.
 
@@ -50,6 +50,7 @@ src/__tests__/
 | `src/lib/validation.ts` | `validateAmount`, `validateDescription`, `validateEnvelopeName`, `validateEnvelopeId`, `validateDate`, `validateEmail`, `validatePassword` |
 | `src/lib/dateUtils.ts` | `getMonthBounds`, `formatMonthYear` |
 | `src/lib/logger.ts` | `info`, `warn`, `error`, `sanitizedError` (dev + prod behaviour) |
+| `src/lib/forecasting.ts` | `computeForecast` — no-history fallback, multi-envelope projection, confidence score, overruns, zero-budget handling |
 | `src/components/dashboard/CalendarHeatmap.tsx` | `computeCurrentStreak`, `computeMaxStreak`, `computeFullMonthProgress`, rendu SVG de `DotRingBadge` |
 
 ### Exigences de couverture supplémentaires (Parcours Fidélité)
