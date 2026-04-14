@@ -29,7 +29,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Masquer les outils de développement (Toast et indicateurs) si non activés explicitement
   devIndicators: process.env.SHOW_DEV_TOOLS === 'true' ? undefined : false,
-  allowedDevOrigins: ["budget.zikkis.fr", "*.zikkis.fr"],
+  allowedDevOrigins: ["budget.zikkis.fr", "*.zikkis.fr", "localhost", "127.0.0.1"],
   async headers() {
     return [
       {

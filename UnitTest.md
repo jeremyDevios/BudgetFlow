@@ -49,6 +49,15 @@ npm test -- --watch
 
 # Run with coverage report
 npm run test:coverage
+
+# Install Playwright Chromium browser (first time only)
+npm run test:e2e:install
+
+# Run end-to-end smoke tests
+npm run test:e2e
+
+# Run browser tests with visible UI
+npm run test:e2e:headed
 ```
 
 ### Coverage Report
@@ -73,6 +82,9 @@ src/__tests__/
     ├── logger.test.ts
     ├── spendingInsights.test.ts
     └── validation.test.ts
+
+tests/e2e/
+└── public-smoke.spec.ts
 ```
 
 ### Test File Locations
@@ -87,6 +99,7 @@ src/__tests__/
 | `src/__tests__/hooks/useSpendingForecast.test.ts` | Hook recomputation when monthly transactions change |
 | `src/__tests__/app/dashboard.page.test.tsx` | Dashboard rendering states and forecast/warning UI |
 | `src/__tests__/components/TransactionModal.test.tsx` | Create/edit/delete transaction flows |
+| `tests/e2e/public-smoke.spec.ts` | Public smoke flow: home page and login screen availability |
 
 ### What Is Covered
 
@@ -102,6 +115,7 @@ src/__tests__/
 | `src/hooks/useSpendingForecast.ts` | reruns forecast when current-month data changes |
 | `src/app/(protected)/dashboard/page.tsx` | empty forecast state, normal estimate state, overrun state, exceptional spending warning |
 | `src/components/dashboard/TransactionModal.tsx` | create, edit, delete flows and aggregate `spent` updates |
+| `tests/e2e/public-smoke.spec.ts` | public landing page rendering, CTA navigation, and login page availability |
 
 #### Not Covered or Only Partially Covered on the Web App
 
@@ -112,7 +126,7 @@ src/__tests__/
 | most UI components in `src/components/` | not unit tested |
 | `src/hooks/useCalendarHeatmap.ts`, `src/hooks/useNotifications.ts` | not unit tested |
 | `src/app/api/**/route.ts` handlers | not unit tested |
-| full browser flows (login, onboarding, navigation, Firebase integration) | not covered by Jest unit tests |
+| authenticated browser flows (Google login popup, onboarding, dashboard navigation, Firebase integration) | not covered by Playwright smoke tests yet |
 | visual rendering, responsive layout, and animation behavior | only indirectly covered |
 
 ### Exigences de couverture supplémentaires (Parcours Fidélité)

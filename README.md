@@ -65,7 +65,7 @@
 - **Graphiques** : [Recharts](https://recharts.org/) (Sankey Diagram)
 - **Gestion de dates** : [date-fns](https://date-fns.org/)
 - **Drag & Drop** : [@dnd-kit](https://dndkit.com/)
-- **Tests** : [Jest](https://jestjs.io/) + [@testing-library/react](https://testing-library.com/)
+- **Tests** : [Jest](https://jestjs.io/) + [@testing-library/react](https://testing-library.com/) + [Playwright](https://playwright.dev/)
 
 ### iOS App
 
@@ -134,6 +134,12 @@ npm test
 
 # Avec rapport de couverture
 npm run test:coverage
+
+# Installer Chromium pour Playwright (une seule fois)
+npm run test:e2e:install
+
+# Lancer les tests end-to-end Playwright
+npm run test:e2e
 ```
 
 Pour les tests iOS : ouvrir le projet dans Xcode et appuyer sur **⌘U**.
