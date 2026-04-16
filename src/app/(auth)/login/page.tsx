@@ -1,46 +1,128 @@
 "use client";
 
-import { useState } from "react";
-import { GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  GoogleAuthProvider,
+  getRedirectResult,
+  signInWithPopup,
+  signInWithRedirect,
+  type User,
+} from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { logger } from "@/lib/logger";
+import { useAuth } from "@/context/AuthContext";
+
+function isFirebaseAuthError(error: unknown): error is { code: string } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code: unknown }).code === "string"
+  );
+}
 
 export default function AuthPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const syncedUserIdRef = useRef<string | null>(null);
+
+  const buildUserProfile = (currentUser: User) => {
+    const email = currentUser.email?.trim();
+
+    if (!email) {
+      throw new Error("Google authentication did not return an email address.");
+    }
+
+    const fallbackDisplayName = email.split("@")[0] || "Utilisateur";
+    const displayName = currentUser.displayName?.trim() || fallbackDisplayName;
+
+    return {
+      email,
+      displayName: displayName.slice(0, 100),
+      lastLogin: new Date().toISOString(),
+      ...(currentUser.photoURL ? { photoURL: currentUser.photoURL } : {}),
+    };
+  };
+
+  const syncUserProfile = async (currentUser: User) => {
+    await setDoc(doc(db, "users", currentUser.uid), buildUserProfile(currentUser), { merge: true });
+  };
+
+  const finalizeAuthenticatedUser = useCallback(
+    async (currentUser: User) => {
+      if (syncedUserIdRef.current === currentUser.uid) {
+        return;
+      }
+
+      syncedUserIdRef.current = currentUser.uid;
+
+      try {
+        await syncUserProfile(currentUser);
+      } catch (err: unknown) {
+        logger.sanitizedError("Google authentication profile sync error", err);
+      }
+
+      router.push("/dashboard");
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const redirectResult = await getRedirectResult(auth);
+
+        if (!cancelled && redirectResult?.user) {
+          await finalizeAuthenticatedUser(redirectResult.user);
+        }
+      } catch (err: unknown) {
+        logger.sanitizedError("Google redirect result error", err);
+        if (!cancelled) {
+          setError("Erreur lors du retour de connexion Google. Veuillez réessayer.");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [finalizeAuthenticatedUser]);
+
+  useEffect(() => {
+    if (authLoading || !user) {
+      return;
+    }
+
+    void finalizeAuthenticatedUser(user);
+  }, [authLoading, finalizeAuthenticatedUser, user]);
 
   const handleGoogleAuth = async () => {
     setError("");
     setLoading(true);
+    const provider = new GoogleAuthProvider();
+
     try {
-      await setPersistence(auth, browserLocalPersistence);
-      const provider = new GoogleAuthProvider();
       const userCredential = await signInWithPopup(auth, provider);
-
-      const user = userCredential.user;
-      const userDocData: {
-        email: string | null;
-        displayName: string | null;
-        lastLogin: string;
-        photoURL?: string;
-      } = {
-        email: user.email,
-        displayName: user.displayName,
-        lastLogin: new Date().toISOString(),
-      };
-
-      if (user.photoURL !== null) {
-        userDocData.photoURL = user.photoURL;
+      await finalizeAuthenticatedUser(userCredential.user);
+    } catch (err: unknown) {
+      if (isFirebaseAuthError(err) && err.code === "auth/popup-blocked") {
+        logger.warn("Google auth popup blocked, falling back to redirect");
+        await signInWithRedirect(auth, provider);
+        return;
       }
 
-      await setDoc(doc(db, "users", user.uid), userDocData, { merge: true });
+      if (isFirebaseAuthError(err) && err.code === "auth/popup-closed-by-user") {
+        setError("La fenêtre Google a été fermée avant la fin de la connexion.");
+        return;
+      }
 
-      router.push("/dashboard");
-    } catch (err: unknown) {
       logger.sanitizedError("Google authentication error", err);
       setError("Erreur lors de la connexion avec Google. Veuillez réessayer.");
     } finally {

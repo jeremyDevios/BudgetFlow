@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
 const isDev = process.env.NODE_ENV === "development";
+const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+const configuredAuthDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+const authHelperHost =
+  process.env.NEXT_PUBLIC_FIREBASE_AUTH_HELPER_HOST ||
+  (configuredAuthDomain &&
+  (configuredAuthDomain.endsWith(".firebaseapp.com") ||
+    configuredAuthDomain.endsWith(".web.app"))
+    ? configuredAuthDomain
+    : projectId
+      ? `${projectId}.firebaseapp.com`
+      : undefined);
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -35,6 +46,22 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: securityHeaders,
+      },
+    ];
+  },
+  async rewrites() {
+    if (!authHelperHost) {
+      return [];
+    }
+
+    return [
+      {
+        source: "/__/auth/:path*",
+        destination: `https://${authHelperHost}/__/auth/:path*`,
+      },
+      {
+        source: "/__/firebase/:path*",
+        destination: `https://${authHelperHost}/__/firebase/:path*`,
       },
     ];
   },
