@@ -107,6 +107,8 @@
 /* CalendarHeatmap mode tokens */
 :root {
   --hm-cell-inactive-bg: #E4E4E7;
+  --hm-day-num-inactive: #9CA3AF;
+  --hm-day-num-future: #D1D5DB;
   --hm-cell-inactive-border: #D4D4D8;
   --hm-cell-future-bg: rgba(0,0,0,0.04);
   --hm-cell-future-border: rgba(0,0,0,0.06);
@@ -117,6 +119,8 @@
 }
 .dark {
   --hm-cell-inactive-bg: #27272A;
+  --hm-day-num-inactive: #71717A;
+  --hm-day-num-future: #3F3F46;
   --hm-cell-inactive-border: #3F3F46;
   --hm-cell-future-bg: rgba(255,255,255,0.03);
   --hm-cell-future-border: rgba(255,255,255,0.06);

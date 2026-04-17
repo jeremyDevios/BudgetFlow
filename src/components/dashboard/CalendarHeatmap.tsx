@@ -391,13 +391,38 @@ export default function CalendarHeatmap({
                 transactionDates,
                 loginDates
               );
+              const dayTextColor: string =
+                state === "transaction" || state === "login-only"
+                  ? "rgba(255,255,255,0.85)"
+                  : state === "inactive"
+                  ? "var(--hm-day-num-inactive)"
+                  : "var(--hm-day-num-future)";
               return (
                 <div
                   key={cell.dateStr}
-                  className="w-full aspect-square rounded-md border"
+                  className="w-full aspect-square rounded-md border relative"
                   style={getCellStyle(state)}
                   title={cell.dateStr}
-                />
+                >
+                  <span
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "7px",
+                      fontWeight: 500,
+                      lineHeight: 1,
+                      color: dayTextColor,
+                      fontFamily: "system-ui, -apple-system, sans-serif",
+                      userSelect: "none",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {cell.day}
+                  </span>
+                </div>
               );
             })}
           </div>

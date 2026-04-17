@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, documentId, onSnapshot, query, where } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
@@ -35,8 +35,8 @@ export function useCalendarHeatmap(
     const end = `${monthKey}-31`;
     const q = query(
       collection(db, "users", userId, "dailyActivity"),
-      where("date", ">=", start),
-      where("date", "<=", end)
+      where(documentId(), ">=", start),
+      where(documentId(), "<=", end)
     );
 
     const unsubscribe = onSnapshot(
@@ -45,8 +45,8 @@ export function useCalendarHeatmap(
         const nextDates = new Set<string>();
         snapshot.forEach((activityDoc) => {
           const data = activityDoc.data();
-          if (typeof data.date === "string" && data.loggedIn === true) {
-            nextDates.add(data.date);
+          if (data.loggedIn === true) {
+            nextDates.add(activityDoc.id);
           }
         });
 
