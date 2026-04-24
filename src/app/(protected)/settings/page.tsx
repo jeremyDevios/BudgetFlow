@@ -5,13 +5,14 @@ import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc, writeBatch } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MoveLeft, Plus, Trash2, Save, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, Edit2, AlertTriangle, Bell, Loader2, Check, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { MoveLeft, Plus, Trash2, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, Edit2, AlertTriangle, Bell, Loader2, Check, GripVertical, Vibrate } from "lucide-react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { logger } from "@/lib/logger";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useHaptics } from "@/hooks/useHaptics";
 
 // --- Icons List ---
 const ICONS_LIST = [
@@ -61,8 +62,8 @@ function SortableEnvelopeRow({
   handleDeleteEnvelope
 }: { 
   env: Envelope, 
-  openModal: any,
-  handleDeleteEnvelope: any
+  openModal: (env?: Envelope) => void,
+  handleDeleteEnvelope: (id: string, name: string) => void
 }) {
   const {
     attributes,
@@ -78,7 +79,7 @@ function SortableEnvelopeRow({
     transition,
     zIndex: isDragging ? 50 : "auto",
     opacity: isDragging ? 0.5 : 1,
-    position: 'relative' as 'relative', // Cast to valid specific string literal type
+    position: "relative" as const,
   };
 
   const Icon = ICON_MAP[env.icon] || ShoppingCart;
@@ -130,6 +131,7 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { permission, requestPermission, disableNotifications, loading: notifLoading } = useNotifications();
+  const { enabled: hapticsEnabled, supported: hapticsSupported, ready: hapticsReady, setEnabled: setHapticsEnabled, trigger } = useHaptics();
   const [dbNotifEnabled, setDbNotifEnabled] = useState(false); // État en base de données
     const [imgError, setImgError] = useState(false);
 
@@ -316,6 +318,15 @@ export default function SettingsPage() {
     }
   };
 
+  const handleHapticsToggle = () => {
+    const nextEnabled = !hapticsEnabled;
+    setHapticsEnabled(nextEnabled);
+
+    if (nextEnabled) {
+      trigger("selection", true);
+    }
+  };
+
 
   // --- Calculations ---
   const totalEnvelopes = envelopes.reduce((acc, env) => acc + env.budget, 0);
@@ -373,6 +384,41 @@ export default function SettingsPage() {
                     <p className="text-sm text-app-text-secondary">Basculer entre mode clair et mode sombre.</p>
                 </div>
                 <ThemeToggle />
+            </div>
+        </section>
+
+        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
+            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                <Vibrate className="h-5 w-5 text-amber-500" />
+                Retour haptique
+            </h2>
+            <div className="flex items-center justify-between gap-4">
+                <div>
+                    <h3 className="font-medium text-app-text">Vibrations</h3>
+                    <p className="text-sm text-app-text-secondary">
+                        Léger retour sur certaines actions importantes. Sur le web, la prise en charge peut varier et rester indisponible sur iPhone/Safari.
+                    </p>
+                    <p className="mt-2 text-xs text-app-text-secondary">
+                        Préférence enregistrée localement sur cet appareil et ce navigateur. {hapticsReady && !hapticsSupported ? "Aucune vibration détectée sur ce navigateur pour le moment." : "Si votre navigateur le permet, seules certaines actions déclenchent une vibration."}
+                    </p>
+                </div>
+
+                {hapticsReady ? (
+                    <button
+                        type="button"
+                        onClick={handleHapticsToggle}
+                        aria-pressed={hapticsEnabled}
+                        className={`inline-flex min-w-28 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
+                            hapticsEnabled
+                                ? "bg-amber-500 text-app-text hover:bg-amber-600"
+                                : "bg-app-bg text-app-text-secondary hover:bg-app-border"
+                        }`}
+                    >
+                        {hapticsEnabled ? "Activées" : "Désactivées"}
+                    </button>
+                ) : (
+                    <div className="h-10 w-28 rounded-full bg-app-bg" aria-hidden="true" />
+                )}
             </div>
         </section>
         

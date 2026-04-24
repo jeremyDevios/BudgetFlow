@@ -3,16 +3,15 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Plus, 
   X, 
   Trash2,
-  Calendar as CalendarIcon, 
   Loader2 
 } from "lucide-react";
 import { collection, addDoc, doc, updateDoc, deleteDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
+import { useHaptics } from "@/hooks/useHaptics";
 
 type Envelope = {
   id: string;
@@ -42,6 +41,7 @@ interface TransactionModalProps {
 
 export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId }: TransactionModalProps) {
   const { user } = useAuth();
+  const { trigger } = useHaptics();
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
@@ -147,10 +147,12 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
 
       refreshData();
       setSaveSuccess(true);
+      trigger("success");
       setTimeout(() => setSaveSuccess(false), 1500);
       onClose();
     } catch (error) {
       logger.sanitizedError("Transaction operation failed", error);
+      trigger("error");
       alert("Erreur lors de l'opération");
     } finally {
       setLoading(false);
@@ -179,9 +181,11 @@ const handleDelete = async () => {
         });
 
         refreshData();
+        trigger("success");
         onClose();
     } catch (error) {
         logger.sanitizedError("Transaction deletion failed", error);
+        trigger("error");
         alert("Erreur lors de la suppression");
     } finally {
         setLoading(false);
@@ -254,15 +258,20 @@ const handleDelete = async () => {
           <div>
              <label className="block text-sm font-medium text-app-text-secondary mb-1">Enveloppe</label>
              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-700">
-                {envelopes.map(env => (
-                    <motion.button
-                        key={env.id}
-                        type="button"
-                        onClick={() => setSelectedEnvelopeId(env.id)}
-                        whileTap={{ scale: 0.95 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                        className={`p-3 rounded-lg border text-left flex items-center gap-2 transition-all ${selectedEnvelopeId === env.id ? 'bg-app-surface border-amber-500 ring-1 ring-amber-500' : 'bg-app-bg border-app-border hover:bg-app-surface'}`}
-                    >
+                 {envelopes.map(env => (
+                     <motion.button
+                         key={env.id}
+                         type="button"
+                         onClick={() => {
+                           if (selectedEnvelopeId !== env.id) {
+                             trigger("selection");
+                           }
+                           setSelectedEnvelopeId(env.id);
+                         }}
+                         whileTap={{ scale: 0.95 }}
+                         transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                         className={`p-3 rounded-lg border text-left flex items-center gap-2 transition-all ${selectedEnvelopeId === env.id ? 'bg-app-surface border-amber-500 ring-1 ring-amber-500' : 'bg-app-bg border-app-border hover:bg-app-surface'}`}
+                     >
                         <div className={`w-3 h-3 rounded-full ${env.color}`} />
                         <span className={`truncate text-sm ${selectedEnvelopeId === env.id ? 'text-app-text font-medium' : 'text-app-text-secondary'}`}>{env.name}</span>
                     </motion.button>

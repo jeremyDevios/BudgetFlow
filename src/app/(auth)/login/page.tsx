@@ -14,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { logger } from "@/lib/logger";
 import { useAuth } from "@/context/AuthContext";
+import { useHaptics } from "@/hooks/useHaptics";
 
 function isFirebaseAuthError(error: unknown): error is { code: string } {
   return (
@@ -29,6 +30,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { trigger } = useHaptics();
   const syncedUserIdRef = useRef<string | null>(null);
 
   const buildUserProfile = (currentUser: User) => {
@@ -106,10 +108,12 @@ export default function AuthPage() {
   const handleGoogleAuth = async () => {
     setError("");
     setLoading(true);
+    trigger("selection");
     const provider = new GoogleAuthProvider();
 
     try {
       const userCredential = await signInWithPopup(auth, provider);
+      trigger("success");
       await finalizeAuthenticatedUser(userCredential.user);
     } catch (err: unknown) {
       if (isFirebaseAuthError(err) && err.code === "auth/popup-blocked") {
@@ -119,11 +123,13 @@ export default function AuthPage() {
       }
 
       if (isFirebaseAuthError(err) && err.code === "auth/popup-closed-by-user") {
+        trigger("error");
         setError("La fenêtre Google a été fermée avant la fin de la connexion.");
         return;
       }
 
       logger.sanitizedError("Google authentication error", err);
+      trigger("error");
       setError("Erreur lors de la connexion avec Google. Veuillez réessayer.");
     } finally {
       setLoading(false);
