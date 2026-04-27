@@ -1,5 +1,3 @@
-import type { NextConfig } from "next";
-
 const isDev = process.env.NODE_ENV === "development";
 const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 const configuredAuthDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
@@ -37,10 +35,10 @@ const securityHeaders = [
   },
 ];
 
-const nextConfig: NextConfig = {
-  // Masquer les outils de développement (Toast et indicateurs) si non activés explicitement
-  devIndicators: process.env.SHOW_DEV_TOOLS === 'true' ? undefined : false,
-  allowedDevOrigins: ["budget.zikkis.fr", "*.zikkis.fr", "localhost", "127.0.0.1"],
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  devIndicators: process.env.SHOW_DEV_TOOLS === "true" ? undefined : false,
+  allowedDevOrigins: ["budget.zikkis.fr", "*.zikkis.fr", "localhost", "127.0.0.1", "192.168.1.241"],
   async headers() {
     return [
       {
