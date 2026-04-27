@@ -443,11 +443,21 @@ export default function DashboardPage() {
   // --- Calculs globaux (restricted to visible envelopes for the selected month) ---
   const totalBudgetEnvelopes = visibleEnvelopes.reduce((acc, env) => acc + env.budget, 0);
   const totalSpentEnvelopes = visibleEnvelopes.reduce((acc, env) => acc + env.spent, 0);
-  
+
+  // Temporary envelopes that are active for the selected month contribute their own
+  // budget on top of the base monthly pool (income - fixedCosts - savings).
+  // visibleEnvelopes already contains only month-active envelopes, so filtering by
+  // isTemporary here is sufficient — no extra date check is needed.
+  const temporaryEnvelopesBudget = visibleEnvelopes
+    .filter((env) => env.isTemporary)
+    .reduce((acc, env) => acc + env.budget, 0);
+
   // Reste à vivre réel (ce qu'il reste dans les enveloppes + surplus non alloué)
-  // Logic: Income - Fixed - Savings = Total Available for Month
+  // Logic: (Income - Fixed - Savings) + active-temporary-envelope budgets = Total Available for Month
   // Current Balance = Total Available - Total Spent
-  const monthlyTotalAvailable = settings ? (settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings) : 0;
+  const monthlyTotalAvailable = settings
+    ? settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings + temporaryEnvelopesBudget
+    : 0;
   const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes;
   
   const globalProgress = monthlyTotalAvailable > 0 ? (totalSpentEnvelopes / monthlyTotalAvailable) * 100 : 0;

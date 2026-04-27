@@ -11,15 +11,20 @@ import { collection, addDoc, doc, updateDoc, deleteDoc, increment } from "fireba
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
+import { type Envelope, isEnvelopeActiveForMonth } from "@/types/envelope";
 
-type Envelope = {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  budget: number;
-  spent: number;
-};
+// French month names indexed 1-based (index 0 unused).
+const FRENCH_MONTHS = [
+  "", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+  "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre",
+];
+
+/** Converts a YYYY-MM string into a French month label, e.g. "2026-07" → "Juillet 2026". */
+function formatMonthFr(yyyyMm: string): string {
+  const [year, month] = yyyyMm.split("-");
+  const label = FRENCH_MONTHS[parseInt(month, 10)] ?? month;
+  return `${label} ${year}`;
+}
 
 type Transaction = {
   id: string;
@@ -69,9 +74,9 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
 
   const selectedEnv = envelopes.find((e) => e.id === selectedEnvelopeId);
   const envRemaining = selectedEnv
-    ? selectedEnv.budget - selectedEnv.spent + (transactionToEdit?.envelopeId === selectedEnvelopeId ? (transactionToEdit?.amount ?? 0) : 0)
+    ? (selectedEnv.budget ?? 0) - (selectedEnv.spent ?? 0) + (transactionToEdit?.envelopeId === selectedEnvelopeId ? (transactionToEdit?.amount ?? 0) : 0)
     : null;
-  const remainingRatio = selectedEnv && selectedEnv.budget > 0 && envRemaining !== null
+  const remainingRatio = selectedEnv && (selectedEnv.budget ?? 0) > 0 && envRemaining !== null
     ? envRemaining / selectedEnv.budget
     : null;
   const remainingToneClass = envRemaining === null
@@ -82,9 +87,24 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
         : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
 
+  // Derive the YYYY-MM month of the currently selected expense date.
+  const selectedDateMonth = date ? date.substring(0, 7) : "";
+
+  // Validation: temporary envelopes only accept dates within their activeMonths.
+  const isDateInvalidForTemp =
+    !!selectedEnv?.isTemporary &&
+    !!selectedDateMonth &&
+    !isEnvelopeActiveForMonth(selectedEnv, selectedDateMonth);
+
+  // Human-readable list of valid months for the error message.
+  const validMonthLabels =
+    selectedEnv?.isTemporary && Array.isArray(selectedEnv.activeMonths)
+      ? selectedEnv.activeMonths.map(formatMonthFr).join(" / ")
+      : "";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !amount || !selectedEnvelopeId) return;
+    if (!user || !amount || !selectedEnvelopeId || isDateInvalidForTemp) return;
 
     setLoading(true);
     try {
@@ -252,21 +272,41 @@ const handleDelete = async () => {
           <div>
              <label className="block text-sm font-medium text-app-text-secondary mb-1">Enveloppe</label>
              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-700">
-                 {envelopes.map(env => (
+                 {envelopes.map(env => {
+                   const isSelected = selectedEnvelopeId === env.id;
+                   const isTemp = !!env.isTemporary;
+                   // Build border/background classes based on selection state and temporality.
+                   const baseClass = "p-3 rounded-lg border text-left flex items-center gap-2 transition-all";
+                   const stateClass = isSelected
+                     ? isTemp
+                       ? "bg-app-surface border-dashed border-amber-500 ring-1 ring-amber-500"
+                       : "bg-app-surface border-amber-500 ring-1 ring-amber-500"
+                     : isTemp
+                       ? "bg-amber-500/5 border-dashed border-amber-500/50 hover:bg-amber-500/10"
+                       : "bg-app-bg border-app-border hover:bg-app-surface";
+                   return (
                      <motion.button
-                         key={env.id}
-                         type="button"
-                         onClick={() => {
-                            setSelectedEnvelopeId(env.id);
-                          }}
-                         whileTap={{ scale: 0.95 }}
-                         transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                         className={`p-3 rounded-lg border text-left flex items-center gap-2 transition-all ${selectedEnvelopeId === env.id ? 'bg-app-surface border-amber-500 ring-1 ring-amber-500' : 'bg-app-bg border-app-border hover:bg-app-surface'}`}
+                       key={env.id}
+                       type="button"
+                       onClick={() => setSelectedEnvelopeId(env.id)}
+                       whileTap={{ scale: 0.95 }}
+                       transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                       className={`${baseClass} ${stateClass}`}
+                       title={isTemp ? "Enveloppe temporaire" : undefined}
                      >
-                        <div className={`w-3 h-3 rounded-full ${env.color}`} />
-                        <span className={`truncate text-sm ${selectedEnvelopeId === env.id ? 'text-app-text font-medium' : 'text-app-text-secondary'}`}>{env.name}</span>
-                    </motion.button>
-                ))}
+                       <div className={`w-3 h-3 rounded-full flex-shrink-0 ${env.color}`} />
+                       <span className={`truncate text-sm ${isSelected ? "text-app-text font-medium" : "text-app-text-secondary"}`}>
+                         {env.name}
+                       </span>
+                       {/* Tiny temporary badge — dashed pill so it reads at a glance */}
+                       {isTemp && (
+                         <span className="ml-auto flex-shrink-0 rounded border border-dashed border-amber-500/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-amber-500/80">
+                           tmp
+                         </span>
+                       )}
+                     </motion.button>
+                   );
+                 })}
             </div>
 
             <AnimatePresence>
@@ -280,6 +320,26 @@ const handleDelete = async () => {
                 >
                   Reste disponible : {envRemaining.toFixed(2)} €
                 </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Temporary-envelope date-validation error */}
+            <AnimatePresence>
+              {isDateInvalidForTemp && (
+                <motion.p
+                  key="temp-date-error"
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.2 }}
+                  className="mt-2 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-400"
+                  role="alert"
+                >
+                  Cette enveloppe temporaire n&apos;accepte pas de dépense pour cette date.
+                  {validMonthLabels && (
+                    <> Mois valides&nbsp;: <span className="font-semibold">{validMonthLabels}</span>.</>
+                  )}
+                </motion.p>
               )}
             </AnimatePresence>
           </div>
@@ -312,13 +372,15 @@ const handleDelete = async () => {
 
           <motion.button
             type="submit"
-            disabled={loading}
-            whileTap={!loading ? { scale: 0.97 } : {}}
+            disabled={loading || isDateInvalidForTemp}
+            whileTap={!loading && !isDateInvalidForTemp ? { scale: 0.97 } : {}}
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className={`w-full mt-4 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-colors ${
-              saveSuccess
-                ? "bg-emerald-500 hover:bg-emerald-600 text-white"
-                : "bg-amber-500 hover:bg-amber-600 text-app-text"
+              isDateInvalidForTemp
+                ? "bg-amber-500/30 text-app-text/40 cursor-not-allowed"
+                : saveSuccess
+                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                  : "bg-amber-500 hover:bg-amber-600 text-app-text"
             }`}
           >
             <AnimatePresence mode="wait">

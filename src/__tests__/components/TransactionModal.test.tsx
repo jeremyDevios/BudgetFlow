@@ -99,6 +99,205 @@ const envelopes = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Shared fixture: one temporary envelope active only in March and April 2026.
+// ---------------------------------------------------------------------------
+const tempEnvelope = {
+  id: "env-temp",
+  name: "Vacances été",
+  icon: "Sun",
+  color: "bg-amber-500",
+  budget: 500,
+  spent: 50,
+  isTemporary: true,
+  activeMonths: ["2026-03", "2026-04"],
+};
+
+// Envelopes list that includes the temporary envelope.
+const envelopesWithTemp = [...envelopes, tempEnvelope];
+
+// ---------------------------------------------------------------------------
+// Helper: renders the modal with the temp envelope pre-selected via
+// defaultEnvelopeId so every test starts in a consistent state.
+// ---------------------------------------------------------------------------
+function renderWithTemp(
+  overrides: Partial<React.ComponentProps<typeof TransactionModal>> = {}
+) {
+  const onClose = jest.fn();
+  const refreshData = jest.fn();
+  render(
+    <TransactionModal
+      isOpen
+      onClose={onClose}
+      envelopes={envelopesWithTemp}
+      refreshData={refreshData}
+      defaultEnvelopeId="env-temp"
+      {...overrides}
+    />
+  );
+  return { onClose, refreshData };
+}
+
+// ---------------------------------------------------------------------------
+// Regression suite: temporary-envelope visual marking and date validation.
+// ---------------------------------------------------------------------------
+describe("TransactionModal – temporary-envelope regression", () => {
+  beforeEach(() => {
+    // System time: 14 April 2026 – inside the temp envelope's activeMonths.
+    jest.useFakeTimers().setSystemTime(new Date("2026-04-14T12:00:00.000Z"));
+    addDocMock.mockReset().mockResolvedValue({ id: "tx-new" });
+    updateDocMock.mockReset().mockResolvedValue(undefined);
+    deleteDocMock.mockReset().mockResolvedValue(undefined);
+    incrementMock.mockReset().mockImplementation((value: number) => ({ incrementBy: value }));
+    collectionMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
+    docMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
+    sanitizedErrorMock.mockReset();
+    window.alert = jest.fn();
+    window.confirm = jest.fn(() => true);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // --- 1. Visual marking ------------------------------------------------- //
+
+  it("renders a 'tmp' badge inside the picker button for every temporary envelope", () => {
+    renderWithTemp();
+    // Exactly one "tmp" badge should be visible (only one temp envelope).
+    const badges = screen.getAllByText("tmp");
+    expect(badges).toHaveLength(1);
+  });
+
+  it("applies a dashed border to the temporary envelope picker button", () => {
+    renderWithTemp();
+    // The picker button for a temporary envelope must carry border-dashed.
+    const tempButton = screen.getByRole("button", { name: /Vacances été/i });
+    expect(tempButton.className).toMatch(/border-dashed/);
+  });
+
+  it("does NOT render a 'tmp' badge or dashed border on non-temporary envelope buttons", () => {
+    renderWithTemp();
+    const coursesButton = screen.getByRole("button", { name: /Courses/i });
+    expect(coursesButton.className).not.toMatch(/border-dashed/);
+  });
+
+  // --- 2. Submit disabled when date is outside activeMonths -------------- //
+
+  it("disables the submit button when the selected date is outside the temporary envelope's activeMonths", () => {
+    renderWithTemp();
+    // Move the date to May 2026 – outside ["2026-03", "2026-04"].
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-05-15" },
+    });
+    expect(screen.getByRole("button", { name: "Ajouter" })).toBeDisabled();
+  });
+
+  it("keeps the submit button enabled when the date falls within the temporary envelope's activeMonths", () => {
+    renderWithTemp();
+    // Default date is 2026-04-14 which is inside activeMonths – button must be enabled.
+    expect(screen.getByRole("button", { name: "Ajouter" })).not.toBeDisabled();
+  });
+
+  it("does not disable the submit button for a non-temporary envelope regardless of date", () => {
+    // Render with a regular envelope selected.
+    render(
+      <TransactionModal
+        isOpen
+        onClose={jest.fn()}
+        envelopes={envelopesWithTemp}
+        refreshData={jest.fn()}
+        defaultEnvelopeId="env-1"
+      />
+    );
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-05-15" },
+    });
+    expect(screen.getByRole("button", { name: "Ajouter" })).not.toBeDisabled();
+  });
+
+  // --- 3. Warning message appearance and content ------------------------- //
+
+  it("shows a role='alert' warning when the date is outside the temporary envelope's activeMonths", () => {
+    renderWithTemp();
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-05-15" },
+    });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("includes the French rejection sentence in the warning message", () => {
+    renderWithTemp();
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-05-15" },
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Cette enveloppe temporaire n'accepte pas de dépense pour cette date."
+    );
+  });
+
+  it("lists the valid months in French inside the warning message", () => {
+    renderWithTemp();
+    // activeMonths: ["2026-03", "2026-04"] → "Mars 2026 / Avril 2026"
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-05-15" },
+    });
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Mars 2026");
+    expect(alert).toHaveTextContent("Avril 2026");
+    // Both months must be present in the same alert element.
+    expect(alert.textContent).toMatch(/Mars 2026.*Avril 2026/);
+  });
+
+  // --- 4. Warning clears when date corrected to a valid month ------------ //
+
+  it("removes the warning when the date is corrected to a month within activeMonths", () => {
+    renderWithTemp();
+    // First trigger the error…
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-05-15" },
+    });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    // …then correct it back to a valid month (March 2026).
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-03-10" },
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("re-enables the submit button after the date is corrected to a valid month", () => {
+    renderWithTemp();
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-05-15" },
+    });
+    expect(screen.getByRole("button", { name: "Ajouter" })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-04-01" },
+    });
+    expect(screen.getByRole("button", { name: "Ajouter" })).not.toBeDisabled();
+  });
+
+  // --- 5. Switching envelopes clears a stale validation error ------------ //
+
+  it("clears the warning when the user switches from a temporary to a regular envelope", () => {
+    renderWithTemp();
+    // Trigger the error on the temp envelope.
+    fireEvent.change(screen.getByLabelText(/Date de la transaction/i), {
+      target: { value: "2026-05-15" },
+    });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+
+    // Switch to a non-temporary envelope.
+    fireEvent.click(screen.getByRole("button", { name: /Courses/i }));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Original CRUD suite (unchanged).
+// ---------------------------------------------------------------------------
 describe("TransactionModal", () => {
   const onClose = jest.fn();
   const refreshData = jest.fn();

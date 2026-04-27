@@ -13,6 +13,9 @@
   - Solde restant affiché en temps réel lors de la saisie d'une dépense.
 - **Thème clair / sombre** : Bascule adaptative sur Web et iOS, respectant les préférences système.
 - **Mobile First** : Interface pensée pour l'usage quotidien sur smartphone.
+- **Companion Apple Watch** :
+  - Consultation rapide du restant du mois et des enveloppes principales.
+  - Ajout rapide d'une depense depuis la montre, relayee vers l'iPhone.
 - **Historique & Suivi** :
   - Historique global des transactions avec regroupement mensuel.
   - Vue détaillée par enveloppe.
@@ -75,6 +78,7 @@
 - **Charts** : Swift Charts (natif)
 - **Icônes** : SF Symbols
 - **Notifications** : UNUserNotificationCenter (notifications locales)
+- **Companion watchOS** : app compagnon via WatchConnectivity
 - **Tests** : XCTest
 
 ## Installation & Démarrage (Web)
