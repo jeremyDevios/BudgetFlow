@@ -21,6 +21,7 @@ interface Envelope {
   name: string;
   budget: number;
   color: string;
+  isTemporary?: boolean;
 }
 
 const TAILWIND_COLORS_MAP: Record<string, string> = {
@@ -80,10 +81,9 @@ export default function CashFlowPage() {
         // Fetch Envelopes
         const envCol = collection(db, "users", user.uid, "envelopes");
         const envSnap = await getDocs(envCol);
-        const envList = envSnap.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        } as Envelope));
+        const envList = envSnap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as Envelope))
+          .filter(env => !env.isTemporary);
         setEnvelopes(envList);
 
       } catch (error) {

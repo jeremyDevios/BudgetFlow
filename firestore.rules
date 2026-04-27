@@ -56,10 +56,29 @@ service cloud.firestore {
 
     // Envelope: /users/{userId}/envelopes/{envelopeId}
     // Required: name, budget, spent, icon, color, order
-    // Optional: tileSize, createdAt
+    // Optional: tileSize, createdAt, isTemporary, activeMonths
+    //
+    // Temporary-envelope fields:
+    //   isTemporary  — bool flag marking the envelope as month-scoped.
+    //   activeMonths — list of YYYY-MM strings (1–24 entries) that controls
+    //                  which months the envelope is surfaced in the UI.
+    //
+    // ⚠️  Firestore Security Rules do not support list iteration, so
+    //     per-item YYYY-MM format validation cannot be enforced here.
+    //     Client code and/or a Cloud Function trigger must reject items
+    //     that do not match /^\d{4}-(0[1-9]|1[0-2])$/ before writing.
+    function isValidActiveMonths(months) {
+      // list capped at 24 months (two years of look-ahead/back).
+      // Empty list is valid: permanent envelopes always write [] and a
+      // temporary envelope with no months assigned is legitimately inactive.
+      return months is list
+        && months.size() <= 24;
+    }
+
     function isValidEnvelopeData(data) {
       return data.keys().hasOnly([
-            'name', 'budget', 'spent', 'icon', 'color', 'order', 'tileSize', 'createdAt'
+            'name', 'budget', 'spent', 'icon', 'color', 'order',
+            'tileSize', 'createdAt', 'isTemporary', 'activeMonths'
           ])
         && data.name   is string && data.name.size()  >= 1 && data.name.size()  <= 50
         && data.icon   is string && data.icon.size()  >= 1 && data.icon.size()  <= 100
@@ -67,8 +86,11 @@ service cloud.firestore {
         && data.budget is number && data.budget > 0         && data.budget <= 1000000
         && data.spent  is number && data.spent  >= 0        && data.spent  <= 1000000
         && data.order  is number && data.order  >= 0        && data.order  <= 10000
-        && (!('tileSize' in data) || data.tileSize == null || data.tileSize in ['small', 'wide'])
-        && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30));
+        && (!('tileSize'    in data) || data.tileSize == null || data.tileSize in ['small', 'wide'])
+        && (!('createdAt'   in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30))
+        // ── Temporary-envelope optional fields ────────────────────────────────
+        && (!('isTemporary'  in data) || data.isTemporary is bool)
+        && (!('activeMonths' in data) || isValidActiveMonths(data.activeMonths));
     }
 
     // Transaction: /users/{userId}/transactions/{transactionId}

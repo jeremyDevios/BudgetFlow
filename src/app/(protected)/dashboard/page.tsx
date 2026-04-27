@@ -44,8 +44,10 @@ import {
   Workflow,
   GripVertical,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Clock,
 } from "lucide-react";
+import { isEnvelopeActiveForMonth } from "@/types/envelope";
 import TransactionModal from "@/components/dashboard/TransactionModal";
 import { logger } from "@/lib/logger";
 import { motion, AnimatePresence } from "framer-motion";
@@ -97,6 +99,10 @@ interface Envelope {
   color: string;
   order?: number;
   tileSize?: TileSize | null;
+  /** Mirrors the canonical field: true = only active in `activeMonths`. */
+  isTemporary?: boolean;
+  /** YYYY-MM months in which a temporary envelope is visible. */
+  activeMonths?: string[];
 }
 
 type TileSize = "small" | "wide";
@@ -167,6 +173,7 @@ function SortableEnvelopeTile({
   tileSize,
   onToggleTileSize,
   isResizing,
+  isTemporary,
 }: {
   env: Envelope;
   transactions: Transaction[];
@@ -179,6 +186,8 @@ function SortableEnvelopeTile({
   tileSize: TileSize;
   onToggleTileSize: (envelopeId: string, nextSize: TileSize) => void;
   isResizing: boolean;
+  /** When true, renders the temporary-envelope visual cue on the tile. */
+  isTemporary?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: env.id });
   const Icon = ICON_MAP[env.icon] || ShoppingCart;
@@ -220,6 +229,20 @@ function SortableEnvelopeTile({
                 <Icon className="h-5 w-5" />
               </div>
               <h4 className="min-w-0 flex-1 text-sm font-semibold leading-tight text-app-text whitespace-normal break-words">{env.name}</h4>
+              {isTemporary && (
+                <span
+                  className="ml-1 flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+                  style={{
+                    background: "var(--color-temporary-bg)",
+                    border: "1px solid var(--color-temporary)",
+                    color: "var(--color-temporary)",
+                  }}
+                  title="Enveloppe temporaire"
+                >
+                  <Clock className="h-2.5 w-2.5" />
+                  Temporaire
+                </span>
+              )}
             </div>
           </div>
 
@@ -349,12 +372,23 @@ export default function DashboardPage() {
     return set;
   }, [transactions]);
 
+  // YYYY-MM string for the currently viewed month — used by the temporary-envelope filter.
+  const selectedMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+
+  // Envelopes visible for the selected month:
+  //  - All permanent envelopes are always included.
+  //  - Temporary envelopes are included only when selectedMonth is in their activeMonths list.
+  const visibleEnvelopes = useMemo(
+    () => envelopes.filter((env) => isEnvelopeActiveForMonth(env, selectedMonth)),
+    [envelopes, selectedMonth],
+  );
+
   const autoWideEnvelopeIds = useMemo(() => {
-    if (!envelopes.length) return new Set<string>();
+    if (!visibleEnvelopes.length) return new Set<string>();
     const preset = resolveBentoPreset(settings?.bentoPreset);
     const presetConfig = getBentoPresetConfig(preset);
 
-    const positiveBudgets = envelopes.filter((env) => env.budget > 0);
+    const positiveBudgets = visibleEnvelopes.filter((env) => env.budget > 0);
     if (!positiveBudgets.length) return new Set<string>();
 
     const sortedBudgets = positiveBudgets
@@ -373,7 +407,7 @@ export default function DashboardPage() {
       .map((env) => env.id)
     );
 
-    const fallbackWideTiles = Math.max(1, Math.round(envelopes.length * presetConfig.fallbackWideRatio));
+    const fallbackWideTiles = Math.max(1, Math.round(visibleEnvelopes.length * presetConfig.fallbackWideRatio));
     if (wideIdSet.size < fallbackWideTiles) {
       for (const id of rankedBudgetIds) {
         if (wideIdSet.size >= fallbackWideTiles) break;
@@ -383,18 +417,18 @@ export default function DashboardPage() {
 
     let wideIds = rankedBudgetIds.filter((id) => wideIdSet.has(id));
 
-    const maxWideTiles = Math.max(1, Math.round(envelopes.length * presetConfig.maxWideRatio));
+    const maxWideTiles = Math.max(1, Math.round(visibleEnvelopes.length * presetConfig.maxWideRatio));
     if (wideIds.length > maxWideTiles) {
       wideIds = wideIds.slice(0, maxWideTiles);
     }
 
     return new Set(wideIds);
-  }, [envelopes, settings?.bentoPreset]);
+  }, [visibleEnvelopes, settings?.bentoPreset]);
 
   const resolvedTileSizes = useMemo(() => {
     const map = new Map<string, TileSize>();
 
-    envelopes.forEach((env) => {
+    visibleEnvelopes.forEach((env) => {
       if (env.tileSize === "small" || env.tileSize === "wide") {
         map.set(env.id, env.tileSize);
         return;
@@ -404,11 +438,11 @@ export default function DashboardPage() {
     });
 
     return map;
-  }, [autoWideEnvelopeIds, envelopes]);
+  }, [autoWideEnvelopeIds, visibleEnvelopes]);
 
-  // --- Calculs globaux ---
-  const totalBudgetEnvelopes = envelopes.reduce((acc, env) => acc + env.budget, 0);
-  const totalSpentEnvelopes = envelopes.reduce((acc, env) => acc + env.spent, 0);
+  // --- Calculs globaux (restricted to visible envelopes for the selected month) ---
+  const totalBudgetEnvelopes = visibleEnvelopes.reduce((acc, env) => acc + env.budget, 0);
+  const totalSpentEnvelopes = visibleEnvelopes.reduce((acc, env) => acc + env.spent, 0);
   
   // Reste à vivre réel (ce qu'il reste dans les enveloppes + surplus non alloué)
   // Logic: Income - Fixed - Savings = Total Available for Month
@@ -431,7 +465,7 @@ export default function DashboardPage() {
 
   const { globalForecast, envelopeForecasts, loading: forecastLoading } = useSpendingForecast({
     userId: user?.uid ?? null,
-    envelopes: envelopes.map(e => ({ id: e.id, budget: e.budget, name: e.name })),
+    envelopes: visibleEnvelopes.map(e => ({ id: e.id, budget: e.budget, name: e.name })),
     currentMonthTransactions: forecastTransactions,
     monthlyBudget: monthlyTotalAvailable,
     isCurrentMonth,
@@ -442,14 +476,14 @@ export default function DashboardPage() {
       isCurrentMonth
         ? findExceptionalSpendingInsight({
             transactions,
-            envelopes: envelopes.map((envelope) => ({
+            envelopes: visibleEnvelopes.map((envelope) => ({
               id: envelope.id,
               name: envelope.name,
               budget: envelope.budget,
             })),
           })
         : null,
-    [isCurrentMonth, transactions, envelopes]
+    [isCurrentMonth, transactions, visibleEnvelopes]
   );
 
   // --- Chargement des données ---
@@ -582,24 +616,32 @@ export default function DashboardPage() {
     if (!over || active.id === over.id) return;
 
     setEnvelopes((items) => {
-      const oldIndex = items.findIndex((i) => i.id === active.id);
-      const newIndex = items.findIndex((i) => i.id === over.id);
+      // The DnD context only contains visibleEnvelopes (filtered by selectedMonth).
+      // Operating on the full `items` array would compute wrong indices when hidden
+      // temporary envelopes occupy positions between visible ones, corrupting their
+      // stored `order` as collateral damage.  Reorder only within the visible subset
+      // and merge hidden envelopes back without touching their order values.
+      const visible = items.filter((e) => isEnvelopeActiveForMonth(e, selectedMonth));
+      const hidden  = items.filter((e) => !isEnvelopeActiveForMonth(e, selectedMonth));
+
+      const oldIndex = visible.findIndex((i) => i.id === active.id);
+      const newIndex = visible.findIndex((i) => i.id === over.id);
       if (oldIndex < 0 || newIndex < 0) return items;
 
-      const reordered = arrayMove(items, oldIndex, newIndex).map((item, idx) => ({
+      const reordered = arrayMove(visible, oldIndex, newIndex).map((item, idx) => ({
         ...item,
         order: idx,
       }));
 
       if (user) {
         const batch = writeBatch(db);
-        reordered.forEach((env, idx) => {
-          batch.update(doc(db, "users", user.uid, "envelopes", env.id), { order: idx });
+        reordered.forEach((env) => {
+          batch.update(doc(db, "users", user.uid, "envelopes", env.id), { order: env.order });
         });
         batch.commit().catch(() => logger.warn("Envelope order save failed"));
       }
 
-      return reordered;
+      return [...reordered, ...hidden];
     });
   };
 
@@ -800,7 +842,7 @@ export default function DashboardPage() {
                 </div>
                 {/* Visualisation des segments (Optionnel, simplifié ici) */}
                 <div className="flex h-1 mt-1 gap-1">
-                    {envelopes.map((env) => (
+                    {visibleEnvelopes.map((env) => (
                         <div 
                             key={env.id} 
                             className={`h-full rounded-full ${env.color} opacity-80`}
@@ -943,14 +985,14 @@ export default function DashboardPage() {
             </div>
 
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleEnvelopeReorder}>
-              <SortableContext items={envelopes.map((env) => env.id)} strategy={rectSortingStrategy}>
+              <SortableContext items={visibleEnvelopes.map((env) => env.id)} strategy={rectSortingStrategy}>
                 <motion.div
                     className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4"
                     initial="hidden"
                     animate="visible"
                     variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
                 >
-                    {envelopes.map((env) => {
+                    {visibleEnvelopes.map((env) => {
                       const tileSize = resolvedTileSizes.get(env.id) ?? "small";
                       const isWide = tileSize === "wide";
 
@@ -977,6 +1019,7 @@ export default function DashboardPage() {
                           tileSize={tileSize}
                           onToggleTileSize={handleEnvelopeTileSizeToggle}
                           isResizing={resizingEnvelopeId === env.id}
+                          isTemporary={!!env.isTemporary}
                         />
                       </motion.div>
                       );

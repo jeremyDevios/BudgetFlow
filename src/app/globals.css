@@ -14,6 +14,9 @@
     --color-accent-hover: #D97706;
     --color-positive: #059669;
     --color-negative: #DC2626;
+    /* ⏳ Temporary envelope tokens */
+    --color-temporary: rgba(244, 148, 26, 0.72);
+    --color-temporary-bg: rgba(244, 148, 26, 0.06);
     --glass-bg: rgba(255, 255, 255, 0.62);
     --glass-bg-strong: rgba(255, 255, 255, 0.76);
     --glass-border-soft: rgba(255, 255, 255, 0.62);
@@ -32,6 +35,9 @@
     --color-accent-hover: #D97706;
     --color-positive: #10B981;
     --color-negative: #EF4444;
+    /* ⏳ Temporary envelope tokens */
+    --color-temporary: rgba(244, 148, 26, 0.62);
+    --color-temporary-bg: rgba(244, 148, 26, 0.10);
     --glass-bg: rgba(25, 25, 28, 0.66);
     --glass-bg-strong: rgba(33, 33, 37, 0.82);
     --glass-border-soft: rgba(255, 255, 255, 0.14);
