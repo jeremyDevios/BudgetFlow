@@ -5,14 +5,13 @@ import { db } from "@/lib/firebase";
 import { collection, doc, getDoc, getDocs, updateDoc, deleteDoc, addDoc, writeBatch } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { MoveLeft, Plus, Trash2, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, Edit2, AlertTriangle, Bell, Loader2, Check, GripVertical, Vibrate } from "lucide-react";
+import { MoveLeft, Plus, Trash2, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, Edit2, AlertTriangle, Bell, Loader2, Check, GripVertical } from "lucide-react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { logger } from "@/lib/logger";
 import ThemeToggle from "@/components/ThemeToggle";
-import { useHaptics } from "@/hooks/useHaptics";
 
 // --- Icons List ---
 const ICONS_LIST = [
@@ -30,10 +29,20 @@ const COLORS = [
   "bg-pink-500", "bg-indigo-500", "bg-teal-500", "bg-orange-500", "bg-cyan-500"
 ];
 
+type BentoPreset = "compact" | "balanced" | "airy";
+
+function resolveBentoPreset(value: string | undefined): BentoPreset {
+  if (value === "compact" || value === "balanced" || value === "airy") {
+    return value;
+  }
+  return "balanced";
+}
+
 interface UserSettings {
   monthlyIncome: number;
   fixedCosts: number;
   monthlySavings: number;
+  bentoPreset: BentoPreset;
 }
 
 interface Envelope {
@@ -131,7 +140,6 @@ export default function SettingsPage() {
   const { user } = useAuth();
   const router = useRouter();
   const { permission, requestPermission, disableNotifications, loading: notifLoading } = useNotifications();
-  const { enabled: hapticsEnabled, supported: hapticsSupported, ready: hapticsReady, setEnabled: setHapticsEnabled, trigger } = useHaptics();
   const [dbNotifEnabled, setDbNotifEnabled] = useState(false); // État en base de données
     const [imgError, setImgError] = useState(false);
 
@@ -140,7 +148,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<UserSettings>({
     monthlyIncome: 0,
     fixedCosts: 0,
-    monthlySavings: 0
+    monthlySavings: 0,
+    bentoPreset: "balanced",
   });
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
 
@@ -198,7 +207,13 @@ export default function SettingsPage() {
       const settingsRef = doc(db, "users", user.uid, "settings", "general");
       const settingsSnap = await getDoc(settingsRef);
       if (settingsSnap.exists()) {
-        setSettings(settingsSnap.data() as UserSettings);
+        const rawSettings = settingsSnap.data() as Partial<UserSettings>;
+        setSettings({
+          monthlyIncome: Number(rawSettings.monthlyIncome ?? 0),
+          fixedCosts: Number(rawSettings.fixedCosts ?? 0),
+          monthlySavings: Number(rawSettings.monthlySavings ?? 0),
+          bentoPreset: resolveBentoPreset(rawSettings.bentoPreset),
+        });
       }
       
       // 1.5 User Profile (pour notif enabled)
@@ -234,7 +249,10 @@ export default function SettingsPage() {
 
   // --- Handlers ---
 
-  const handleUpdateSettings = async (field: keyof UserSettings, value: string) => {
+  const handleUpdateNumericSetting = async (
+    field: "monthlyIncome" | "fixedCosts" | "monthlySavings",
+    value: string
+  ) => {
     const numValue = parseFloat(value) || 0;
     const newSettings = { ...settings, [field]: numValue };
     setSettings(newSettings);
@@ -244,6 +262,25 @@ export default function SettingsPage() {
         await updateDoc(doc(db, "users", user.uid, "settings", "general"), {
             [field]: numValue
         });
+    }
+  };
+
+  const handleUpdateBentoPreset = async (preset: BentoPreset) => {
+    if (preset === settings.bentoPreset) return;
+
+    const previousPreset = settings.bentoPreset;
+    const newSettings = { ...settings, bentoPreset: preset };
+    setSettings(newSettings);
+
+    if (user) {
+      try {
+        await updateDoc(doc(db, "users", user.uid, "settings", "general"), {
+          bentoPreset: preset,
+        });
+      } catch (error) {
+        setSettings((current) => ({ ...current, bentoPreset: previousPreset }));
+        logger.sanitizedError("Erreur mise a jour style Bento", error);
+      }
     }
   };
 
@@ -318,16 +355,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleHapticsToggle = () => {
-    const nextEnabled = !hapticsEnabled;
-    setHapticsEnabled(nextEnabled);
-
-    if (nextEnabled) {
-      trigger("selection", true);
-    }
-  };
-
-
   // --- Calculations ---
   const totalEnvelopes = envelopes.reduce((acc, env) => acc + env.budget, 0);
   const remainingBudget = settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings - totalEnvelopes;
@@ -385,43 +412,52 @@ export default function SettingsPage() {
                 </div>
                 <ThemeToggle />
             </div>
-        </section>
 
-        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <Vibrate className="h-5 w-5 text-amber-500" />
-                Retour haptique
-            </h2>
-            <div className="flex items-center justify-between gap-4">
-                <div>
-                    <h3 className="font-medium text-app-text">Vibrations</h3>
-                    <p className="text-sm text-app-text-secondary">
-                        Léger retour sur certaines actions importantes. Sur le web, la prise en charge peut varier et rester indisponible sur iPhone/Safari.
-                    </p>
-                    <p className="mt-2 text-xs text-app-text-secondary">
-                        Préférence enregistrée localement sur cet appareil et ce navigateur. {hapticsReady && !hapticsSupported ? "Aucune vibration détectée sur ce navigateur pour le moment." : "Si votre navigateur le permet, seules certaines actions déclenchent une vibration."}
-                    </p>
+            <div className="mt-5 border-t border-app-border pt-5">
+                <h3 className="font-medium text-app-text">Style Bento</h3>
+                <p className="mt-1 text-sm text-app-text-secondary">
+                    Choisissez une densite de grille pour l&apos;affichage du tableau de bord.
+                </p>
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {[
+                        {
+                            id: "compact" as const,
+                            label: "Compact",
+                            description: "Plus de petites tuiles",
+                        },
+                        {
+                            id: "balanced" as const,
+                            label: "Equilibre",
+                            description: "Distribution recommandee",
+                        },
+                        {
+                            id: "airy" as const,
+                            label: "Aere",
+                            description: "Plus de tuiles larges",
+                        },
+                    ].map((preset) => {
+                        const isActive = settings.bentoPreset === preset.id;
+                        return (
+                            <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => handleUpdateBentoPreset(preset.id)}
+                                aria-pressed={isActive}
+                                className={`rounded-xl border px-3 py-3 text-left transition-colors ${
+                                    isActive
+                                        ? "border-amber-500/80 bg-amber-500/15"
+                                        : "border-app-border bg-app-bg hover:bg-app-surface"
+                                }`}
+                            >
+                                <p className="text-sm font-semibold text-app-text">{preset.label}</p>
+                                <p className="mt-1 text-xs text-app-text-secondary">{preset.description}</p>
+                            </button>
+                        );
+                    })}
                 </div>
-
-                {hapticsReady ? (
-                    <button
-                        type="button"
-                        onClick={handleHapticsToggle}
-                        aria-pressed={hapticsEnabled}
-                        className={`inline-flex min-w-28 items-center justify-center rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                            hapticsEnabled
-                                ? "bg-amber-500 text-app-text hover:bg-amber-600"
-                                : "bg-app-bg text-app-text-secondary hover:bg-app-border"
-                        }`}
-                    >
-                        {hapticsEnabled ? "Activées" : "Désactivées"}
-                    </button>
-                ) : (
-                    <div className="h-10 w-28 rounded-full bg-app-bg" aria-hidden="true" />
-                )}
             </div>
         </section>
-        
+
         {/* Section Notifications */}
         <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
@@ -487,10 +523,10 @@ export default function SettingsPage() {
                             <input 
                                 type="number"
                                 inputMode="decimal"
-                                value={settings.monthlyIncome} 
-                                onChange={(e) => handleUpdateSettings('monthlyIncome', e.target.value)}
-                                className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
-                            />
+                                 value={settings.monthlyIncome} 
+                                 onChange={(e) => handleUpdateNumericSetting('monthlyIncome', e.target.value)}
+                                 className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
+                             />
                             <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
                         </div>
                     </div>
@@ -500,10 +536,10 @@ export default function SettingsPage() {
                             <input 
                                 type="number"
                                 inputMode="decimal" 
-                                value={settings.fixedCosts} 
-                                onChange={(e) => handleUpdateSettings('fixedCosts', e.target.value)}
-                                className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
-                            />
+                                 value={settings.fixedCosts} 
+                                 onChange={(e) => handleUpdateNumericSetting('fixedCosts', e.target.value)}
+                                 className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
+                             />
                             <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
                         </div>
                     </div>
@@ -513,10 +549,10 @@ export default function SettingsPage() {
                             <input 
                                 type="number"
                                 inputMode="decimal" 
-                                value={settings.monthlySavings} 
-                                onChange={(e) => handleUpdateSettings('monthlySavings', e.target.value)}
-                                className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
-                            />
+                                 value={settings.monthlySavings} 
+                                 onChange={(e) => handleUpdateNumericSetting('monthlySavings', e.target.value)}
+                                 className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none" 
+                             />
                             <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
                         </div>
                     </div>

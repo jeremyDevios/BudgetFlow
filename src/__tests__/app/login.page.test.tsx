@@ -10,7 +10,6 @@ const signInWithPopupMock = jest.fn();
 const signInWithRedirectMock = jest.fn();
 const getRedirectResultMock = jest.fn();
 const useAuthMock = jest.fn();
-const triggerHapticMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -20,12 +19,6 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/context/AuthContext", () => ({
   useAuth: () => useAuthMock(),
-}));
-
-jest.mock("@/hooks/useHaptics", () => ({
-  useHaptics: () => ({
-    trigger: (...args: unknown[]) => triggerHapticMock(...args),
-  }),
 }));
 
 jest.mock("@/lib/firebase", () => ({
@@ -53,7 +46,6 @@ describe("AuthPage", () => {
     signInWithRedirectMock.mockReset();
     getRedirectResultMock.mockReset();
     useAuthMock.mockReset();
-    triggerHapticMock.mockReset();
 
     useAuthMock.mockReturnValue({
       user: null,
@@ -84,8 +76,6 @@ describe("AuthPage", () => {
       expect(pushMock).toHaveBeenCalledWith("/dashboard");
     });
 
-    expect(triggerHapticMock).toHaveBeenNthCalledWith(1, "selection");
-    expect(triggerHapticMock).toHaveBeenNthCalledWith(2, "success");
   });
 
   it("falls back to redirect auth when the popup is blocked", async () => {
@@ -100,8 +90,6 @@ describe("AuthPage", () => {
     });
     expect(pushMock).not.toHaveBeenCalled();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(triggerHapticMock).toHaveBeenCalledTimes(1);
-    expect(triggerHapticMock).toHaveBeenCalledWith("selection");
   });
 
   it("finalizes redirect auth by syncing the profile when a user is already authenticated", async () => {
@@ -151,7 +139,7 @@ describe("AuthPage", () => {
     });
   });
 
-  it("shows a French error and triggers an error haptic when the popup is closed", async () => {
+  it("shows a French error when the popup is closed", async () => {
     signInWithPopupMock.mockRejectedValue({ code: "auth/popup-closed-by-user" });
 
     render(<AuthPage />);
@@ -161,7 +149,5 @@ describe("AuthPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "La fenêtre Google a été fermée avant la fin de la connexion."
     );
-    expect(triggerHapticMock).toHaveBeenNthCalledWith(1, "selection");
-    expect(triggerHapticMock).toHaveBeenNthCalledWith(2, "error");
   });
 });

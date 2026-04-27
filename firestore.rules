@@ -38,27 +38,28 @@ service cloud.firestore {
 
     // App settings: /users/{userId}/settings/general
     // Required: monthlyIncome, fixedCosts, monthlySavings, isOnboarded
-    // Optional: currency, createdAt, updatedAt
+    // Optional: currency, bentoPreset, createdAt, updatedAt
     function isValidSettingsData(data) {
       return data.keys().hasOnly([
             'monthlyIncome', 'fixedCosts', 'monthlySavings',
-            'currency', 'isOnboarded', 'createdAt', 'updatedAt'
+            'currency', 'bentoPreset', 'isOnboarded', 'createdAt', 'updatedAt'
           ])
         && data.monthlyIncome  is number && data.monthlyIncome  >= 0 && data.monthlyIncome  <= 100000000
         && data.fixedCosts     is number && data.fixedCosts     >= 0 && data.fixedCosts     <= 100000000
         && data.monthlySavings is number && data.monthlySavings >= 0 && data.monthlySavings <= 100000000
         && data.isOnboarded    is bool
         && (!('currency'  in data) || (data.currency  is string && data.currency.size()  >= 1 && data.currency.size()  <= 10))
+        && (!('bentoPreset' in data) || data.bentoPreset in ['compact', 'balanced', 'airy'])
         && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30))
         && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 30));
     }
 
     // Envelope: /users/{userId}/envelopes/{envelopeId}
     // Required: name, budget, spent, icon, color, order
-    // Optional: createdAt
+    // Optional: tileSize, createdAt
     function isValidEnvelopeData(data) {
       return data.keys().hasOnly([
-            'name', 'budget', 'spent', 'icon', 'color', 'order', 'createdAt'
+            'name', 'budget', 'spent', 'icon', 'color', 'order', 'tileSize', 'createdAt'
           ])
         && data.name   is string && data.name.size()  >= 1 && data.name.size()  <= 50
         && data.icon   is string && data.icon.size()  >= 1 && data.icon.size()  <= 100
@@ -66,6 +67,7 @@ service cloud.firestore {
         && data.budget is number && data.budget > 0         && data.budget <= 1000000
         && data.spent  is number && data.spent  >= 0        && data.spent  <= 1000000
         && data.order  is number && data.order  >= 0        && data.order  <= 10000
+        && (!('tileSize' in data) || data.tileSize == null || data.tileSize in ['small', 'wide'])
         && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30));
     }
 

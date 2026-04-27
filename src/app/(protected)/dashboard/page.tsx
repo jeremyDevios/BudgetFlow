@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, getDocs, doc, getDoc, orderBy, limit, where } from "firebase/firestore";
+import { collection, query, getDocs, doc, getDoc, where, writeBatch, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -41,7 +41,10 @@ import {
   Bell,
   Share,
   List,
-  Workflow
+  Workflow,
+  GripVertical,
+  Maximize2,
+  Minimize2
 } from "lucide-react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
 import { logger } from "@/lib/logger";
@@ -50,8 +53,25 @@ import SearchDropdown from "@/components/dashboard/SearchDropdown";
 import CalendarHeatmap from "@/components/dashboard/CalendarHeatmap";
 import { useCalendarHeatmap } from "@/hooks/useCalendarHeatmap";
 import { useSpendingForecast } from "@/hooks/useSpendingForecast";
-import { ForecastTransaction } from "@/lib/forecasting";
+import { EnvelopeForecast, ForecastTransaction } from "@/lib/forecasting";
 import { findExceptionalSpendingInsight } from "@/lib/spendingInsights";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // --- Types ---
 type IconName = "ShoppingCart" | "Fuel" | "Utensils" | "Plane" | "Heart" | "Gamepad2" | "Bus" | "Shirt" | "Music" | "Coffee" | "Briefcase" | "GraduationCap" | "Baby" | "PawPrint" | "Gift" | "Smartphone" | "Wifi" | "Zap" | "Droplets" | "Hammer";
@@ -65,6 +85,7 @@ interface UserSettings {
   monthlyIncome: number;
   fixedCosts: number;
   monthlySavings: number;
+  bentoPreset?: BentoPreset;
 }
 
 interface Envelope {
@@ -74,6 +95,45 @@ interface Envelope {
   spent: number;
   icon: string;
   color: string;
+  order?: number;
+  tileSize?: TileSize | null;
+}
+
+type TileSize = "small" | "wide";
+type BentoPreset = "compact" | "balanced" | "airy";
+
+function resolveBentoPreset(value: string | undefined): BentoPreset {
+  if (value === "compact" || value === "balanced" || value === "airy") {
+    return value;
+  }
+  return "balanced";
+}
+
+function getBentoPresetConfig(preset: BentoPreset) {
+  switch (preset) {
+    case "compact":
+      return {
+        baseThreshold: 360,
+        multiplier: 1.35,
+        maxWideRatio: 0.35,
+        fallbackWideRatio: 0.2,
+      };
+    case "airy":
+      return {
+        baseThreshold: 220,
+        multiplier: 1.05,
+        maxWideRatio: 0.7,
+        fallbackWideRatio: 0.7,
+      };
+    case "balanced":
+    default:
+      return {
+        baseThreshold: 280,
+        multiplier: 1.2,
+        maxWideRatio: 0.5,
+        fallbackWideRatio: 0.34,
+      };
+  }
 }
 
 interface Transaction {
@@ -82,6 +142,171 @@ interface Transaction {
   description: string;
   envelopeId: string;
   date: string;
+}
+
+function getBentoTileSize(isWide: boolean) {
+  if (isWide) {
+    return "col-span-2";
+  }
+  return "col-span-1";
+}
+
+function SortableEnvelopeTile({
+  env,
+  transactions,
+  openMenuId,
+  setOpenMenuId,
+  onOpenTxModal,
+  onNavigateDetails,
+  forecast,
+  isCurrentMonth,
+  tileSize,
+  onToggleTileSize,
+  isResizing,
+}: {
+  env: Envelope;
+  transactions: Transaction[];
+  openMenuId: string | null;
+  setOpenMenuId: (id: string | null) => void;
+  onOpenTxModal: (envelopeId: string) => void;
+  onNavigateDetails: (envelopeId: string) => void;
+  forecast?: EnvelopeForecast;
+  isCurrentMonth: boolean;
+  tileSize: TileSize;
+  onToggleTileSize: (envelopeId: string, nextSize: TileSize) => void;
+  isResizing: boolean;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: env.id });
+  const Icon = ICON_MAP[env.icon] || ShoppingCart;
+  const remaining = env.budget - env.spent;
+  const isWide = tileSize === "wide";
+  const envTransactions = transactions.filter((t) => t.envelopeId === env.id);
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 40 : "auto",
+  };
+  const tileStateClassName = isDragging
+    ? "ring-2 ring-amber-400/80 shadow-[0_14px_34px_rgba(245,158,11,0.32)]"
+    : isResizing
+      ? "scale-[1.02] ring-2 ring-cyan-400/65 shadow-[0_14px_34px_rgba(34,211,238,0.24)]"
+      : "";
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        onClick={() => onNavigateDetails(env.id)}
+        className={`bento-tile relative h-[156px] sm:h-[172px] p-3 sm:p-4 group cursor-pointer active:scale-[0.99] transition-all duration-300 ${tileStateClassName}`}
+      >
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleTileSize(env.id, isWide ? "small" : "wide");
+          }}
+          className="absolute bottom-2 right-2 z-20 flex h-9 w-9 items-center justify-center rounded-lg border border-app-border/70 bg-app-surface/80 text-app-text-secondary shadow-sm backdrop-blur-md transition-all hover:border-app-border hover:text-app-text"
+          title={isWide ? "Réduire la tuile" : "Agrandir la tuile"}
+          aria-label={isWide ? `Réduire ${env.name}` : `Agrandir ${env.name}`}
+        >
+          {isWide ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        </button>
+
+        <div className={`absolute inset-0 rounded-xl ${env.color} opacity-[0.14] dark:opacity-[0.16] pointer-events-none`} />
+
+        <div className="relative z-10 flex h-full flex-col">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="mt-0.5 shrink-0 cursor-grab active:cursor-grabbing rounded-md p-1 text-app-text-secondary hover:bg-white/20 hover:text-app-text"
+                title="Réorganiser"
+                {...attributes}
+                {...listeners}
+              >
+                <GripVertical className="h-4 w-4" />
+              </button>
+              <div className={`p-2 rounded-lg border border-app-border/80 ${env.color} text-app-text`}> 
+                <Icon className="h-5 w-5" />
+              </div>
+              <h4 className="truncate text-base font-semibold text-app-text">{env.name}</h4>
+            </div>
+
+            <div className="relative shrink-0">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId(openMenuId === env.id ? null : env.id);
+                }}
+                className={`rounded-lg p-1.5 transition-colors ${
+                  openMenuId === env.id
+                    ? "bg-app-surface/80 text-app-text"
+                    : "text-app-text-secondary hover:bg-app-surface/60 hover:text-app-text"
+                }`}
+                title="Options"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+
+              {openMenuId === env.id && (
+                <div className="glass-panel-strong absolute right-0 top-full z-50 mt-2 flex w-56 flex-col overflow-hidden rounded-xl p-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenTxModal(env.id);
+                      setOpenMenuId(null);
+                    }}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-bold text-amber-500 transition-colors hover:bg-app-surface/70"
+                  >
+                    <Plus className="h-4 w-4" /> Nouvelle Dépense
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigateDetails(env.id);
+                    }}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-app-text-secondary transition-colors hover:bg-app-surface/70 hover:text-app-text"
+                  >
+                    <TrendingUp className="h-4 w-4" /> Détails & Historique
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-0.5">
+            <div className="flex items-baseline justify-between">
+              <span className={`text-2xl font-bold tabular-nums ${remaining < 0 ? "text-red-500" : "text-app-text"}`}>
+                {remaining.toFixed(2)}€
+              </span>
+              <span className="text-xs text-app-text-secondary tabular-nums">sur {env.budget.toFixed(2)}€</span>
+            </div>
+          </div>
+
+          <div className="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+            {envTransactions.map((tx) => (
+              <div
+                key={tx.id}
+                className={`h-full ${env.color} border-r border-white/25 dark:border-zinc-900/80 box-border`}
+                style={{ width: `${env.budget > 0 ? (tx.amount / env.budget) * 100 : 0}%` }}
+                title={`${tx.description || "Dépense"}: ${Number(tx.amount).toFixed(2)}€`}
+              />
+            ))}
+          </div>
+
+          {isCurrentMonth && forecast && forecast.hasData && (
+            <div className={`mt-1.5 flex items-center gap-1 text-xs ${forecast.willExceed ? "text-red-400" : "text-emerald-400"}`}>
+              {forecast.willExceed ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <TrendingUp className="h-3 w-3 shrink-0" />}
+              <span>
+                {forecast.willExceed
+                  ? `Dépassement estimé: +${forecast.excessAmount.toFixed(0)}€`
+                  : `Estimation: ${forecast.projectedRemaining.toFixed(0)}€ restant`}
+              </span>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
@@ -99,6 +324,7 @@ export default function DashboardPage() {
   const [showInstallPopup, setShowInstallPopup] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const moreMenuRef = useRef<HTMLDivElement>(null);
+  const [resizingEnvelopeId, setResizingEnvelopeId] = useState<string | null>(null);
   
   // Gestion de la date sélectionnée (Mois)
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -116,6 +342,63 @@ export default function DashboardPage() {
     });
     return set;
   }, [transactions]);
+
+  const autoWideEnvelopeIds = useMemo(() => {
+    if (!envelopes.length) return new Set<string>();
+    const preset = resolveBentoPreset(settings?.bentoPreset);
+    const presetConfig = getBentoPresetConfig(preset);
+
+    const positiveBudgets = envelopes.filter((env) => env.budget > 0);
+    if (!positiveBudgets.length) return new Set<string>();
+
+    const sortedBudgets = positiveBudgets
+      .map((env) => env.budget)
+      .sort((a, b) => a - b);
+    const medianBudget = sortedBudgets[Math.floor(sortedBudgets.length / 2)] ?? 0;
+    const dynamicThreshold = Math.max(presetConfig.baseThreshold, medianBudget * presetConfig.multiplier);
+
+    const rankedBudgetIds = [...positiveBudgets]
+      .sort((a, b) => b.budget - a.budget)
+      .map((env) => env.id);
+
+    const wideIdSet = new Set(
+      positiveBudgets
+      .filter((env) => env.budget >= dynamicThreshold)
+      .map((env) => env.id)
+    );
+
+    const fallbackWideTiles = Math.max(1, Math.round(envelopes.length * presetConfig.fallbackWideRatio));
+    if (wideIdSet.size < fallbackWideTiles) {
+      for (const id of rankedBudgetIds) {
+        if (wideIdSet.size >= fallbackWideTiles) break;
+        wideIdSet.add(id);
+      }
+    }
+
+    let wideIds = rankedBudgetIds.filter((id) => wideIdSet.has(id));
+
+    const maxWideTiles = Math.max(1, Math.round(envelopes.length * presetConfig.maxWideRatio));
+    if (wideIds.length > maxWideTiles) {
+      wideIds = wideIds.slice(0, maxWideTiles);
+    }
+
+    return new Set(wideIds);
+  }, [envelopes, settings?.bentoPreset]);
+
+  const resolvedTileSizes = useMemo(() => {
+    const map = new Map<string, TileSize>();
+
+    envelopes.forEach((env) => {
+      if (env.tileSize === "small" || env.tileSize === "wide") {
+        map.set(env.id, env.tileSize);
+        return;
+      }
+
+      map.set(env.id, autoWideEnvelopeIds.has(env.id) ? "wide" : "small");
+    });
+
+    return map;
+  }, [autoWideEnvelopeIds, envelopes]);
 
   // --- Calculs globaux ---
   const totalBudgetEnvelopes = envelopes.reduce((acc, env) => acc + env.budget, 0);
@@ -208,15 +491,13 @@ export default function DashboardPage() {
       // ... (local storage sync, pas d'appel firestore) ...
 
       // 1. Settings (Statique)
-      if (!settings) {
-        try {
-            const settingsRef = doc(db, "users", user.uid, "settings", "general");
-            const settingsSnap = await getDoc(settingsRef);
-            if (settingsSnap.exists()) {
-                setSettings(settingsSnap.data() as UserSettings);
-            }
-        } catch(e) { logger.warn("Settings read failed"); }
-      }
+      try {
+          const settingsRef = doc(db, "users", user.uid, "settings", "general");
+          const settingsSnap = await getDoc(settingsRef);
+          if (settingsSnap.exists()) {
+              setSettings(settingsSnap.data() as UserSettings);
+          }
+      } catch(e) { logger.warn("Settings read failed"); }
 
       // 2. Enveloppes
       let envList: Envelope[] = [];
@@ -229,7 +510,8 @@ export default function DashboardPage() {
                 id: doc.id, 
                 ...data, 
                 spent: 0,
-                order: data.order
+                order: data.order,
+                tileSize: data.tileSize === "small" || data.tileSize === "wide" ? data.tileSize : null,
             } as unknown as Envelope); 
           });
           // Tri par ordre
@@ -282,6 +564,65 @@ export default function DashboardPage() {
     fetchData();
   }, [user, currentDate]); // Recharger quand l'utilisateur OU la date change
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleEnvelopeReorder = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setEnvelopes((items) => {
+      const oldIndex = items.findIndex((i) => i.id === active.id);
+      const newIndex = items.findIndex((i) => i.id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return items;
+
+      const reordered = arrayMove(items, oldIndex, newIndex).map((item, idx) => ({
+        ...item,
+        order: idx,
+      }));
+
+      if (user) {
+        const batch = writeBatch(db);
+        reordered.forEach((env, idx) => {
+          batch.update(doc(db, "users", user.uid, "envelopes", env.id), { order: idx });
+        });
+        batch.commit().catch(() => logger.warn("Envelope order save failed"));
+      }
+
+      return reordered;
+    });
+  };
+
+  const handleEnvelopeTileSizeToggle = async (envelopeId: string, nextSize: TileSize) => {
+    if (!user) return;
+    setResizingEnvelopeId(envelopeId);
+
+    setEnvelopes((items) =>
+      items.map((item) =>
+        item.id === envelopeId
+          ? {
+              ...item,
+              tileSize: nextSize,
+            }
+          : item
+      )
+    );
+
+    try {
+      await updateDoc(doc(db, "users", user.uid, "envelopes", envelopeId), { tileSize: nextSize });
+    } catch {
+      logger.warn("Envelope tile size save failed");
+    } finally {
+      setTimeout(() => {
+        setResizingEnvelopeId((current) => (current === envelopeId ? null : current));
+      }, 260);
+    }
+  };
+
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
             if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
@@ -313,12 +654,14 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-app-bg text-app-text pb-20 sm:pb-8">
+    <div className="relative min-h-screen overflow-hidden bg-app-bg text-app-text pb-20 sm:pb-8">
+      <div className="pointer-events-none absolute -left-20 -top-28 h-72 w-72 rounded-full bg-cyan-300/20 blur-3xl dark:bg-cyan-900/20" />
+      <div className="pointer-events-none absolute right-0 top-1/3 h-80 w-80 rounded-full bg-amber-300/20 blur-3xl dark:bg-amber-800/20" />
         
       {/* Header Mobile / Desktop */}
-            <header className="sticky top-0 z-30 bg-app-bg/80 backdrop-blur-md border-b border-app-border px-3 sm:px-6 py-3 sm:py-4 flex justify-between items-center">
+            <header className="glass-panel sticky top-0 z-30 border-b border-app-border/60 px-3 sm:px-6 py-3 sm:py-4 flex justify-between items-center">
                 <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 bg-app-surface rounded-full p-1 border border-app-border">
+                    <div className="glass-panel flex items-center gap-2 rounded-full p-1">
                         <button
                             onClick={() => changeMonth(-1)}
                             className="p-1 rounded-full text-app-text-secondary hover:text-app-text hover:bg-app-surface active:scale-75"
@@ -380,7 +723,7 @@ export default function DashboardPage() {
                             <MoreHorizontal className="h-5 w-5" />
                         </button>
                         {showMoreMenu && (
-                            <div className="absolute right-0 top-full mt-2 w-52 bg-app-surface border border-app-border rounded-xl shadow-xl z-50 overflow-hidden p-1">
+                            <div className="glass-panel-strong absolute right-0 top-full mt-2 w-52 rounded-xl z-50 overflow-hidden p-1">
                                 <button
                                     onClick={() => { router.push('/evolution'); setShowMoreMenu(false); }}
                                     className="flex items-center gap-3 w-full px-3 py-3 text-sm text-app-text-secondary hover:text-amber-500 hover:bg-app-bg rounded-lg transition-colors text-left"
@@ -421,10 +764,10 @@ export default function DashboardPage() {
                 </div>
             </header>
 
-      <main className="max-w-4xl mx-auto p-4 space-y-8">
+      <main className="relative z-10 max-w-5xl mx-auto p-4 space-y-8">
         
         {/* Résumé du Mois (Card Principale) */}
-        <section className="bg-gradient-to-br from-gray-300/70 to-amber-200/40 dark:from-zinc-900 dark:to-amber-950/30 rounded-3xl p-5 relative overflow-hidden shadow-2xl">
+        <section className="glass-panel-strong rounded-3xl p-5 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
             
             <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-1 py-3" aria-live="polite">
@@ -443,7 +786,7 @@ export default function DashboardPage() {
                     <span>Dépenses : {totalSpentEnvelopes.toFixed(2)} €</span>
                     <span>{globalProgress.toFixed(0)}%</span>
                 </div>
-                <div className="h-3 bg-black/10 dark:bg-app-surface rounded-full overflow-hidden">
+                <div className="h-3 rounded-full overflow-hidden bg-black/10 dark:bg-white/10">
                     <div 
                         className={`h-full rounded-full transition-all duration-1000 ease-out ${globalProgress > 100 ? 'bg-red-500' : 'bg-gradient-to-r from-amber-400 to-orange-600'}`}
                         style={{ width: `${Math.min(globalProgress, 100)}%` }}
@@ -591,127 +934,51 @@ export default function DashboardPage() {
         <section>
             <div className="flex justify-between items-end mb-4 px-2">
                 <h3 className="text-lg font-bold text-app-text">Mes Enveloppes</h3>
-                <span className="text-xs text-app-text-secondary">{envelopes.length} catégories</span>
+                <span className="text-xs text-app-text-secondary">{envelopes.length} catégories · glisser-déposer · coin ↘ taille</span>
             </div>
-            
-            <motion.div
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-                initial="hidden"
-                animate="visible"
-                variants={{ visible: { transition: { staggerChildren: 0.06 } } }}
-            >
-                {envelopes.map((env) => {
-                    const progress = env.budget > 0 ? (env.spent / env.budget) * 100 : 0;
-                    const remaining = env.budget - env.spent;
-                    const Icon = ICON_MAP[env.icon] || ShoppingCart;
 
-                    return (
-                        <motion.div
-                            key={env.id}
-                            variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } } }}
-                        >
-                        <div 
-                            onClick={() => router.push(`/envelopes/${env.id}?date=${currentDate.toISOString()}`)}
-                            className="relative bg-gradient-to-br from-gray-50 to-gray-100 dark:from-zinc-950 dark:to-zinc-900 p-4 rounded-xl transition-all duration-200 group cursor-pointer active:scale-95 z-0 border border-gray-200/60 dark:border-0 hover:shadow-[0_8px_24px_rgba(0,0,0,0.10)] dark:hover:shadow-[0_12px_40px_rgba(0,0,0,0.55)] hover:-translate-y-0.5"
-                        >
-                            <div className={`absolute inset-0 rounded-xl ${env.color} opacity-10 dark:opacity-[0.13] pointer-events-none`} />
-                            <div className="relative z-10">
-                                <div className="flex justify-between items-center mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`p-2 rounded-lg border border-app-border ${env.color} text-app-text`}>
-                                            <Icon className="h-5 w-5" />
-                                        </div>
-                                        <h4 className="font-semibold text-base text-app-text truncate max-w-[140px]">{env.name}</h4>
-                                    </div>
-                                    
-                                    {/* Menu des enveloppes */}
-                                    <div className="relative">
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setOpenMenuId(openMenuId === env.id ? null : env.id);
-                                            }}
-                                            className={`p-1.5 rounded-lg transition-colors ${openMenuId === env.id ? 'bg-app-surface text-app-text' : 'text-app-text-secondary hover:text-app-text hover:bg-app-surface/50'}`}
-                                            title="Options"
-                                        >
-                                            <MoreHorizontal className="h-5 w-5" />
-                                        </button>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleEnvelopeReorder}>
+              <SortableContext items={envelopes.map((env) => env.id)} strategy={rectSortingStrategy}>
+                <motion.div
+                    className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4"
+                    initial="hidden"
+                    animate="visible"
+                    variants={{ visible: { transition: { staggerChildren: 0.04 } } }}
+                >
+                    {envelopes.map((env) => {
+                      const tileSize = resolvedTileSizes.get(env.id) ?? "small";
+                      const isWide = tileSize === "wide";
 
-                                        {openMenuId === env.id && (
-                                            <div className="absolute right-0 top-full mt-2 w-56 bg-app-surface border border-app-border rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col p-1">
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setDefaultEnvelopeId(env.id);
-                                                        setIsTxModalOpen(true);
-                                                        setOpenMenuId(null);
-                                                    }}
-                                                    className="flex items-center gap-3 px-3 py-3 text-sm font-bold text-amber-500 hover:bg-app-surface rounded-lg transition-colors text-left"
-                                                >
-                                                    <Plus className="h-4 w-4" /> Nouvelle Dépense
-                                                </button>
-                                                <button 
-                                                     onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        router.push(`/envelopes/${env.id}?date=${currentDate.toISOString()}`);
-                                                     }}
-                                                    className="flex items-center gap-3 px-3 py-3 text-sm text-app-text-secondary hover:text-app-text hover:bg-app-surface rounded-lg transition-colors text-left"
-                                                >
-                                                    <TrendingUp className="h-4 w-4" /> Détails & Historique
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-0.5">
-                                    <div className="flex justify-between items-baseline">
-                                        <span className={`text-xl font-bold ${remaining < 0 ? 'text-red-500' : 'text-app-text'}`}>
-                                            {remaining.toFixed(2)}€
-                                        </span>
-                                        <span className="text-xs text-app-text-secondary">
-                                            sur {env.budget.toFixed(2)}€
-                                        </span>
-                                    </div>
-                                </div>
-                                
-                                {/* Mini Progress Bar interne */}
-                                <div className="mt-2 flex h-1.5 w-full bg-black/10 dark:bg-app-surface rounded-full overflow-hidden">
-                                 {transactions
-                                        .filter(t => t.envelopeId === env.id)
-                                        .map((tx) => (
-                                            <div 
-                                                key={tx.id}
-                                                className={`h-full ${env.color} border-r-2 border-white/20 dark:border-zinc-900/80 box-border`}
-                                                style={{ width: `${(tx.amount / env.budget) * 100}%` }}
-                                                title={`${tx.description || 'Dépense'}: ${Number(tx.amount).toFixed(2)}€`}
-                                            />
-                                        ))}
-                                </div>
-                                {/* Per-envelope forecast mini indicator */}
-                                {isCurrentMonth && envelopeForecasts[env.id] && envelopeForecasts[env.id].hasData && (
-                                  <div className={`mt-1.5 flex items-center gap-1 text-xs ${
-                                    envelopeForecasts[env.id].willExceed ? 'text-red-400' : 'text-emerald-400'
-                                  }`}>
-                                    {envelopeForecasts[env.id].willExceed ? (
-                                      <AlertTriangle className="h-3 w-3 shrink-0" />
-                                    ) : (
-                                      <TrendingUp className="h-3 w-3 shrink-0" />
-                                    )}
-                                    <span>
-                                      {envelopeForecasts[env.id].willExceed
-                                        ? `Dépassement estimé: +${envelopeForecasts[env.id].excessAmount.toFixed(0)}€`
-                                        : `Estimation: ${envelopeForecasts[env.id].projectedRemaining.toFixed(0)}€ restant`
-                                      }
-                                    </span>
-                                  </div>
-                                )}
-                            </div>
-                        </div>
-                        </motion.div>
-                    );
-                })}
-            </motion.div>
+                      return (
+                      <motion.div
+                        key={env.id}
+                        className={getBentoTileSize(isWide)}
+                        variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 24 } } }}
+                      >
+                        <SortableEnvelopeTile
+                          env={env}
+                          transactions={transactions}
+                          openMenuId={openMenuId}
+                          setOpenMenuId={setOpenMenuId}
+                          onOpenTxModal={(envelopeId) => {
+                            setDefaultEnvelopeId(envelopeId);
+                            setIsTxModalOpen(true);
+                          }}
+                          onNavigateDetails={(envelopeId) =>
+                            router.push(`/envelopes/${envelopeId}?date=${currentDate.toISOString()}`)
+                          }
+                          forecast={envelopeForecasts[env.id]}
+                          isCurrentMonth={isCurrentMonth}
+                          tileSize={tileSize}
+                          onToggleTileSize={handleEnvelopeTileSizeToggle}
+                          isResizing={resizingEnvelopeId === env.id}
+                        />
+                      </motion.div>
+                      );
+                    })}
+                </motion.div>
+              </SortableContext>
+            </DndContext>
         </section>
 
       </main>
@@ -728,7 +995,7 @@ export default function DashboardPage() {
       {/* Popup Notification */}
       {showNotifPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4 animate-in fade-in">
-           <div className="w-full max-w-sm bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+           <div className="glass-panel-strong w-full max-w-sm rounded-2xl p-6 relative overflow-hidden">
              
               <div className="absolute top-0 right-0 p-4 opacity-10">
                   <Bell className="w-24 h-24 text-amber-500 -rotate-12 transform translate-x-4 -translate-y-4" />
@@ -768,7 +1035,7 @@ export default function DashboardPage() {
       {/* Install App Popup (iOS) */}
       {showInstallPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4 animate-in fade-in">
-           <div className="w-full max-w-sm bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+           <div className="glass-panel-strong w-full max-w-sm rounded-2xl p-6 relative overflow-hidden">
              
               <div className="absolute top-0 right-0 p-4 opacity-10">
                   <Share className="w-24 h-24 text-blue-500 -rotate-12 transform translate-x-4 -translate-y-4" />

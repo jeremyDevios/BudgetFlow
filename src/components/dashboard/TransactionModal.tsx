@@ -11,7 +11,6 @@ import { collection, addDoc, doc, updateDoc, deleteDoc, increment } from "fireba
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
-import { useHaptics } from "@/hooks/useHaptics";
 
 type Envelope = {
   id: string;
@@ -41,7 +40,6 @@ interface TransactionModalProps {
 
 export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId }: TransactionModalProps) {
   const { user } = useAuth();
-  const { trigger } = useHaptics();
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
@@ -147,12 +145,10 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
 
       refreshData();
       setSaveSuccess(true);
-      trigger("success");
       setTimeout(() => setSaveSuccess(false), 1500);
       onClose();
     } catch (error) {
       logger.sanitizedError("Transaction operation failed", error);
-      trigger("error");
       alert("Erreur lors de l'opération");
     } finally {
       setLoading(false);
@@ -181,11 +177,9 @@ const handleDelete = async () => {
         });
 
         refreshData();
-        trigger("success");
         onClose();
     } catch (error) {
         logger.sanitizedError("Transaction deletion failed", error);
-        trigger("error");
         alert("Erreur lors de la suppression");
     } finally {
         setLoading(false);
@@ -263,11 +257,8 @@ const handleDelete = async () => {
                          key={env.id}
                          type="button"
                          onClick={() => {
-                           if (selectedEnvelopeId !== env.id) {
-                             trigger("selection");
-                           }
-                           setSelectedEnvelopeId(env.id);
-                         }}
+                            setSelectedEnvelopeId(env.id);
+                          }}
                          whileTap={{ scale: 0.95 }}
                          transition={{ type: "spring", stiffness: 400, damping: 25 }}
                          className={`p-3 rounded-lg border text-left flex items-center gap-2 transition-all ${selectedEnvelopeId === env.id ? 'bg-app-surface border-amber-500 ring-1 ring-amber-500' : 'bg-app-bg border-app-border hover:bg-app-surface'}`}

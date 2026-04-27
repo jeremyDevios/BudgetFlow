@@ -11,7 +11,6 @@ const incrementMock = jest.fn();
 const collectionMock = jest.fn();
 const docMock = jest.fn();
 const sanitizedErrorMock = jest.fn();
-const triggerHapticMock = jest.fn();
 
 jest.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
@@ -27,12 +26,6 @@ jest.mock("@/lib/logger", () => ({
   logger: {
     sanitizedError: (...args: unknown[]) => sanitizedErrorMock(...args),
   },
-}));
-
-jest.mock("@/hooks/useHaptics", () => ({
-  useHaptics: () => ({
-    trigger: (...args: unknown[]) => triggerHapticMock(...args),
-  }),
 }));
 
 jest.mock("firebase/firestore", () => ({
@@ -119,7 +112,6 @@ describe("TransactionModal", () => {
     collectionMock.mockReset().mockImplementation((_db, ...path) => ({ path }));
     docMock.mockReset().mockImplementation((_db, ...path) => ({ path }));
     sanitizedErrorMock.mockReset();
-    triggerHapticMock.mockReset();
     onClose.mockReset();
     refreshData.mockReset();
     window.alert = jest.fn();
@@ -167,7 +159,6 @@ describe("TransactionModal", () => {
       { path: ["users", "user-1", "envelopes", "env-2"] },
       { spent: { incrementBy: 25.5 } }
     );
-    expect(triggerHapticMock).toHaveBeenCalledWith("success");
     expect(refreshData).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -214,7 +205,6 @@ describe("TransactionModal", () => {
       { path: ["users", "user-1", "envelopes", "env-1"] },
       { spent: { incrementBy: 20 } }
     );
-    expect(triggerHapticMock).toHaveBeenCalledWith("success");
     expect(refreshData).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -249,44 +239,7 @@ describe("TransactionModal", () => {
       { path: ["users", "user-1", "envelopes", "env-2"] },
       { spent: { incrementBy: -18 } }
     );
-    expect(triggerHapticMock).toHaveBeenCalledWith("success");
     expect(refreshData).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("triggers a selection haptic when changing the envelope", async () => {
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-
-    render(
-      <TransactionModal
-        isOpen
-        onClose={onClose}
-        envelopes={envelopes}
-        refreshData={refreshData}
-        defaultEnvelopeId="env-1"
-      />
-    );
-
-    await user.click(screen.getByRole("button", { name: /transport/i }));
-
-    expect(triggerHapticMock).toHaveBeenCalledWith("selection");
-  });
-
-  it("does not trigger a selection haptic when reselecting the current envelope", async () => {
-    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-
-    render(
-      <TransactionModal
-        isOpen
-        onClose={onClose}
-        envelopes={envelopes}
-        refreshData={refreshData}
-        defaultEnvelopeId="env-1"
-      />
-    );
-
-    await user.click(screen.getByRole("button", { name: /courses/i }));
-
-    expect(triggerHapticMock).not.toHaveBeenCalled();
   });
 });
