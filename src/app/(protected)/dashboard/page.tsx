@@ -205,8 +205,8 @@ function SortableEnvelopeTile({
         <div className={`absolute inset-0 rounded-xl ${env.color} opacity-[0.14] dark:opacity-[0.16] pointer-events-none`} />
 
         <div className="relative z-10 flex h-full flex-col">
-          <div className="mb-2 flex min-h-[2.4rem] items-start justify-between gap-2">
-            <div className="flex min-w-0 items-center gap-2.5">
+          <div className="mb-2 flex min-h-[2.4rem] items-start">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5 pr-1">
               <button
                 onClick={(e) => e.stopPropagation()}
                 className="mt-0.5 shrink-0 cursor-grab active:cursor-grabbing rounded-md p-1 text-app-text-secondary hover:bg-white/20 hover:text-app-text"
@@ -219,48 +219,7 @@ function SortableEnvelopeTile({
               <div className={`p-2 rounded-lg border border-app-border/80 ${env.color} text-app-text`}> 
                 <Icon className="h-5 w-5" />
               </div>
-              <h4 className="text-sm font-semibold leading-tight text-app-text whitespace-normal break-words">{env.name}</h4>
-            </div>
-
-            <div className="relative shrink-0 flex items-center gap-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenMenuId(openMenuId === env.id ? null : env.id);
-                }}
-                className={`rounded-lg p-1.5 transition-colors ${
-                  openMenuId === env.id
-                    ? "bg-app-surface/80 text-app-text"
-                    : "text-app-text-secondary hover:bg-app-surface/60 hover:text-app-text"
-                }`}
-                title="Options"
-              >
-                <MoreHorizontal className="h-5 w-5" />
-              </button>
-
-              {openMenuId === env.id && (
-                <div className="glass-panel-strong absolute right-0 top-full z-50 mt-2 flex w-56 flex-col overflow-hidden rounded-xl p-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenTxModal(env.id);
-                      setOpenMenuId(null);
-                    }}
-                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-bold text-amber-500 transition-colors hover:bg-app-surface/70"
-                  >
-                    <Plus className="h-4 w-4" /> Nouvelle Dépense
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onNavigateDetails(env.id);
-                    }}
-                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-app-text-secondary transition-colors hover:bg-app-surface/70 hover:text-app-text"
-                  >
-                    <TrendingUp className="h-4 w-4" /> Détails & Historique
-                  </button>
-                </div>
-              )}
+              <h4 className="min-w-0 flex-1 text-sm font-semibold leading-tight text-app-text whitespace-normal break-words">{env.name}</h4>
             </div>
           </div>
 
@@ -287,7 +246,7 @@ function SortableEnvelopeTile({
           {isCurrentMonth && forecast && forecast.hasData && (
             <div className={`mt-1.5 flex items-start gap-1 text-xs ${forecast.willExceed ? "text-red-400" : "text-emerald-400"}`}>
               {forecast.willExceed ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <TrendingUp className="h-3 w-3 shrink-0" />}
-              <span>
+              <span className="leading-snug">
                 {forecast.willExceed
                   ? `Dépassement estimé: +${forecast.excessAmount.toFixed(0)}€`
                   : `Estimation: ${forecast.projectedRemaining.toFixed(0)}€ restant`}
@@ -295,7 +254,48 @@ function SortableEnvelopeTile({
             </div>
           )}
 
-          <div className="mt-auto flex justify-end pt-1">
+          <div className="mt-auto flex items-end justify-between pt-1">
+            <div className="relative shrink-0">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpenMenuId(openMenuId === env.id ? null : env.id);
+                }}
+                className={`rounded-lg p-1.5 transition-colors ${
+                  openMenuId === env.id
+                    ? "bg-app-surface/80 text-app-text"
+                    : "text-app-text-secondary hover:bg-app-surface/60 hover:text-app-text"
+                }`}
+                title="Options"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+
+              {openMenuId === env.id && (
+                <div className="glass-panel-strong absolute bottom-full left-0 z-50 mb-2 flex w-56 flex-col overflow-hidden rounded-xl p-1">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenTxModal(env.id);
+                      setOpenMenuId(null);
+                    }}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm font-bold text-amber-500 transition-colors hover:bg-app-surface/70"
+                  >
+                    <Plus className="h-4 w-4" /> Nouvelle Dépense
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigateDetails(env.id);
+                    }}
+                    className="flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm text-app-text-secondary transition-colors hover:bg-app-surface/70 hover:text-app-text"
+                  >
+                    <TrendingUp className="h-4 w-4" /> Détails & Historique
+                  </button>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={(e) => {
                 e.stopPropagation();
