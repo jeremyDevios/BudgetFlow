@@ -227,7 +227,7 @@ describe("DashboardPage", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/Reste: 1233.20 €/i)
+        screen.getByText(/Rest est.: 1233.20 €/i)
       ).toBeInTheDocument()
     );
 
@@ -260,7 +260,7 @@ describe("DashboardPage", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/Surcoût: 400.38 €/i)
+        screen.getByText(/Surcoût est.: 400.38 €/i)
       ).toBeInTheDocument()
     );
     expect(
