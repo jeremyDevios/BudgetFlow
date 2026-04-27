@@ -248,8 +248,8 @@ function SortableEnvelopeTile({
               {forecast.willExceed ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <TrendingUp className="h-3 w-3 shrink-0" />}
               <span className="leading-snug">
                 {forecast.willExceed
-                  ? `Dépassement estimé: +${forecast.excessAmount.toFixed(0)}€`
-                  : `Estimation: ${forecast.projectedRemaining.toFixed(0)}€ restant`}
+                  ? `Surcoût: ${forecast.excessAmount.toFixed(0)}€`
+                  : `Reste: ${forecast.projectedRemaining.toFixed(0)}€`}
               </span>
             </div>
           )}
@@ -853,7 +853,7 @@ export default function DashboardPage() {
                                 >
                                   <div className="flex items-center gap-2 text-red-400 text-sm font-semibold">
                                     <AlertTriangle className="h-4 w-4" />
-                                    <span>Risque de dépassement : +{globalForecast.excessAmount.toFixed(2)} €</span>
+                                    <span>Surcoût: {globalForecast.excessAmount.toFixed(2)} €</span>
                                   </div>
                                   <div className="text-xs text-app-text-secondary">
                                     Projection fin de mois : {globalForecast.projectedTotal.toFixed(2)} € de dépenses
@@ -896,7 +896,7 @@ export default function DashboardPage() {
                                 >
                                   <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
                                     <TrendingUp className="h-4 w-4" />
-                                    <span>Estimation fin de mois : {globalForecast.projectedRemaining.toFixed(2)} € restant</span>
+                                    <span>Reste: {globalForecast.projectedRemaining.toFixed(2)} €</span>
                                   </div>
                                   <div className="text-xs text-app-text-secondary">
                                     Projection dépenses totales : {globalForecast.projectedTotal.toFixed(2)} €
