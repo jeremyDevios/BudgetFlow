@@ -151,6 +151,10 @@ function getBentoTileSize(isWide: boolean) {
   return "col-span-1";
 }
 
+function formatEurosNoDecimals(value: number) {
+  return Math.round(value).toLocaleString("fr-FR");
+}
+
 function SortableEnvelopeTile({
   env,
   transactions,
@@ -196,24 +200,12 @@ function SortableEnvelopeTile({
     <div ref={setNodeRef} style={style}>
       <div
         onClick={() => onNavigateDetails(env.id)}
-        className={`bento-tile relative h-[156px] sm:h-[172px] p-3 sm:p-4 group cursor-pointer active:scale-[0.99] transition-all duration-300 ${tileStateClassName}`}
+        className={`bento-tile relative h-[172px] sm:h-[186px] p-3 sm:p-4 group cursor-pointer active:scale-[0.99] transition-all duration-300 ${tileStateClassName}`}
       >
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleTileSize(env.id, isWide ? "small" : "wide");
-          }}
-          className="absolute bottom-2 right-2 z-20 flex h-9 w-9 items-center justify-center rounded-lg border border-app-border/70 bg-app-surface/80 text-app-text-secondary shadow-sm backdrop-blur-md transition-all hover:border-app-border hover:text-app-text"
-          title={isWide ? "Réduire la tuile" : "Agrandir la tuile"}
-          aria-label={isWide ? `Réduire ${env.name}` : `Agrandir ${env.name}`}
-        >
-          {isWide ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-        </button>
-
         <div className={`absolute inset-0 rounded-xl ${env.color} opacity-[0.14] dark:opacity-[0.16] pointer-events-none`} />
 
         <div className="relative z-10 flex h-full flex-col">
-          <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="mb-2 flex min-h-[2.4rem] items-start justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2.5">
               <button
                 onClick={(e) => e.stopPropagation()}
@@ -227,10 +219,10 @@ function SortableEnvelopeTile({
               <div className={`p-2 rounded-lg border border-app-border/80 ${env.color} text-app-text`}> 
                 <Icon className="h-5 w-5" />
               </div>
-              <h4 className="truncate text-base font-semibold text-app-text">{env.name}</h4>
+              <h4 className="text-sm font-semibold leading-tight text-app-text whitespace-normal break-words">{env.name}</h4>
             </div>
 
-            <div className="relative shrink-0">
+            <div className="relative shrink-0 flex items-center gap-1">
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -273,15 +265,15 @@ function SortableEnvelopeTile({
           </div>
 
           <div className="space-y-0.5">
-            <div className="flex items-baseline justify-between">
-              <span className={`text-2xl font-bold tabular-nums ${remaining < 0 ? "text-red-500" : "text-app-text"}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={`text-xl sm:text-2xl font-bold tabular-nums ${remaining < 0 ? "text-red-500" : "text-app-text"}`}>
                 {remaining.toFixed(2)}€
               </span>
-              <span className="text-xs text-app-text-secondary tabular-nums">sur {env.budget.toFixed(2)}€</span>
+              <span className="shrink-0 whitespace-nowrap text-xs text-app-text-secondary tabular-nums">sur {formatEurosNoDecimals(env.budget)}€</span>
             </div>
           </div>
 
-          <div className="mt-2 flex h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
+          <div className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
             {envTransactions.map((tx) => (
               <div
                 key={tx.id}
@@ -293,7 +285,7 @@ function SortableEnvelopeTile({
           </div>
 
           {isCurrentMonth && forecast && forecast.hasData && (
-            <div className={`mt-1.5 flex items-center gap-1 text-xs ${forecast.willExceed ? "text-red-400" : "text-emerald-400"}`}>
+            <div className={`mt-1.5 flex items-start gap-1 text-xs ${forecast.willExceed ? "text-red-400" : "text-emerald-400"}`}>
               {forecast.willExceed ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <TrendingUp className="h-3 w-3 shrink-0" />}
               <span>
                 {forecast.willExceed
@@ -302,6 +294,20 @@ function SortableEnvelopeTile({
               </span>
             </div>
           )}
+
+          <div className="mt-auto flex justify-end pt-1">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleTileSize(env.id, isWide ? "small" : "wide");
+              }}
+              className="z-20 flex h-8 w-8 items-center justify-center rounded-lg border border-app-border/70 bg-app-surface/80 text-app-text-secondary shadow-sm backdrop-blur-md transition-all hover:border-app-border hover:text-app-text"
+              title={isWide ? "Réduire la tuile" : "Agrandir la tuile"}
+              aria-label={isWide ? `Réduire ${env.name}` : `Agrandir ${env.name}`}
+            >
+              {isWide ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </button>
+          </div>
 
         </div>
       </div>
@@ -932,9 +938,8 @@ export default function DashboardPage() {
 
         {/* Grille des Enveloppes */}
         <section>
-            <div className="flex justify-between items-end mb-4 px-2">
+            <div className="mb-4 px-2">
                 <h3 className="text-lg font-bold text-app-text">Mes Enveloppes</h3>
-                <span className="text-xs text-app-text-secondary">{envelopes.length} catégories · glisser-déposer · coin ↘ taille</span>
             </div>
 
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleEnvelopeReorder}>
