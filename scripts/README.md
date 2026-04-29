@@ -145,6 +145,7 @@ The `generate-sw.js` script:
 This script runs automatically:
 - `npm run dev` - generates before starting development server
 - `npm run build` - generates before building for production
+- `npm start` - regenerates before starting the production server
 
 ## Required Environment Variables
 
