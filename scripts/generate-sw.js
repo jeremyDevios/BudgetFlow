@@ -1,9 +1,9 @@
 const fs = require('fs');
 const path = require('path');
+const { loadEnvFiles } = require('./load-env');
 
 // Charger les variables d'environnement - priorité à .env.local
-require('dotenv').config({ path: '.env.local' });
-require('dotenv').config(); // Fallback sur .env si .env.local n'existe pas
+loadEnvFiles('.env.local', '.env');
 
 const swTemplate = `// Give the service worker access to Firebase Messaging.
 // Note that you can only use Firebase Messaging here. Other Firebase libraries

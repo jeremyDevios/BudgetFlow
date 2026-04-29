@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-require("dotenv").config({ path: ".env.local" });
-require("dotenv").config();
+const { loadEnvFiles } = require("./load-env");
+
+loadEnvFiles(".env.local", ".env");
 
 const defaultPort = process.env.PORT || "8095";
 const triggerUrl = process.env.NOTIFICATION_TRIGGER_URL || `http://127.0.0.1:${defaultPort}/api/notifications/trigger`;
