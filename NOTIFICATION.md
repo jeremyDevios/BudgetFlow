@@ -36,13 +36,14 @@ CRON_SECRET="votre_mot_de_passe_tres_securise_ici"
 
 ## 🛠️ 2. Comment ça marche ?
 
-Le système repose sur une simple page (API Route) de votre site qui, lorsqu'elle est visitée, déclenche l'envoi des notifications.
+Le système repose sur une API Route de votre site qui, lorsqu'elle est appelée, déclenche l'envoi des notifications.
 
 - **Le fichier magique** : `src/app/api/notifications/trigger/route.ts`
-- **L'URL de déclenchement** : `https://votre-site.com/api/notifications/trigger?key=votre_mot_de_passe`
+- **Le script cron recommandé** : `scripts/trigger-notifications.js`
+- **L'URL de déclenchement** : `https://votre-site.com/api/notifications/trigger`
 
 ### Logique du Script
-1. Il vérifie que le paramètre `?key=` correspond à votre `CRON_SECRET`.
+1. Il vérifie que le secret fourni correspond à votre `CRON_SECRET`.
 2. Il récupère tous les utilisateurs ayant activé les notifications dans Firestore.
 3. Pour chaque utilisateur, il regarde s'il a saisi des dépenses **aujourd'hui** (depuis minuit).
 4. Il envoie un message personnalisé :
@@ -68,20 +69,48 @@ Ajoutez ce fichier `vercel.json` à la racine :
   ]
 }
 ```
-*(Note : Vercel n'autorise les crons que sur les projets Pro ou Hobby avec limitations. Vérifiez leur doc).*
+Vercel ne permet pas d'ajouter des en-têtes personnalisés sur ses crons. L'endpoint accepte donc aussi temporairement le mode legacy `?key=` pour rester compatible avec ce cas et avec un test manuel dans le navigateur.
+
+> Recommandation : sur votre propre serveur, préférez le script Node ci-dessous. Il envoie un `POST` avec l'en-tête `x-cron-secret`, ce qui évite d'exposer le secret dans l'URL.
 
 ### Option B : Vous hébergez sur votre propre serveur (VPS, Coolify, etc.)
 Utilisez l'outil `crontab` de votre serveur Linux.
 
-1. Ouvrez l'éditeur cron :
+1. Ajoutez ces variables sur le serveur (dans votre `.env.local` ou votre environnement système) :
+
+```ini
+CRON_SECRET="votre_mot_de_passe_tres_securise_ici"
+NOTIFICATION_TRIGGER_URL="http://127.0.0.1:8095/api/notifications/trigger"
+```
+
+Si votre application n'écoute pas sur `8095`, remplacez l'URL par votre vraie URL interne ou publique.
+
+2. Ouvrez l'éditeur cron :
 ```bash
 crontab -e
 ```
 
-2. Ajoutez la ligne suivante (remplacez l'URL et la clé) :
+3. Ajoutez la ligne suivante :
 ```bash
-# Tous les jours à 19h00 (Heure du serveur)
-0 19 * * * curl "https://votre-domaine.com/api/notifications/trigger?key=votre_mot_de_passe_tres_securise_ici" > /dev/null 2>&1
+# Tous les jours à 19h00 (heure du serveur)
+0 19 * * * cd /chemin/vers/BudgetFlow && /usr/bin/env node scripts/trigger-notifications.js >> /var/log/budgetflow-notifications.log 2>&1
+```
+
+Ce script :
+
+- charge automatiquement `.env.local`,
+- appelle l'API en `POST`,
+- envoie `CRON_SECRET` dans l'en-tête `x-cron-secret`,
+- retourne un code d'erreur non nul si l'appel échoue (important pour diagnostiquer un cron).
+
+### Option B bis : cron avec curl
+
+Si vous préférez rester sur `curl`, utilisez un `POST` avec en-tête :
+
+```bash
+curl -X POST \
+  -H "x-cron-secret: votre_mot_de_passe_tres_securise_ici" \
+  "https://votre-domaine.com/api/notifications/trigger"
 ```
 
 ### Option C : Service externe gratuit
@@ -95,18 +124,30 @@ Utilisez un service comme **cron-job.org** (gratuit).
 
 ## 🧪 4. Tester manuellement
 
-Vous pouvez tester l'envoi immédiat des notifications en ouvrant simplement l'URL dans votre navigateur ou via terminal :
+Vous pouvez tester l'envoi immédiat des notifications :
 
 ```bash
-# En local
-curl "http://localhost:3000/api/notifications/trigger?key=votre_mot_de_passe_tres_securise_ici"
+# Recommande : via le script Node (charge .env.local automatiquement)
+npm run notifications:trigger
+
+# Ou en local avec curl
+curl -X POST \
+  -H "x-cron-secret: votre_mot_de_passe_tres_securise_ici" \
+  "http://127.0.0.1:8095/api/notifications/trigger"
+
+# Compatibilite legacy / test navigateur
+curl "http://127.0.0.1:8095/api/notifications/trigger?key=votre_mot_de_passe_tres_securise_ici"
 ```
 
 Si tout fonctionne, vous recevrez une réponse JSON :
 ```json
 {
   "success": true,
-  "processed": 12,
+  "date": "2026-04-29",
+  "totalUsers": 12,
+  "eligibleUsers": 9,
+  "skippedDisabled": 2,
+  "skippedWithoutToken": 1,
   "sent": 12
 }
 ```
