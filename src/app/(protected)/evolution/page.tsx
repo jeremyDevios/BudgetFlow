@@ -190,6 +190,7 @@ export default function EvolutionPage() {
   const totalSaisie = data.reduce((sum, d) => sum + d.income, 0);
   const totalDepenses = data.reduce((sum, d) => sum + d.totalSpent, 0);
   const totalEconomies = data.reduce((sum, d) => sum + d.remaining, 0);
+  const totalEpargneRealisee = data.reduce((sum, d) => sum + d.savingsObjective, 0);
 
   if (loading) {
      return <div className="min-h-screen bg-app-bg flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
@@ -353,8 +354,10 @@ export default function EvolutionPage() {
       {data.length > 0 && (
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-4 bg-app-surface/30 border border-app-border rounded-2xl text-center">
-            <div className="text-xs text-app-text-secondary">Total saisi</div>
+            <div className="text-xs text-app-text-secondary">Salaire cumulé</div>
             <div className="text-lg font-bold tabular-nums">{totalSaisie.toFixed(2)} €</div>
+            <div className="mt-2 text-xs text-app-text-secondary">Épargne réalisée</div>
+            <div className="text-sm tabular-nums">{totalEpargneRealisee.toFixed(2)} €</div>
           </div>
 
           <div className="p-4 bg-app-surface/30 border border-app-border rounded-2xl text-center">
