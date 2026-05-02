@@ -293,7 +293,6 @@ export default function SettingsPage() {
     monthlyIncome: 0,
     fixedCosts: 0,
     monthlySavings: 0,
-    bentoPreset: "balanced",
   });
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
 
@@ -345,7 +344,6 @@ export default function SettingsPage() {
           monthlyIncome: Number(raw.monthlyIncome ?? 0),
           fixedCosts: Number(raw.fixedCosts ?? 0),
           monthlySavings: Number(raw.monthlySavings ?? 0),
-          bentoPreset: resolveBentoPreset(raw.bentoPreset),
         });
       }
 
@@ -388,19 +386,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleUpdateBentoPreset = async (preset: BentoPreset) => {
-    if (preset === settings.bentoPreset) return;
-    const previous = settings.bentoPreset;
-    setSettings((s) => ({ ...s, bentoPreset: preset }));
-    if (user) {
-      try {
-        await updateDoc(doc(db, "users", user.uid, "settings", "general"), { bentoPreset: preset });
-      } catch (error) {
-        setSettings((s) => ({ ...s, bentoPreset: previous }));
-        logger.sanitizedError("Erreur mise à jour style Bento", error);
-      }
-    }
-  };
+
 
   // ---------------------------------------------------------------------------
   // Envelope handlers
@@ -516,7 +502,7 @@ export default function SettingsPage() {
   // Budget calculations for the overview section
   // ---------------------------------------------------------------------------
 
-  const totalEnvelopes = envelopes.reduce((acc, e) => acc + e.budget, 0);
+  const totalEnvelopes = permanentEnvelopes.reduce((acc, e) => acc + e.budget, 0);
   const remainingBudget =
     settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings - totalEnvelopes;
   const isOverBudget = remainingBudget < 0;
@@ -611,39 +597,7 @@ export default function SettingsPage() {
             <ThemeToggle />
           </div>
 
-          <div className="mt-5 border-t border-app-border pt-5">
-            <h3 className="font-medium text-app-text">Style Bento</h3>
-            <p className="mt-1 text-sm text-app-text-secondary">
-              Choisissez une densité de grille pour l&apos;affichage du tableau de bord.
-            </p>
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {(
-                [
-                  { id: "compact" as const, label: "Compact", description: "Plus de petites tuiles" },
-                  { id: "balanced" as const, label: "Équilibré", description: "Distribution recommandée" },
-                  { id: "airy" as const, label: "Aéré", description: "Plus de tuiles larges" },
-                ] as const
-              ).map((preset) => {
-                const isActive = settings.bentoPreset === preset.id;
-                return (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => handleUpdateBentoPreset(preset.id)}
-                    aria-pressed={isActive}
-                    className={`rounded-xl border px-3 py-3 text-left transition-colors ${
-                      isActive
-                        ? "border-amber-500/80 bg-amber-500/15"
-                        : "border-app-border bg-app-bg hover:bg-app-surface"
-                    }`}
-                  >
-                    <p className="text-sm font-semibold text-app-text">{preset.label}</p>
-                    <p className="mt-1 text-xs text-app-text-secondary">{preset.description}</p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+
         </section>
 
         {/* ── Notifications ── */}
