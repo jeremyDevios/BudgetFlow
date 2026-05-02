@@ -355,9 +355,10 @@ export default function EvolutionPage() {
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-4 bg-app-surface/30 border border-app-border rounded-2xl text-center">
             <div className="text-xs text-app-text-secondary">Salaire cumulé</div>
-            <div className="text-lg font-bold tabular-nums">{totalSaisie.toFixed(2)} €</div>
-            <div className="mt-2 text-xs text-app-text-secondary">Épargne réalisée</div>
-            <div className="text-sm tabular-nums">{totalEpargneRealisee.toFixed(2)} €</div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="text-lg font-bold tabular-nums">{totalSaisie.toFixed(2)} €</div>
+              <div className="text-xs text-app-text-secondary">Épargne&nbsp;: {totalEpargneRealisee.toFixed(2)} €</div>
+            </div>
           </div>
 
           <div className="p-4 bg-app-surface/30 border border-app-border rounded-2xl text-center">
