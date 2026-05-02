@@ -293,6 +293,7 @@ export default function SettingsPage() {
     monthlyIncome: 0,
     fixedCosts: 0,
     monthlySavings: 0,
+    bentoPreset: "balanced",
   });
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
 
@@ -344,6 +345,7 @@ export default function SettingsPage() {
           monthlyIncome: Number(raw.monthlyIncome ?? 0),
           fixedCosts: Number(raw.fixedCosts ?? 0),
           monthlySavings: Number(raw.monthlySavings ?? 0),
+          bentoPreset: resolveBentoPreset(raw.bentoPreset),
         });
       }
 
