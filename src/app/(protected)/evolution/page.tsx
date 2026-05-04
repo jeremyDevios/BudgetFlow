@@ -352,15 +352,7 @@ export default function EvolutionPage() {
       
       {/* Résumé cumulés */}
       {data.length > 0 && (
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 bg-app-surface/30 border border-app-border rounded-2xl text-center">
-            <div className="text-xs text-app-text-secondary">Salaire cumulé</div>
-            <div className="flex items-center justify-center gap-2">
-              <div className="text-lg font-bold tabular-nums">{totalSaisie.toFixed(2)} €</div>
-              <div className="text-xs text-app-text-secondary">Épargne&nbsp;: {totalEpargneRealisee.toFixed(2)} €</div>
-            </div>
-          </div>
-
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 bg-app-surface/30 border border-app-border rounded-2xl text-center">
             <div className="text-xs text-app-text-secondary">Total dépenses</div>
             <div className="text-lg font-bold text-amber-500 tabular-nums">{totalDepenses.toFixed(2)} €</div>
