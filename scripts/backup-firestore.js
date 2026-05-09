@@ -9,6 +9,8 @@
  *   node scripts/backup-firestore.js
  *   node scripts/backup-firestore.js --output ./backups/custom-name.json
  *   node scripts/backup-firestore.js --user <userId>   ← backup d'un seul utilisateur
+ *   node scripts/backup-firestore.js --env prod|dev
+ *   node scripts/backup-firestore.js --project mon-projet-firebase
  *
  * Prérequis :
  *   1. Générer une clé de compte de service dans Firebase Console :
@@ -25,6 +27,7 @@
 const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
+const { resolveFirebaseAdminConfig } = require("./firebase-admin-config");
 
 // ─── Résolution des arguments CLI ────────────────────────────────────────────
 
@@ -33,32 +36,57 @@ const getArg = (flag) => {
   const idx = args.indexOf(flag);
   return idx !== -1 ? args[idx + 1] : null;
 };
+const hasFlag = (flag) => args.includes(flag);
+
+function printHelp() {
+  console.log(`
+🔥 BudgetFlow — Backup Firestore
+
+Usage :
+  node scripts/backup-firestore.js
+  node scripts/backup-firestore.js --user <userId>
+  node scripts/backup-firestore.js --output ./backups/mon-backup.json
+  node scripts/backup-firestore.js --env prod
+  node scripts/backup-firestore.js --project mon-projet-firebase
+
+Options :
+  --user <userId>       Backup d'un utilisateur précis
+  --output <fichier>    Chemin du fichier JSON de sortie
+  --env prod|dev        Choix de la clé scripts/service-account-*.json
+  --project <projectId> Override explicite du projet Firebase
+  --help                Affiche cette aide
+`);
+}
+
+if (hasFlag("--help")) {
+  printHelp();
+  process.exit(0);
+}
 
 const targetUserId = getArg("--user") || null;
 const customOutput = getArg("--output") || null;
+const targetEnv = getArg("--env") || "prod";
+const customProjectId = getArg("--project") || null;
 
 // ─── Initialisation Firebase Admin ───────────────────────────────────────────
 
-const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, "service-account.json");
-
-let credential;
-if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  credential = admin.credential.applicationDefault();
-  console.log("🔑 Credentials : GOOGLE_APPLICATION_CREDENTIALS");
-} else if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-  const serviceAccount = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH, "utf8"));
-  credential = admin.credential.cert(serviceAccount);
-  console.log("🔑 Credentials : service-account.json");
-} else {
-  console.error(
-    "❌ Aucune credential trouvée.\n" +
-    "   → Placez votre clé de service sous scripts/service-account.json\n" +
-    "   → ou définissez GOOGLE_APPLICATION_CREDENTIALS"
-  );
+let resolvedConfig;
+try {
+  resolvedConfig = resolveFirebaseAdminConfig({
+    env: targetEnv,
+    customProjectId,
+  });
+} catch (error) {
+  console.error(`❌ ${error.message}`);
   process.exit(1);
 }
 
-const projectId = process.env.FIREBASE_PROJECT_ID || "budgetflow-86842";
+const { credential, credentialSource, projectId, warnings } = resolvedConfig;
+
+console.log(`🔑 Credentials : ${credentialSource}${credentialSource !== "GOOGLE_APPLICATION_CREDENTIALS" ? `  (--env ${targetEnv})` : ""}`);
+for (const warning of warnings) {
+  console.log(`⚠️ ${warning}`);
+}
 
 if (!admin.apps.length) {
   admin.initializeApp({ credential, projectId });

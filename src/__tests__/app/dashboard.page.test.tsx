@@ -8,7 +8,7 @@ const signOutMock = jest.fn();
 const getDocMock = jest.fn();
 const getDocsMock = jest.fn();
 const useSpendingForecastMock = jest.fn();
-const findExceptionalSpendingInsightMock = jest.fn();
+const useSmartSpendingInsightsMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -53,9 +53,9 @@ jest.mock("@/hooks/useSpendingForecast", () => ({
   useSpendingForecast: (...args: unknown[]) => useSpendingForecastMock(...args),
 }));
 
-jest.mock("@/lib/spendingInsights", () => ({
-  findExceptionalSpendingInsight: (...args: unknown[]) =>
-    findExceptionalSpendingInsightMock(...args),
+jest.mock("@/hooks/useSmartSpendingInsights", () => ({
+  useSmartSpendingInsights: (...args: unknown[]) =>
+    useSmartSpendingInsightsMock(...args),
 }));
 
 jest.mock("@/components/dashboard/SearchDropdown", () => ({
@@ -135,7 +135,13 @@ describe("DashboardPage", () => {
     getDocMock.mockReset();
     getDocsMock.mockReset();
     useSpendingForecastMock.mockReset();
-    findExceptionalSpendingInsightMock.mockReset();
+    useSmartSpendingInsightsMock.mockReset();
+
+    useSmartSpendingInsightsMock.mockReturnValue({
+      globalNotifications: [],
+      envelopeNotifications: {},
+      loading: false,
+    });
 
     getDocMock
       .mockResolvedValueOnce(
@@ -187,7 +193,6 @@ describe("DashboardPage", () => {
       envelopeForecasts: {},
       loading: false,
     });
-    findExceptionalSpendingInsightMock.mockReturnValue(null);
 
     render(<DashboardPage />);
 
@@ -200,7 +205,7 @@ describe("DashboardPage", () => {
     expect(screen.getByTestId("calendar-heatmap")).toBeInTheDocument();
   });
 
-  it("shows the month-end estimate with the exceptional spending warning", async () => {
+  it("shows the month-end estimate with the first smart notification", async () => {
     useSpendingForecastMock.mockReturnValue({
       globalForecast: {
         projectedTotal: 266.8,
@@ -213,14 +218,20 @@ describe("DashboardPage", () => {
       envelopeForecasts: {},
       loading: false,
     });
-    findExceptionalSpendingInsightMock.mockReturnValue({
-      transactionId: "tx-1",
-      transactionName: "Serveur Web",
-      amount: 212.66,
-      envelopeId: "env-1",
-      envelopeName: "Autres",
-      envelopeBudget: 100,
-      budgetRatio: 2.1266,
+    useSmartSpendingInsightsMock.mockReturnValue({
+      globalNotifications: [
+        {
+          id: "smart-1",
+          kind: "exceptional_spending",
+          severity: "warning",
+          scope: "global",
+          title: "Dépense exceptionnelle détectée",
+          description:
+            "\"Serveur Web\" a consommé 213% de l'enveloppe Autres (100.00 €).",
+        },
+      ],
+      envelopeNotifications: {},
+      loading: false,
     });
 
     render(<DashboardPage />);
@@ -234,8 +245,10 @@ describe("DashboardPage", () => {
     expect(
       screen.getByText(/Projection dépenses totales : 266.80 €/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/"Serveur Web"/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Autres/i).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(/Dépense exceptionnelle détectée/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Serveur Web/i)).toBeInTheDocument();
     expect(
       screen.getByText(/213% de l'enveloppe/i)
     ).toBeInTheDocument();
@@ -254,7 +267,6 @@ describe("DashboardPage", () => {
       envelopeForecasts: {},
       loading: false,
     });
-    findExceptionalSpendingInsightMock.mockReturnValue(null);
 
     render(<DashboardPage />);
 

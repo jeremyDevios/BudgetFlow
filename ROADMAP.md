@@ -44,7 +44,8 @@
 - ✅ **Web** — Projection à 90 jours par enveloppe (moyenne journalière sur historique 3 mois)
 - ✅ **Web** — Score de confiance de prévision (basé sur la profondeur d'historique disponible)
 - ✅ **Web** — Alertes de dépassement prévisible par enveloppe
-- ❌ **iOS** — Projections (non encore portées)
+- ✅ **iOS** — Projections portées sur iOS (`SpendingForecastEngine.swift`) — parité complète avec le Web
+- ✅ **iOS** — Détection de dépenses exceptionnelles (`SpendingInsightsEngine.swift`)
 
 ### Notifications
 - ✅ **Web** — Push notifications via Firebase Cloud Messaging (FCM) avec déclenchement serveur quotidien
@@ -56,6 +57,18 @@
 - ✅ **Web** — Activation/désactivation des notifications push et enregistrement token FCM
 - ✅ **iOS** — Indicateur de mode en ligne/hors-ligne et déclenchement manuel de la sync
 
+### Enveloppes Temporaires
+- ✅ **Web + iOS** — Enveloppes à durée limitée (`isTemporary` + `activeMonths`) : visibles uniquement pour les mois sélectionnés
+- ✅ **Web** — Formulaire de création `TemporaryEnvelopeForm` avec sélection de mois
+- ✅ **Web** — Filtrage automatique du dashboard, du Cash Flow Sankey et du total disponible selon le mois courant
+- ✅ **iOS** — `Envelope.isActive(in:)` pour le filtrage par mois
+
+### Widgets & Plateformes étendues
+- ✅ **iOS** — Widget WidgetKit pour l'écran d'accueil (solde disponible, top enveloppe)
+- ✅ **iOS** — Retours haptiques via `HapticsManager.swift`
+- ✅ **iOS** — Localisation FR/EN via `Localization.swift`
+- ✅ **iOS** — App compagnon Apple Watch avec quick-add relayé vers l'iPhone (`WatchConnectivityManager`)
+
 ### Onboarding
 - ✅ **Web + iOS** — Flux d'onboarding multi-étapes (configuration budget + création des premières enveloppes)
 
@@ -63,20 +76,20 @@
 
 ## Phases roadmap
 
-### Phase 1 — Design "Premium Dark" & Bento Layout ❌
-- **Tableau de bord Bento Grid** : tuiles de tailles variées, réorganisables
-- **Glassmorphism** : effets de transparence et bordures subtiles
-- **Nouvelle palette** : dégradés "Ebony & Deep Blue" plus luxueux
+### Phase 1 — Design "Premium Dark" & Bento Layout 🔄
+- 🔄 **Tableau de bord Bento Grid** : le champ `tileSize` (`"small"` / `"wide"` / `null`) est présent dans le modèle d'enveloppe et utilisé pour le layout ; présets Bento implémentés (`bentoPreset` dans `UserSettings`)
+- ❌ **Glassmorphism** : effets de transparence et bordures subtiles
+- ❌ **Nouvelle palette** : dégradés "Ebony & Deep Blue" plus luxueux
 
 ### Phase 2 — Saisie "Zéro Friction" 🔄
 - 🔄 **iOS** FAB rapide implémenté, mais sans auto-complétion basée sur l'historique
+- ✅ **Retour haptique iOS** : `HapticsManager.swift` implémenté — vibrations à la confirmation et en cas d'alerte
 - ❌ **Suggestions intelligentes** : proposer le libellé/montant selon l'historique local lors de la frappe
 - ❌ **Calculatrice intégrée** : évaluation d'expression dans le champ montant (ex: `10+5`)
-- ❌ **Retour haptique iOS** : vibrations distinctes à la confirmation ou en cas d'alerte
 
-### Phase 3 — Intelligence Prédictive 🔄
+### Phase 3 — Intelligence Prédictive ✅
 - ✅ **Web** — Projections à 90 jours implémentées
-- ❌ **iOS** — Prévisions non portées
+- ✅ **iOS** — Prévisions portées (`SpendingForecastEngine.swift`) — parité algorithmique complète
 - ❌ **Alerte de rythme** : avertissement si la cadence de dépense est trop rapide pour le jour du mois
 
 ### Phase 4 — Recherche & Analyse Avancée 🔄
@@ -96,6 +109,10 @@
 ## 5 nouvelles features proposées
 
 ### A. Transactions récurrentes ⭐
+
+> 💡 **Note — Features B (Widget iOS) et E (résumé mensuel) réalisées** : le Widget WidgetKit est implémenté dans `BudgetFlowWidgets/`. Les notifications push Web et les rappels locaux iOS sont en production.
+
+
 Marquer une transaction comme récurrente (mensuelle, hebdomadaire…) pour qu'elle se rejoue automatiquement à la date prévue sans ressaisie. Utile pour les abonnements, le loyer, les remboursements fixes. Simple à modéliser : un champ `recurrence` sur le document transaction et un déclenchement serveur (Web) ou local (iOS, via `UNNotificationCenter`).
 
 ### B. Widgets iOS — Solde disponible

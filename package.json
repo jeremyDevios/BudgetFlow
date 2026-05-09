@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "backup:firestore": "node scripts/backup-firestore.js",
+    "backup:daily": "bash scripts/backup-firestore-daily.sh",
     "notifications:generate-sw": "node scripts/generate-sw.js",
+    "restore:firestore": "node scripts/restore-firestore.js",
+    "restore:full": "bash scripts/restore-firestore-full.sh",
+    "seed:test-data": "node scripts/seed-test-data.js",
     "predev": "npm run notifications:generate-sw",
     "dev": "next dev -p 8091 -H 0.0.0.0",
     "prebuild": "npm run notifications:generate-sw",

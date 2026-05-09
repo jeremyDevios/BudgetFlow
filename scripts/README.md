@@ -24,11 +24,17 @@ Exporte **toute la base Firestore** dans un fichier JSON local.
 # Backup complet (tous les utilisateurs)
 node scripts/backup-firestore.js
 
+# Backup complet prod/dev via clé dédiée
+node scripts/backup-firestore.js --env prod
+
 # Backup d'un utilisateur précis
 node scripts/backup-firestore.js --user <userId>
 
 # Chemin de sortie personnalisé
 node scripts/backup-firestore.js --output ./backups/mon-backup.json
+
+# Forcer explicitement le projet Firebase cible
+node scripts/backup-firestore.js --env prod --project budgetflow-vizualy
 ```
 
 Le fichier est créé dans `backups/backup-YYYY-MM-DDTHH-MM-SS_full.json`  
@@ -46,6 +52,9 @@ Réimporte un backup JSON dans Firestore.
 ```bash
 # Simuler la restauration (sans écrire)
 node scripts/restore-firestore.js --input ./backups/backup-xxx.json
+
+# Simuler en choisissant la clé prod/dev
+node scripts/restore-firestore.js --input ./backups/backup-xxx.json --env prod
 
 # Restauration réelle — écrasement complet des documents existants
 node scripts/restore-firestore.js --input ./backups/backup-xxx.json --confirm --overwrite
@@ -66,6 +75,64 @@ node scripts/restore-firestore.js --input ./backups/backup-xxx.json --project mo
 - Si la cible est le **même projet** que la source → demande de confirmation interactive (`RESTAURER`)
 - `--overwrite` et `--merge` sont mutuellement exclusifs
 - Utilise des **batches Firestore** (rotation automatique à 490 ops/batch)
+- Si `FIREBASE_PROJECT_ID` ne correspond pas au `project_id` du compte de service, le `project_id` du compte de service est prioritaire
+
+---
+
+### `backup-firestore-daily.sh`
+
+Wrapper **cron-friendly** pour exécuter un backup Firestore quotidien complet.
+
+#### Comportement
+
+- crée un backup horodaté dans `backups/daily/<env>/`
+- écrit aussi un log dédié dans `backups/daily/<env>/logs/`
+- purge automatiquement les backups plus vieux que la rétention choisie
+- retourne un code d'erreur non nul si le backup échoue, ce qui est adapté à `crontab`
+
+#### Usage
+
+```bash
+# Backup quotidien prod avec rétention 30 jours
+bash scripts/backup-firestore-daily.sh --env prod
+
+# Changer le dossier de sortie et la rétention
+bash scripts/backup-firestore-daily.sh --env prod --output-dir /var/backups/budgetflow --retention-days 14
+```
+
+#### Exemple crontab
+
+```bash
+# Tous les jours à 02:15
+15 2 * * * cd /chemin/vers/BudgetFlow && /usr/bin/env bash scripts/backup-firestore-daily.sh --env prod >> /var/log/budgetflow-firestore-backup.log 2>&1
+```
+
+Variables utiles côté serveur :
+
+```ini
+BACKUP_ENV=prod
+BACKUP_OUTPUT_DIR=/var/backups/budgetflow
+BACKUP_RETENTION_DAYS=30
+FIREBASE_BACKUP_PROJECT_ID=budgetflow-vizualy
+```
+
+---
+
+### `restore-firestore-full.sh`
+
+Wrapper pour restaurer **toute la base** depuis un backup JSON.
+
+#### Usage
+
+```bash
+# Dry-run complet
+bash scripts/restore-firestore-full.sh --env prod --input ./backups/daily/prod/backup-2026-05-09T02-15-00_full.json
+
+# Restauration réelle complète avec écrasement
+bash scripts/restore-firestore-full.sh --env prod --input ./backups/daily/prod/backup-2026-05-09T02-15-00_full.json --confirm --overwrite
+```
+
+Par défaut, ce wrapper reste en **dry-run** tant que `--confirm` n'est pas fourni.
 
 ---
 

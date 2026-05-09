@@ -4,12 +4,14 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
 import { useSpendingForecast } from "@/hooks/useSpendingForecast";
+import { useSmartSpendingInsights } from "@/hooks/useSmartSpendingInsights";
 import { ForecastTransaction } from "@/lib/forecasting";
 import { collection, doc, getDoc, getDocs, orderBy, query, where, deleteDoc, limit } from "firebase/firestore";
 import { MoveLeft, Trash2, Calendar, Plus, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, AlertTriangle, TrendingUp } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, use } from "react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
+import RotatingSmartInsight from "@/components/dashboard/RotatingSmartInsight";
 import { logger } from "@/lib/logger";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -134,11 +136,23 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
 
   // Forecast computation
   const today = new Date();
+  const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
   const isCurrentMonth = contextDate
     ? (contextDate.getFullYear() === today.getFullYear() && contextDate.getMonth() === today.getMonth())
     : true; // No date param = recent history view, show forecast
 
-  const forecastTransactions: ForecastTransaction[] = transactions.map(tx => ({
+  const currentMonthOnlyTransactions = transactions.filter((transaction) =>
+    typeof transaction.date === "string" && transaction.date.slice(0, 7) === currentMonthKey
+  );
+  const currentMonthSpent = currentMonthOnlyTransactions.reduce(
+    (sum, transaction) => sum + (transaction.amount || 0),
+    0
+  );
+  const currentMonthPercentOfBudget =
+    envelope?.budget > 0 ? (currentMonthSpent / envelope.budget) * 100 : 0;
+  const currentMonthRemaining = (envelope?.budget || 0) - currentMonthSpent;
+
+  const forecastTransactions: ForecastTransaction[] = currentMonthOnlyTransactions.map(tx => ({
     envelopeId: tx.envelopeId || '',
     amount: tx.amount || 0,
     date: tx.date || '',
@@ -157,6 +171,26 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
   });
 
   const forecast = envelope ? envelopeForecasts[envelope.id] : null;
+  const { envelopeNotifications, loading: smartInsightsLoading } =
+    useSmartSpendingInsights({
+      userId: user?.uid ?? null,
+      envelopes: envelope
+        ? [{ id: envelope.id, name: envelope.name || "", budget: envelope.budget || 0 }]
+        : [],
+      currentMonthTransactions: currentMonthOnlyTransactions.map((transaction) => ({
+        id: transaction.id,
+        envelopeId: transaction.envelopeId || "",
+        amount: transaction.amount || 0,
+        date: transaction.date || "",
+        description: transaction.description || "",
+      })),
+      envelopeForecasts,
+      isCurrentMonth,
+    });
+
+  const envelopeInsightNotifications = envelope
+    ? envelopeNotifications[envelope.id] ?? []
+    : [];
 
   const handleDeleteTransaction = async (txId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -231,47 +265,94 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
           transition={{ duration: 0.4 }}
         >
           <div className="bg-app-surface border border-app-border rounded-xl p-4">
-            {forecastLoading ? (
-              <div className="animate-pulse h-6 bg-app-bg rounded w-2/3" />
-            ) : !forecast || !forecast.hasData ? (
-              <div className="flex items-center gap-2 text-app-text-secondary text-sm">
-                <TrendingUp className="h-4 w-4 shrink-0" />
-                <span>Pas assez d&apos;historique pour estimer cette enveloppe</span>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className={`flex items-center gap-2 text-sm font-semibold ${forecast.willExceed ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {forecast.willExceed ? (
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                  ) : (
-                    <TrendingUp className="h-4 w-4 shrink-0" />
-                  )}
-                  <span>
-                    {forecast.willExceed
-                      ? `Risque de dépassement : +${forecast.excessAmount.toFixed(2)} €`
-                      : `Projection fin de mois : ${forecast.projectedSpend.toFixed(2)} € / ${(envelope?.budget || 0).toFixed(2)} €`
-                    }
-                  </span>
-                </div>
+                {forecastLoading ? (
+                  <div className="animate-pulse h-6 bg-app-bg rounded w-2/3" />
+                ) : (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3 text-xs text-app-text-secondary">
+                        <span className="font-medium text-app-text">
+                          Progression réelle du mois
+                        </span>
+                        <span className="tabular-nums">
+                          {currentMonthSpent.toFixed(2)} € / {(envelope?.budget || 0).toFixed(2)} €
+                        </span>
+                      </div>
 
-                {/* Projected progress bar */}
-                <div className="h-1.5 bg-app-bg rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-700 ${
-                      forecast.percentOfBudget > 100 ? 'bg-red-500' :
-                      forecast.percentOfBudget > 80 ? 'bg-amber-500' :
-                      'bg-emerald-500'
-                    }`}
-                    style={{ width: `${Math.min(forecast.percentOfBudget, 100)}%` }}
-                  />
-                </div>
+                      <div
+                        className="h-1.5 bg-app-bg rounded-full overflow-hidden"
+                        aria-label="Progression réelle du mois"
+                      >
+                        <div
+                          className={`h-full rounded-full transition-all duration-700 ${
+                            currentMonthPercentOfBudget > 100
+                              ? "bg-red-500"
+                              : envelope?.color || "bg-emerald-500"
+                          }`}
+                          style={{ width: `${Math.min(currentMonthPercentOfBudget, 100)}%` }}
+                        />
+                      </div>
 
-                <div className="flex justify-between text-xs text-app-text-secondary">
-                  <span>{forecast.percentOfBudget.toFixed(0)}% du budget estimé en fin de mois</span>
-                  <span>Basé sur {forecast.monthsWithData} mois de données</span>
-                </div>
-              </div>
-            )}
+                      <div className="flex justify-between gap-3 text-xs text-app-text-secondary">
+                        <span>{currentMonthPercentOfBudget.toFixed(0)}% du budget consommé à date</span>
+                        <span className="tabular-nums">
+                          Reste réel : {currentMonthRemaining.toFixed(2)} €
+                        </span>
+                      </div>
+                    </div>
+
+                    {!forecast || !forecast.hasData ? (
+                      <div className="flex items-center gap-2 border-t border-app-border pt-3 text-app-text-secondary text-sm">
+                        <TrendingUp className="h-4 w-4 shrink-0" />
+                        <span>Pas assez d&apos;historique pour estimer cette enveloppe</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 border-t border-app-border pt-3">
+                        <div className={`flex items-center gap-2 text-sm font-semibold ${forecast.willExceed ? 'text-red-400' : 'text-emerald-400'}`}>
+                          {forecast.willExceed ? (
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <TrendingUp className="h-4 w-4 shrink-0" />
+                          )}
+                          <span>
+                            {forecast.willExceed
+                              ? `Risque de dépassement : +${forecast.excessAmount.toFixed(2)} €`
+                              : `Projection fin de mois : ${forecast.projectedSpend.toFixed(2)} € / ${(envelope?.budget || 0).toFixed(2)} €`
+                            }
+                          </span>
+                        </div>
+
+                        <div
+                          className="h-1.5 bg-app-bg rounded-full overflow-hidden"
+                          aria-label="Progression estimée fin de mois"
+                        >
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${
+                              forecast.percentOfBudget > 100 ? 'bg-red-500' :
+                              forecast.percentOfBudget > 80 ? 'bg-amber-500' :
+                              'bg-emerald-500'
+                            }`}
+                            style={{ width: `${Math.min(forecast.percentOfBudget, 100)}%` }}
+                          />
+                        </div>
+
+                        <div className="flex justify-between text-xs text-app-text-secondary">
+                          <span>{forecast.percentOfBudget.toFixed(0)}% du budget estimé en fin de mois</span>
+                          <span>Basé sur {forecast.monthsWithData} mois de données</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {smartInsightsLoading ? (
+                      <div className="mt-2 h-16 animate-pulse rounded-xl bg-app-bg" />
+                    ) : (
+                      <RotatingSmartInsight
+                        notifications={envelopeInsightNotifications}
+                        className="mt-2"
+                      />
+                    )}
+                  </div>
+                )}
           </div>
         </motion.div>
       )}

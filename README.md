@@ -7,28 +7,36 @@
 ## Fonctionnalités
 
 - **Gestion par Enveloppes** : Créez des catégories personnalisées (Courses, Loisirs, Shopping, etc.) et allouez-y un budget mensuel.
+- **Enveloppes Temporaires** : Marquez une enveloppe comme temporaire et sélectionnez les mois actifs — elle disparaît automatiquement du dashboard les autres mois.
 - **Dashboard Visuel** :
   - Vue d'ensemble avec solde disponible.
   - Barres de progression par enveloppe avec indicateur de dépassement.
   - Solde restant affiché en temps réel lors de la saisie d'une dépense.
+  - Mise en page Bento Grid avec tailles de tuiles configurables (`small` / `wide`).
 - **Thème clair / sombre** : Bascule adaptative sur Web et iOS, respectant les préférences système.
 - **Mobile First** : Interface pensée pour l'usage quotidien sur smartphone.
 - **Companion Apple Watch** :
   - Consultation rapide du restant du mois et des enveloppes principales.
-  - Ajout rapide d'une depense depuis la montre, relayee vers l'iPhone.
+  - Ajout rapide d'une dépense depuis la montre, relayée vers l'iPhone via `WatchConnectivityManager`.
 - **Historique & Suivi** :
   - Historique global des transactions avec regroupement mensuel.
   - Vue détaillée par enveloppe.
-  - Graphique d'évolution de l'épargne.
+  - Graphique d'évolution de l'épargne (avec cumul salaire).
   - Diagramme Cash Flow (Sankey).
 - **Configuration complète** :
   - Revenus, charges fixes, épargne cible.
   - Indicateurs d'équilibre budgétaire.
+- **Prévisions & Insights** :
+  - Projection à 90 jours par enveloppe (score de confiance, alertes de dépassement prévisible).
+  - Détection de dépenses exceptionnelles.
+  - Disponible sur **Web et iOS** (`SpendingForecastEngine.swift`).
 - **Parcours Fidélité (Gamification)** :
   - Grille heatmap d'activité (Transactions = orange, Connexions = jaune).
   - Badges jalons 7 jours, 14 jours et mois complet via un système SVG en anneau de points.
   - Tuile dashboard unifiée avec la carte "Reste disponible" (responsive, dégradés clair/sombre).
-- **Tests unitaires** : Couverture ≥ 80 % sur la logique métier (Jest sur Web, XCTest sur iOS).
+- **Widget iOS (WidgetKit)** : Solde disponible et enveloppe la plus dépensée sur l'écran d'accueil.
+- **Retours haptiques iOS** : Vibrations distinctes à la confirmation et en cas d'alerte budgétaire.
+- **Tests unitaires** : 16 suites · 200 tests · 94 % de couverture sur la logique métier Web (Jest) ; 25 fichiers XCTest sur iOS.
 
 ## Aperçu de l'interface
 
@@ -182,7 +190,7 @@ src/
 │   ├── (auth)/
 │   │   └── login/page.tsx
 │   ├── (protected)/          # Pages nécessitant authentification
-│   │   ├── dashboard/        # Tableau de bord principal
+│   │   ├── dashboard/        # Tableau de bord principal (bento grid)
 │   │   ├── evolution/        # Graphique d'évolution des économies
 │   │   ├── cashflow/         # Diagramme Sankey des flux financiers
 │   │   ├── history/          # Historique global des transactions
@@ -194,10 +202,50 @@ src/
 │   │   └── validate/transaction/   # Validation serveur
 │   └── layout.tsx
 ├── components/
-│   └── dashboard/
-│       └── TransactionModal.tsx
+│   ├── ThemeToggle.tsx
+│   ├── dashboard/
+│   │   ├── CalendarHeatmap.tsx
+│   │   ├── SearchDropdown.tsx
+│   │   └── TransactionModal.tsx
+│   └── settings/
+│       └── TemporaryEnvelopeForm.tsx
 ├── context/
 │   └── AuthContext.tsx
+├── hooks/
+│   ├── useCalendarHeatmap.ts
+│   ├── useNotifications.ts
+│   └── useSpendingForecast.ts
+├── lib/
+│   ├── firebase.ts           # Configuration Firebase Client
+│   ├── firebaseAdmin.ts      # Configuration Firebase Admin (SSR)
+│   ├── forecasting.ts        # Algorithme de projection 90 jours
+│   ├── spendingInsights.ts   # Détection de dépenses exceptionnelles
+│   ├── validation.ts         # Validateurs réutilisables
+│   ├── logger.ts             # Logger sanitisé (prod/dev)
+│   └── dateUtils.ts          # Utilitaires de dates
+├── types/
+│   └── envelope.ts           # Type Envelope + isEnvelopeActiveForMonth
+└── __tests__/
+    ├── app/                  # Tests API, dashboard, cashflow, login
+    ├── components/           # Tests TransactionModal
+    ├── hooks/                # Tests useSpendingForecast, useCalendarHeatmap
+    ├── lib/                  # Tests validation, dateUtils, logger, forecasting…
+    └── types/                # Tests isEnvelopeActiveForMonth
+
+iOS/BudgetFlowIOS/
+├── BudgetFlow/               # Code source Swift
+│   ├── SpendingForecastEngine.swift   # Prévisions 90 jours (parité Web)
+│   ├── SpendingInsightsEngine.swift   # Dépenses exceptionnelles
+│   ├── HapticsManager.swift           # Retours haptiques
+│   ├── WatchConnectivityManager.swift # Quick-add Apple Watch
+│   ├── Localization.swift             # i18n FR/EN
+│   ├── DesignSystem.swift    # Tokens de design adaptatifs (clair/sombre)
+│   ├── Extensions.swift      # Extensions Color, Calendar
+│   ├── NotificationService.swift
+│   └── SyncService.swift     # Synchronisation Firestore
+├── BudgetFlowWidgets/        # Widget WidgetKit
+├── BudgetFlowAppleWatch Watch App/  # Companion watchOS
+└── BudgetFlowTests/          # 25 fichiers XCTest
 ├── hooks/
 │   └── useNotifications.ts
 ├── lib/
@@ -226,18 +274,25 @@ iOS/BudgetFlow/
 
 ## iOS App
 
-L'application iOS native est **fonctionnelle** et disponible via le dossier `iOS/` du projet.
+L'application iOS native est **fonctionnelle** et disponible via le dossier `iOS/BudgetFlowIOS/` du projet.
 
 ### Fonctionnalités disponibles
 
 - ✅ Toutes les fonctionnalités de base (enveloppes, transactions, historique, évolution, cash flow)
+- ✅ Enveloppes temporaires avec filtrage automatique par mois
+- ✅ Prévisions à 90 jours (`SpendingForecastEngine.swift`) — parité algorithmique avec le Web
+- ✅ Détection de dépenses exceptionnelles (`SpendingInsightsEngine.swift`)
 - ✅ Mode hors-ligne (SwiftData, aucune connexion requise)
 - ✅ Mode en ligne avec synchronisation Firestore
+- ✅ Authentification Firebase (`FirebaseManager` + `AuthView`)
 - ✅ Thème clair / sombre adaptatif
 - ✅ Notifications locales hebdomadaires
-- ✅ Gestures natives (swipe-to-delete, drag & drop, retours haptiques)
+- ✅ Gestures natives (swipe-to-delete, drag & drop)
+- ✅ Retours haptiques (`HapticsManager.swift`)
+- ✅ Widget WidgetKit (écran d'accueil iOS)
+- ✅ Companion Apple Watch avec quick-add relay
+- ✅ Localisation FR/EN (`Localization.swift`)
 - ✅ Accessibilité VoiceOver
-- ⚠️ Authentification Firebase (en cours d'intégration)
 
 ## Sécurité
 

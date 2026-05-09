@@ -53,10 +53,11 @@ import { logger } from "@/lib/logger";
 import { motion, AnimatePresence } from "framer-motion";
 import SearchDropdown from "@/components/dashboard/SearchDropdown";
 import CalendarHeatmap from "@/components/dashboard/CalendarHeatmap";
+import RotatingSmartInsight from "@/components/dashboard/RotatingSmartInsight";
 import { useCalendarHeatmap } from "@/hooks/useCalendarHeatmap";
 import { useSpendingForecast } from "@/hooks/useSpendingForecast";
+import { useSmartSpendingInsights } from "@/hooks/useSmartSpendingInsights";
 import { EnvelopeForecast, ForecastTransaction } from "@/lib/forecasting";
-import { findExceptionalSpendingInsight } from "@/lib/spendingInsights";
 import {
   DndContext,
   closestCenter,
@@ -481,20 +482,24 @@ export default function DashboardPage() {
     isCurrentMonth,
   });
 
-  const exceptionalSpendingInsight = useMemo(
-    () =>
-      isCurrentMonth
-        ? findExceptionalSpendingInsight({
-            transactions,
-            envelopes: visibleEnvelopes.map((envelope) => ({
-              id: envelope.id,
-              name: envelope.name,
-              budget: envelope.budget,
-            })),
-          })
-        : null,
-    [isCurrentMonth, transactions, visibleEnvelopes]
-  );
+  const { globalNotifications, loading: smartInsightsLoading } =
+    useSmartSpendingInsights({
+      userId: user?.uid ?? null,
+      envelopes: visibleEnvelopes.map((envelope) => ({
+        id: envelope.id,
+        name: envelope.name,
+        budget: envelope.budget,
+      })),
+      currentMonthTransactions: transactions.map((transaction) => ({
+        id: transaction.id,
+        envelopeId: transaction.envelopeId,
+        amount: transaction.amount,
+        date: transaction.date,
+        description: transaction.description,
+      })),
+      envelopeForecasts,
+      isCurrentMonth,
+    });
 
   // --- Chargement des données ---
   const fetchData = async () => {
@@ -889,20 +894,8 @@ export default function DashboardPage() {
                                 <span>Pas assez de données pour une estimation (premier mois d&apos;utilisation)</span>
                               </div>
                             ) : globalForecast.willExceed ? (
-                              <div
-                                className={
-                                  exceptionalSpendingInsight
-                                    ? "flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-4"
-                                    : "flex flex-col items-center gap-3"
-                                }
-                              >
-                                <div
-                                  className={
-                                    exceptionalSpendingInsight
-                                      ? "flex flex-1 flex-col items-center gap-1 text-center sm:justify-self-center"
-                                      : "flex w-full max-w-md flex-col items-center gap-1 text-center"
-                                  }
-                                >
+                              <div className="flex w-full flex-col items-center gap-3">
+                                <div className="flex w-full max-w-md flex-col items-center gap-1 text-center">
                                   <div className="flex items-center gap-2 text-red-400 text-sm font-semibold">
                                     <AlertTriangle className="h-4 w-4" />
                                     <span>Surcoût est.: {globalForecast.excessAmount.toFixed(2)} €</span>
@@ -911,41 +904,18 @@ export default function DashboardPage() {
                                     Projection fin de mois : {globalForecast.projectedTotal.toFixed(2)} € de dépenses
                                   </div>
                                 </div>
-                                {exceptionalSpendingInsight && (
-                                  <div className="mx-auto w-full max-w-[18rem] rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-left sm:justify-self-center sm:max-w-[15rem]">
-                                    <div className="flex items-start gap-1.5 text-red-300">
-                                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                                      <div className="space-y-1">
-                                        <div className="text-[11px] leading-snug text-app-text">
-                                          <span className="font-semibold">&quot;{exceptionalSpendingInsight.transactionName}&quot;</span>{" "}
-                                          à {exceptionalSpendingInsight.amount.toFixed(2)} € dans{" "}
-                                          <span className="font-semibold">{exceptionalSpendingInsight.envelopeName}</span>
-                                        </div>
-                                        <div className="text-[10px] leading-snug text-app-text-secondary">
-                                          Cette dépense représente{" "}
-                                          {Math.round(exceptionalSpendingInsight.budgetRatio * 100)}% de l&apos;enveloppe
-                                          ({exceptionalSpendingInsight.envelopeBudget.toFixed(2)} €).
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
+                                {smartInsightsLoading ? (
+                                  <div className="h-16 w-full max-w-[28rem] animate-pulse rounded-xl bg-black/10 dark:bg-white/10" />
+                                ) : (
+                                  <RotatingSmartInsight
+                                    notifications={globalNotifications}
+                                    className="mx-auto w-full max-w-[28rem]"
+                                  />
                                 )}
                               </div>
                             ) : (
-                              <div
-                                className={
-                                  exceptionalSpendingInsight
-                                    ? "flex flex-col gap-3 sm:grid sm:grid-cols-2 sm:items-center sm:gap-4"
-                                    : "flex flex-col items-center gap-3"
-                                }
-                              >
-                                <div
-                                  className={
-                                    exceptionalSpendingInsight
-                                      ? "flex flex-1 flex-col items-center gap-1 text-center sm:justify-self-center"
-                                      : "flex w-full max-w-md flex-col items-center gap-1 text-center"
-                                  }
-                                >
+                              <div className="flex w-full flex-col items-center gap-3">
+                                <div className="flex w-full max-w-md flex-col items-center gap-1 text-center">
                                   <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
                                     <TrendingUp className="h-4 w-4" />
                                     <span>Rest est.: {globalForecast.projectedRemaining.toFixed(2)} €</span>
@@ -954,24 +924,13 @@ export default function DashboardPage() {
                                     Projection dépenses totales : {globalForecast.projectedTotal.toFixed(2)} €
                                   </div>
                                 </div>
-                                {exceptionalSpendingInsight && (
-                                  <div className="mx-auto w-full max-w-[18rem] rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-left sm:justify-self-center sm:max-w-[15rem]">
-                                    <div className="flex items-start gap-1.5 text-red-300">
-                                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                                      <div className="space-y-1">
-                                        <div className="text-[11px] leading-snug text-app-text">
-                                          <span className="font-semibold">&quot;{exceptionalSpendingInsight.transactionName}&quot;</span>{" "}
-                                          à {exceptionalSpendingInsight.amount.toFixed(2)} € dans{" "}
-                                          <span className="font-semibold">{exceptionalSpendingInsight.envelopeName}</span>
-                                        </div>
-                                        <div className="text-[10px] leading-snug text-app-text-secondary">
-                                          Cette dépense représente{" "}
-                                          {Math.round(exceptionalSpendingInsight.budgetRatio * 100)}% de l&apos;enveloppe
-                                          ({exceptionalSpendingInsight.envelopeBudget.toFixed(2)} €).
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </div>
+                                {smartInsightsLoading ? (
+                                  <div className="h-16 w-full max-w-[28rem] animate-pulse rounded-xl bg-black/10 dark:bg-white/10" />
+                                ) : (
+                                  <RotatingSmartInsight
+                                    notifications={globalNotifications}
+                                    className="mx-auto w-full max-w-[28rem]"
+                                  />
                                 )}
                               </div>
                             )}

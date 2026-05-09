@@ -23,6 +23,9 @@
  *   # Cibler un projet Firebase différent (ex : environnement de staging) :
  *   node scripts/restore-firestore.js --input ./backups/... --project autre-projet --confirm --overwrite
  *
+ *   # Choisir la clé de service dev/prod :
+ *   node scripts/restore-firestore.js --input ./backups/... --env prod --confirm --overwrite
+ *
  * Modes d'écriture :
  *   --overwrite   set()     → remplace entièrement chaque document
  *   --merge       set(…, {merge:true}) → fusionne avec les données existantes
@@ -37,6 +40,7 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const { resolveFirebaseAdminConfig } = require("./firebase-admin-config");
 
 // ─── Arguments CLI ────────────────────────────────────────────────────────────
 
@@ -47,9 +51,37 @@ const getArg = (flag) => {
   return idx !== -1 ? args[idx + 1] : null;
 };
 
+function printHelp() {
+  console.log(`
+🔥 BudgetFlow — Restore Firestore
+
+Usage :
+  node scripts/restore-firestore.js --input ./backups/backup.json
+  node scripts/restore-firestore.js --input ./backups/backup.json --confirm --overwrite
+  node scripts/restore-firestore.js --input ./backups/backup.json --confirm --merge
+  node scripts/restore-firestore.js --input ./backups/backup.json --env prod --confirm --overwrite
+
+Options :
+  --input <fichier.json>  Backup JSON à restaurer
+  --user <userId>         Restaure uniquement un utilisateur du backup
+  --env prod|dev          Choix de la clé scripts/service-account-*.json
+  --project <projectId>   Override explicite du projet Firebase
+  --confirm               Active l'écriture réelle
+  --overwrite             Remplace totalement chaque document
+  --merge                 Fusionne avec les documents existants
+  --help                  Affiche cette aide
+`);
+}
+
+if (hasFlag("--help")) {
+  printHelp();
+  process.exit(0);
+}
+
 const inputFile = getArg("--input");
 const targetUserId = getArg("--user") || null;
 const customProjectId = getArg("--project") || null;
+const targetEnv = getArg("--env") || "prod";
 const isDryRun = !hasFlag("--confirm");
 const useOverwrite = hasFlag("--overwrite");
 const useMerge = hasFlag("--merge");
@@ -95,23 +127,23 @@ if (!metadata || !collections) {
 
 // ─── Initialisation Firebase Admin ───────────────────────────────────────────
 
-const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, "service-account.json");
-
-let credential;
-if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-  credential = admin.credential.applicationDefault();
-} else if (fs.existsSync(SERVICE_ACCOUNT_PATH)) {
-  const serviceAccount = JSON.parse(fs.readFileSync(SERVICE_ACCOUNT_PATH, "utf8"));
-  credential = admin.credential.cert(serviceAccount);
-} else {
-  console.error(
-    "❌ Aucune credential trouvée.\n" +
-    "   → Placez votre clé de service sous scripts/service-account.json"
-  );
+let resolvedConfig;
+try {
+  resolvedConfig = resolveFirebaseAdminConfig({
+    env: targetEnv,
+    customProjectId,
+  });
+} catch (error) {
+  console.error(`❌ ${error.message}`);
   process.exit(1);
 }
 
-const projectId = customProjectId || process.env.FIREBASE_PROJECT_ID || "budgetflow-86842";
+const { credential, credentialSource, projectId, warnings } = resolvedConfig;
+
+console.log(`🔑 Credentials : ${credentialSource}${credentialSource !== "GOOGLE_APPLICATION_CREDENTIALS" ? `  (--env ${targetEnv})` : ""}`);
+for (const warning of warnings) {
+  console.log(`⚠️ ${warning}`);
+}
 
 if (!admin.apps.length) {
   admin.initializeApp({ credential, projectId });
