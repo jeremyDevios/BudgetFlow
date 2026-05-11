@@ -118,6 +118,55 @@ FIREBASE_BACKUP_PROJECT_ID=budgetflow-vizualy
 
 ---
 
+### `trigger-notifications-cron.sh`
+
+Wrapper **cron-friendly** pour déclencher `trigger-notifications.js`.
+
+#### Pourquoi ce wrapper ?
+
+`crontab` n'hérite pas du même environnement qu'un terminal interactif :
+
+- le `PATH` est souvent minimal
+- `node` n'est pas toujours trouvé
+- le répertoire courant n'est pas la racine du projet
+
+Ce wrapper :
+
+- force un `PATH` explicite
+- se place à la racine du repo
+- tente de charger `nvm` si disponible
+- exécute ensuite `scripts/trigger-notifications.js`
+
+#### Usage
+
+```bash
+# Utiliser Node trouvé dans PATH / nvm
+bash scripts/trigger-notifications-cron.sh
+
+# Forcer un binaire Node précis
+bash scripts/trigger-notifications-cron.sh --node /opt/homebrew/bin/node
+```
+
+#### Exemple crontab
+
+```bash
+# Toutes les 15 minutes
+*/15 * * * * cd /Users/jeremy/Dev/git/BudgetFlow && /usr/bin/env bash scripts/trigger-notifications-cron.sh >> /var/log/budgetflow-notifications.log 2>&1
+```
+
+Variables utiles côté serveur :
+
+```ini
+CRON_SECRET=your-secret
+NOTIFICATION_TRIGGER_URL=http://127.0.0.1:8095/api/notifications/trigger
+NOTIFICATION_TRIGGER_TIMEOUT_MS=30000
+NODE_BIN=/opt/homebrew/bin/node
+```
+
+> L'application web doit être démarrée côté serveur pour que l'endpoint `/api/notifications/trigger` réponde.
+
+---
+
 ### `restore-firestore-full.sh`
 
 Wrapper pour restaurer **toute la base** depuis un backup JSON.
