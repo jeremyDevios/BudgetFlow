@@ -2,6 +2,19 @@
 
 ---
 
+## Installation des dépendances (serveur de production)
+
+Les scripts s'exécutent directement sur le host (hors Docker). Installer les dépendances
+une seule fois dans le dossier `scripts/` :
+
+```bash
+cd scripts && npm install
+```
+
+> `firebase-admin` est la seule dépendance externe requise.
+
+---
+
 ## Backup & Restore Firestore
 
 ### `backup-firestore.js`
