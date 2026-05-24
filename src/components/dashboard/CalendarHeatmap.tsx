@@ -2,13 +2,21 @@
 
 import type { CSSProperties } from "react";
 
-type DayState = "transaction" | "login-only" | "inactive" | "future";
+import { computeSpendSeverity, computeSpendSeverityFromEnvelopes, type EnvelopeSpendEntry, type SpendSeverity } from "@/lib/calendarSeverity";
+
+// "inactive" and "future" are structural states; the four active states come from severity.
+type ActiveState = SpendSeverity; // "login-only" | "low-spend" | "moderate-spend" | "heavy-spend"
+type DayState = ActiveState | "inactive" | "future";
 type MilestoneState = "achieved" | "in-progress" | "next";
 
 interface CalendarHeatmapProps {
   month: Date;
-  transactionDates: Set<string>;
+  /** Total spend per date string ("YYYY-MM-DD"), summed across all transactions. */
+  dailySpend: Map<string, number>;
+  perEnvelopeSpendPerDay?: Map<string, EnvelopeSpendEntry[]>;
   loginDates: Set<string>;
+  /** Sum of all visible envelope budgets for the month. Used for severity ratio. */
+  monthlyBudget: number;
   loading?: boolean;
   title?: string;
   className?: string;
@@ -28,33 +36,80 @@ const getLocalDateString = (date: Date): string => {
 const getCellState = (
   dateStr: string,
   todayString: string,
-  transactionDates: Set<string>,
-  loginDates: Set<string>
+  dailySpend: Map<string, number>,
+  loginDates: Set<string>,
+  monthlyBudget: number,
+  perEnvelopeSpendPerDay?: Map<string, EnvelopeSpendEntry[]>
 ): DayState => {
   if (dateStr > todayString) return "future";
-  if (transactionDates.has(dateStr)) return "transaction";
-  if (loginDates.has(dateStr)) return "login-only";
-  return "inactive";
+
+  const daySpend = dailySpend.get(dateStr) ?? 0;
+  const hasSpend = daySpend > 0;
+  const hasLogin = loginDates.has(dateStr);
+
+  if (!hasSpend && !hasLogin) return "inactive";
+
+  if (!hasSpend) return "login-only";
+
+  // Per-envelope path (preferred)
+  const entries = perEnvelopeSpendPerDay?.get(dateStr);
+  if (entries && entries.length > 0) {
+    return computeSpendSeverityFromEnvelopes(entries);
+  }
+  // Fallback: global ratio
+  return computeSpendSeverity(daySpend, monthlyBudget);
+};
+
+// Active-state cell style — gradient + border + glow matching the approved tokens.
+// CSS variables (--hm-*) are set in globals.css with light/dark variants.
+const getActiveCellStyle = (state: ActiveState): CSSProperties => {
+  switch (state) {
+    case "login-only":
+      return {
+        background:
+          "linear-gradient(135deg, var(--hm-login-only-from) 0%, var(--hm-login-only-to) 100%)",
+        borderColor: "var(--hm-login-only-border)",
+        borderRadius: "4px",
+        boxShadow:
+          "inset 0 0 4px 1px color-mix(in srgb, var(--hm-login-only-border) 80%, transparent)",
+      };
+    case "low-spend":
+      return {
+        background:
+          "linear-gradient(135deg, var(--hm-low-spend-from) 0%, var(--hm-low-spend-to) 100%)",
+        borderColor: "var(--hm-low-spend-border)",
+        borderRadius: "4px",
+        boxShadow:
+          "0 0 6px 1px var(--hm-low-spend-glow), inset 0 0 4px 1px color-mix(in srgb, var(--hm-low-spend-border) 80%, transparent)",
+      };
+    case "moderate-spend":
+      return {
+        background:
+          "linear-gradient(135deg, var(--hm-moderate-spend-from) 0%, var(--hm-moderate-spend-to) 100%)",
+        borderColor: "var(--hm-moderate-spend-border)",
+        borderRadius: "4px",
+        boxShadow:
+          "0 0 6px 1px var(--hm-moderate-spend-glow), inset 0 0 4px 1px color-mix(in srgb, var(--hm-moderate-spend-border) 80%, transparent)",
+      };
+    case "heavy-spend":
+      return {
+        background:
+          "linear-gradient(135deg, var(--hm-heavy-spend-from) 0%, var(--hm-heavy-spend-to) 100%)",
+        borderColor: "var(--hm-heavy-spend-border)",
+        borderRadius: "4px",
+        boxShadow:
+          "0 0 6px 1px var(--hm-heavy-spend-glow), inset 0 0 4px 1px color-mix(in srgb, var(--hm-heavy-spend-border) 80%, transparent)",
+      };
+  }
 };
 
 const getCellStyle = (state: DayState): CSSProperties => {
   switch (state) {
-    case "transaction":
-      return {
-        background: "var(--hm-orange-bg)",
-        borderColor: "#FF9C54",
-        borderRadius: "4px",
-        boxShadow:
-          "0 0 6px 1px rgba(255, 156, 84, 0.4), inset 0 0 4px 1px rgba(255, 156, 84, 0.8)",
-      };
     case "login-only":
-      return {
-        background: "var(--hm-yellow-bg)",
-        borderColor: "#FFE270",
-        borderRadius: "4px",
-        boxShadow:
-          "0 0 6px 1px rgba(255, 226, 112, 0.4), inset 0 0 4px 1px rgba(255, 226, 112, 0.8)",
-      };
+    case "low-spend":
+    case "moderate-spend":
+    case "heavy-spend":
+      return getActiveCellStyle(state);
     case "inactive":
       return {
         backgroundColor: "var(--hm-cell-inactive-bg)",
@@ -71,9 +126,29 @@ const getCellStyle = (state: DayState): CSSProperties => {
   }
 };
 
+// Returns the CSS color value for the day-number text inside a cell.
+const getDayTextColor = (state: DayState): string => {
+  switch (state) {
+    case "login-only":     return "var(--hm-login-only-text)";
+    case "low-spend":      return "var(--hm-low-spend-text)";
+    case "moderate-spend": return "var(--hm-moderate-spend-text)";
+    case "heavy-spend":    return "var(--hm-heavy-spend-text)";
+    case "inactive":       return "var(--hm-day-num-inactive)";
+    case "future":
+    default:               return "var(--hm-day-num-future)";
+  }
+};
+
+// A day "has activity" if it was logged in OR had spend — used by streak/milestone logic.
+const hasActivity = (
+  dateStr: string,
+  dailySpend: Map<string, number>,
+  loginDates: Set<string>
+): boolean => (dailySpend.get(dateStr) ?? 0) > 0 || loginDates.has(dateStr);
+
 function computeCurrentStreak(
   loginDates: Set<string>,
-  transactionDates: Set<string>,
+  dailySpend: Map<string, number>,
   year: number,
   monthIndex: number,
   daysInMonth: number
@@ -89,7 +164,7 @@ function computeCurrentStreak(
   let streak = 0;
   for (let day = endDay; day >= 1; day--) {
     const dateStr = getLocalDateString(new Date(year, monthIndex, day));
-    if (transactionDates.has(dateStr) || loginDates.has(dateStr)) {
+    if (hasActivity(dateStr, dailySpend, loginDates)) {
       streak++;
     } else {
       break;
@@ -100,7 +175,7 @@ function computeCurrentStreak(
 
 function computeMaxStreak(
   loginDates: Set<string>,
-  transactionDates: Set<string>,
+  dailySpend: Map<string, number>,
   year: number,
   monthIndex: number,
   daysInMonth: number,
@@ -111,7 +186,7 @@ function computeMaxStreak(
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = getLocalDateString(new Date(year, monthIndex, day));
     if (dateStr > todayString) break;
-    if (transactionDates.has(dateStr) || loginDates.has(dateStr)) {
+    if (hasActivity(dateStr, dailySpend, loginDates)) {
       run++;
       if (run > max) max = run;
     } else {
@@ -123,7 +198,7 @@ function computeMaxStreak(
 
 function computeFullMonthProgress(
   loginDates: Set<string>,
-  transactionDates: Set<string>,
+  dailySpend: Map<string, number>,
   year: number,
   monthIndex: number,
   daysInMonth: number,
@@ -135,12 +210,13 @@ function computeFullMonthProgress(
     const dateStr = getLocalDateString(new Date(year, monthIndex, day));
     if (dateStr > todayString) break;
     totalDays++;
-    if (transactionDates.has(dateStr) || loginDates.has(dateStr)) activeDays++;
+    if (hasActivity(dateStr, dailySpend, loginDates)) activeDays++;
   }
   return { activeDays, totalDays };
 }
 
-// SVG dot-ring progress badge
+// ─── SVG dot-ring progress badge ─────────────────────────────────────────────
+
 interface DotRingBadgeProps {
   totalDots: number;
   filledDots: number;
@@ -205,7 +281,10 @@ function DotRingBadge({ totalDots, filledDots, label, state }: DotRingBadgeProps
             r={dotR}
             style={
               isFilled
-                ? { fill: activeColor, filter: `drop-shadow(0 0 3px ${activeColor}) drop-shadow(0 0 5px ${activeColor}90)` }
+                ? {
+                    fill: activeColor,
+                    filter: `drop-shadow(0 0 3px ${activeColor}) drop-shadow(0 0 5px ${activeColor}90)`,
+                  }
                 : { fill: dimColor }
             }
           />
@@ -254,10 +333,35 @@ function badgeStatusText(state: MilestoneState): { text: string; color: string }
   return { text: "En cours", color: "#52525B" };
 }
 
+// ─── Legend dot ───────────────────────────────────────────────────────────────
+
+interface LegendDotProps {
+  fromVar: string;
+  toVar: string;
+}
+function LegendDot({ fromVar, toVar }: LegendDotProps) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        width: "8px",
+        height: "8px",
+        borderRadius: "2px",
+        background: `linear-gradient(135deg, var(${fromVar}) 0%, var(${toVar}) 100%)`,
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function CalendarHeatmap({
   month,
-  transactionDates,
+  dailySpend,
+  perEnvelopeSpendPerDay,
   loginDates,
+  monthlyBudget,
   loading = false,
   title = "Votre Parcours Fidélité",
   className = "",
@@ -271,16 +375,16 @@ export default function CalendarHeatmap({
   const maxGridWidth = columns * 22 + (columns - 1) * 4;
 
   const currentStreak = computeCurrentStreak(
-    loginDates, transactionDates, year, monthIndex, daysInMonth
+    loginDates, dailySpend, year, monthIndex, daysInMonth
   );
   const maxStreak = computeMaxStreak(
-    loginDates, transactionDates, year, monthIndex, daysInMonth, todayString
+    loginDates, dailySpend, year, monthIndex, daysInMonth, todayString
   );
   const { activeDays, totalDays } = computeFullMonthProgress(
-    loginDates, transactionDates, year, monthIndex, daysInMonth, todayString
+    loginDates, dailySpend, year, monthIndex, daysInMonth, todayString
   );
 
-  // --- Milestone states ---
+  // ── Milestone states ──────────────────────────────────────────────────────
 
   // Série 1: 7 consecutive days
   const s1Achieved = maxStreak >= 7;
@@ -289,7 +393,6 @@ export default function CalendarHeatmap({
     : currentStreak > 0
       ? "in-progress"
       : "next";
-  // Progress: current active streak toward 7 (capped at 7 when achieved)
   const s1Filled = s1Achieved ? 7 : Math.min(currentStreak, 7);
 
   // Série 2: 14 consecutive days
@@ -299,18 +402,15 @@ export default function CalendarHeatmap({
     : maxStreak > 0
       ? "in-progress"
       : "next";
-  // Progress: best streak so far toward 14
   const s2Filled = s2Achieved ? 14 : Math.min(maxStreak, 14);
 
-  // Mois Complet: EVERY day of the full month must have activity.
-  // Only achieved when the month is over (totalDays === daysInMonth) AND all days active.
+  // Mois Complet: every day of the full month must have activity
   const monthAchieved = totalDays === daysInMonth && activeDays === daysInMonth;
   const monthState: MilestoneState = monthAchieved
     ? "achieved"
     : activeDays > 0
       ? "in-progress"
       : "next";
-  // Progress: 10 dots, normalized to full month length
   const monthTotalDots = 10;
   const monthFilled = monthAchieved
     ? monthTotalDots
@@ -388,15 +488,11 @@ export default function CalendarHeatmap({
               const state = getCellState(
                 cell.dateStr,
                 todayString,
-                transactionDates,
-                loginDates
+                dailySpend,
+                loginDates,
+                monthlyBudget,
+                perEnvelopeSpendPerDay
               );
-              const dayTextColor: string =
-                state === "transaction" || state === "login-only"
-                  ? "rgba(255,255,255,0.85)"
-                  : state === "inactive"
-                  ? "var(--hm-day-num-inactive)"
-                  : "var(--hm-day-num-future)";
               return (
                 <div
                   key={cell.dateStr}
@@ -414,7 +510,7 @@ export default function CalendarHeatmap({
                       fontSize: "7px",
                       fontWeight: 500,
                       lineHeight: 1,
-                      color: dayTextColor,
+                      color: getDayTextColor(state),
                       fontFamily: "system-ui, -apple-system, sans-serif",
                       userSelect: "none",
                       pointerEvents: "none",
@@ -427,13 +523,27 @@ export default function CalendarHeatmap({
             })}
           </div>
 
-          {/* Legend — only under the cells */}
-          <div className="flex items-center gap-1 flex-wrap text-[10px] self-start">
-            <span className="text-[#F97316] font-semibold">Orange</span>
-            <span className="text-app-text-secondary"> : Dépense</span>
-            <span className="text-app-text-secondary mx-1">·</span>
-            <span className="text-[#EAB308] font-semibold">Jaune</span>
-            <span className="text-app-text-secondary"> : Connexion</span>
+          {/* Legend — semantic states in French */}
+          <div className="flex items-center gap-2 flex-wrap text-[10px] self-start">
+            <span className="flex items-center gap-1" style={{ whiteSpace: "nowrap" }}>
+              <LegendDot fromVar="--hm-login-only-from" toVar="--hm-login-only-to" />
+              <span className="text-app-text-secondary">Connexion</span>
+            </span>
+            <span className="text-app-text-secondary">·</span>
+            <span className="flex items-center gap-1" style={{ whiteSpace: "nowrap" }}>
+              <LegendDot fromVar="--hm-low-spend-from" toVar="--hm-low-spend-to" />
+              <span className="text-app-text-secondary">Faible dépense</span>
+            </span>
+            <span className="text-app-text-secondary">·</span>
+            <span className="flex items-center gap-1" style={{ whiteSpace: "nowrap" }}>
+              <LegendDot fromVar="--hm-moderate-spend-from" toVar="--hm-moderate-spend-to" />
+              <span className="text-app-text-secondary">Dépense modérée</span>
+            </span>
+            <span className="text-app-text-secondary">·</span>
+            <span className="flex items-center gap-1" style={{ whiteSpace: "nowrap" }}>
+              <LegendDot fromVar="--hm-heavy-spend-from" toVar="--hm-heavy-spend-to" />
+              <span className="text-app-text-secondary">Forte dépense</span>
+            </span>
           </div>
         </div>
 
@@ -441,52 +551,52 @@ export default function CalendarHeatmap({
         <div className="flex-1 flex flex-col items-center justify-center gap-2.5 border-l border-app-border">
           <div className="flex flex-col gap-2.5 w-fit">
 
-          {/* Série 1 — 7 jours */}
-          <div className="flex items-center gap-2">
-            <DotRingBadge totalDots={7} filledDots={s1Filled} label="7" state={s1State} />
-            <div>
-              <p className="text-xs font-semibold text-app-text leading-tight">7 jours</p>
-              <p
-                className="text-[10px] leading-tight mt-0.5 font-medium"
-                style={{ color: badgeStatusText(s1State).color }}
-              >
-                {badgeStatusText(s1State).text}
-              </p>
+            {/* Série 1 — 7 jours */}
+            <div className="flex items-center gap-2">
+              <DotRingBadge totalDots={7} filledDots={s1Filled} label="7" state={s1State} />
+              <div>
+                <p className="text-xs font-semibold text-app-text leading-tight">7 jours</p>
+                <p
+                  className="text-[10px] leading-tight mt-0.5 font-medium"
+                  style={{ color: badgeStatusText(s1State).color }}
+                >
+                  {badgeStatusText(s1State).text}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Série 2 — 14 jours */}
-          <div className="flex items-center gap-2">
-            <DotRingBadge totalDots={14} filledDots={s2Filled} label="14" state={s2State} />
-            <div>
-              <p className="text-xs font-semibold text-app-text leading-tight">14 jours</p>
-              <p
-                className="text-[10px] leading-tight mt-0.5 font-medium"
-                style={{ color: badgeStatusText(s2State).color }}
-              >
-                {badgeStatusText(s2State).text}
-              </p>
+            {/* Série 2 — 14 jours */}
+            <div className="flex items-center gap-2">
+              <DotRingBadge totalDots={14} filledDots={s2Filled} label="14" state={s2State} />
+              <div>
+                <p className="text-xs font-semibold text-app-text leading-tight">14 jours</p>
+                <p
+                  className="text-[10px] leading-tight mt-0.5 font-medium"
+                  style={{ color: badgeStatusText(s2State).color }}
+                >
+                  {badgeStatusText(s2State).text}
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* Mois Complet */}
-          <div className="flex items-center gap-2">
-            <DotRingBadge
-              totalDots={monthTotalDots}
-              filledDots={monthFilled}
-              label="♛"
-              state={monthState}
-            />
-            <div>
-              <p className="text-xs font-semibold text-app-text leading-tight">Mois Complet</p>
-              <p
-                className="text-[10px] leading-tight mt-0.5 font-medium"
-                style={{ color: badgeStatusText(monthState).color }}
-              >
-                {badgeStatusText(monthState).text}
-              </p>
+            {/* Mois Complet */}
+            <div className="flex items-center gap-2">
+              <DotRingBadge
+                totalDots={monthTotalDots}
+                filledDots={monthFilled}
+                label="♛"
+                state={monthState}
+              />
+              <div>
+                <p className="text-xs font-semibold text-app-text leading-tight">Mois Complet</p>
+                <p
+                  className="text-[10px] leading-tight mt-0.5 font-medium"
+                  style={{ color: badgeStatusText(monthState).color }}
+                >
+                  {badgeStatusText(monthState).text}
+                </p>
+              </div>
             </div>
-          </div>
 
           </div>
         </div>

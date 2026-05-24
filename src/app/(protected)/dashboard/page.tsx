@@ -364,13 +364,14 @@ export default function DashboardPage() {
     currentDate
   );
 
-  const transactionDates = useMemo(() => {
-    const set = new Set<string>();
+  // Sum all transaction amounts per calendar day ("YYYY-MM-DD") for heatmap severity.
+  const dailySpend = useMemo(() => {
+    const map = new Map<string, number>();
     transactions.forEach((tx) => {
       const day = tx.date?.split("T")[0];
-      if (day) set.add(day);
+      if (day) map.set(day, (map.get(day) ?? 0) + tx.amount);
     });
-    return set;
+    return map;
   }, [transactions]);
 
   // YYYY-MM string for the currently viewed month — used by the temporary-envelope filter.
@@ -383,6 +384,33 @@ export default function DashboardPage() {
     () => envelopes.filter((env) => isEnvelopeActiveForMonth(env, selectedMonth)),
     [envelopes, selectedMonth],
   );
+
+  const envelopeBudgetById = useMemo(() => {
+    const m = new Map<string, number>();
+    visibleEnvelopes.forEach(env => m.set(env.id, env.budget));
+    return m;
+  }, [visibleEnvelopes]);
+
+  const perEnvelopeSpendPerDay = useMemo(() => {
+    const raw = new Map<string, Map<string, number>>();
+    transactions.forEach(tx => {
+      const day = tx.date?.split("T")[0];
+      if (!day || !envelopeBudgetById.has(tx.envelopeId)) return;
+      if (!raw.has(day)) raw.set(day, new Map());
+      const dayMap = raw.get(day)!;
+      dayMap.set(tx.envelopeId, (dayMap.get(tx.envelopeId) ?? 0) + tx.amount);
+    });
+
+    const result = new Map<string, import("@/lib/calendarSeverity").EnvelopeSpendEntry[]>();
+    raw.forEach((envelopeMap, day) => {
+      const entries: import("@/lib/calendarSeverity").EnvelopeSpendEntry[] = [];
+      envelopeMap.forEach((spend, envelopeId) => {
+        entries.push({ spend, budget: envelopeBudgetById.get(envelopeId) ?? 0 });
+      });
+      result.set(day, entries);
+    });
+    return result;
+  }, [transactions, envelopeBudgetById]);
 
   const autoWideEnvelopeIds = useMemo(() => {
     if (!visibleEnvelopes.length) return new Set<string>();
@@ -873,8 +901,10 @@ export default function DashboardPage() {
 
                         <CalendarHeatmap
                             month={currentDate}
-                            transactionDates={transactionDates}
+                            dailySpend={dailySpend}
+                          perEnvelopeSpendPerDay={perEnvelopeSpendPerDay}
                             loginDates={loginDates}
+                            monthlyBudget={totalBudgetEnvelopes}
                             loading={heatmapLoading}
                             embedded
                         />

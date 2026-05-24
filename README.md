@@ -31,7 +31,7 @@
   - Détection de dépenses exceptionnelles.
   - Disponible sur **Web et iOS** (`SpendingForecastEngine.swift`).
 - **Parcours Fidélité (Gamification)** :
-  - Grille heatmap d'activité (Transactions = orange, Connexions = jaune).
+  - Grille heatmap d'activité mensuelle avec code couleur par intensité de dépense.
   - Badges jalons 7 jours, 14 jours et mois complet via un système SVG en anneau de points.
   - Tuile dashboard unifiée avec la carte "Reste disponible" (responsive, dégradés clair/sombre).
 - **Widget iOS (WidgetKit)** : Solde disponible et enveloppe la plus dépensée sur l'écran d'accueil.
@@ -177,6 +177,28 @@ Pour les tests iOS : ouvrir le projet dans Xcode et appuyer sur **⌘U**.
 # Déployer les règles Firestore
 firebase deploy --only firestore:rules
 ```
+
+## Calcul de la couleur des cellules du calendrier
+
+Chaque cellule du calendrier représente un jour passé. Sa couleur est déterminée par le **ratio** entre le total des dépenses du jour et le **budget mensuel total** (somme de tous les budgets d'enveloppes visibles).
+
+| Condition | Couleur | Signification |
+|---|---|---|
+| Aucune dépense, connexion enregistrée | Gris | Connexion |
+| `dépenses du jour / budget mensuel` ≤ 20 % | Jaune | Dépense faible |
+| `dépenses du jour / budget mensuel` ≤ 50 % | Orange | Dépense modérée |
+| `dépenses du jour / budget mensuel` > 50 % | Rouge | Dépense élevée |
+| Aucune dépense, aucune connexion | Gris clair / vide | Jour inactif |
+| Jour futur | Transparent | Non applicable |
+
+**Exemple :**
+
+- Budget mensuel total : 1 000 €
+- Dépenses le 15 mai : 150 € → ratio = 15 % → 🟡 Jaune
+- Dépenses le 20 mai : 350 € → ratio = 35 % → 🟠 Orange
+- Dépenses le 25 mai : 600 € → ratio = 60 % → 🔴 Rouge
+
+Le calcul est implémenté dans `src/lib/calendarSeverity.ts` (Web) et `iOS/BudgetFlowIOS/BudgetFlow/CalendarDaySeverity.swift` (iOS), et les deux restent strictement synchronisés.
 
 ## Notifications
 

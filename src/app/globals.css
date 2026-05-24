@@ -122,6 +122,7 @@
 
 /* CalendarHeatmap mode tokens */
 :root {
+  /* Structural / inactive */
   --hm-cell-inactive-bg: #E4E4E7;
   --hm-day-num-inactive: #9CA3AF;
   --hm-day-num-future: #D1D5DB;
@@ -130,10 +131,37 @@
   --hm-cell-future-border: rgba(0,0,0,0.06);
   --hm-dim-dot: #D1D5DB;
   --hm-section-bg: linear-gradient(135deg, rgba(209,213,219,0.70) 0%, rgba(253,230,138,0.40) 100%);
-  --hm-orange-bg: #D96922;
-  --hm-yellow-bg: #D4A820;
+
+  /* Login-only (white/gray) — light */
+  --hm-login-only-from: #E4E4E7;
+  --hm-login-only-to: #D1D1D6;
+  --hm-login-only-border: #A1A1AA;
+  --hm-login-only-glow: transparent;
+  --hm-login-only-text: #52525B;
+
+  /* Low-spend (yellow) — light */
+  --hm-low-spend-from: #FEF08A;
+  --hm-low-spend-to: #FDE047;
+  --hm-low-spend-border: #FACC15;
+  --hm-low-spend-glow: rgba(234,179,8,0.28);
+  --hm-low-spend-text: #713F12;
+
+  /* Moderate-spend (orange) — light */
+  --hm-moderate-spend-from: #FDBA74;
+  --hm-moderate-spend-to: #FB923C;
+  --hm-moderate-spend-border: #F97316;
+  --hm-moderate-spend-glow: rgba(249,115,22,0.30);
+  --hm-moderate-spend-text: #7C2D12;
+
+  /* Heavy-spend (red) — light */
+  --hm-heavy-spend-from: #FCA5A5;
+  --hm-heavy-spend-to: #F87171;
+  --hm-heavy-spend-border: #EF4444;
+  --hm-heavy-spend-glow: rgba(239,68,68,0.30);
+  --hm-heavy-spend-text: #7F1D1D;
 }
 .dark {
+  /* Structural / inactive */
   --hm-cell-inactive-bg: #27272A;
   --hm-day-num-inactive: #71717A;
   --hm-day-num-future: #3F3F46;
@@ -142,8 +170,34 @@
   --hm-cell-future-border: rgba(255,255,255,0.06);
   --hm-dim-dot: #3A3A3E;
   --hm-section-bg: radial-gradient(ellipse at 20% 60%, rgba(249,115,22,0.09) 0%, var(--color-surface) 65%);
-  --hm-orange-bg: #D05A14;
-  --hm-yellow-bg: #C99B12;
+
+  /* Login-only (white/gray) — dark */
+  --hm-login-only-from: #52525B;
+  --hm-login-only-to: #3F3F46;
+  --hm-login-only-border: #71717A;
+  --hm-login-only-glow: transparent;
+  --hm-login-only-text: rgba(255,255,255,0.85);
+
+  /* Low-spend (yellow) — dark */
+  --hm-low-spend-from: #D4A012;
+  --hm-low-spend-to: #B08A0A;
+  --hm-low-spend-border: #F5D44A;
+  --hm-low-spend-glow: rgba(234,179,8,0.38);
+  --hm-low-spend-text: rgba(255,255,255,0.90);
+
+  /* Moderate-spend (orange) — dark */
+  --hm-moderate-spend-from: #E06520;
+  --hm-moderate-spend-to: #C05010;
+  --hm-moderate-spend-border: #FF9C54;
+  --hm-moderate-spend-glow: rgba(255,156,84,0.40);
+  --hm-moderate-spend-text: rgba(255,255,255,0.85);
+
+  /* Heavy-spend (red) — dark */
+  --hm-heavy-spend-from: #CC2828;
+  --hm-heavy-spend-to: #AA1C1C;
+  --hm-heavy-spend-border: #FCA5A5;
+  --hm-heavy-spend-glow: rgba(248,113,113,0.45);
+  --hm-heavy-spend-text: rgba(255,255,255,0.85);
 }
 .hm-section {
   box-shadow: 0 2px 8px rgba(0,0,0,0.07);
