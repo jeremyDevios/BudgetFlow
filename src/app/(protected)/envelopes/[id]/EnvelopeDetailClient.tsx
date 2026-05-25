@@ -35,6 +35,9 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [transactionToEdit, setTransactionToEdit] = useState<any>(null);
 
+  const txImpact = (tx: { amount: number; isReimbursement?: boolean }) =>
+    tx.isReimbursement ? -tx.amount : tx.amount;
+
   // Date context
   const dateParam = searchParams.get('date');
   const contextDate = dateParam ? new Date(dateParam) : null;
@@ -76,7 +79,12 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
         monthlyTxSnap.forEach((txDoc) => {
           const txData = txDoc.data() as any;
           if (!txData.envelopeId) return;
-          monthlySpentByEnvelope[txData.envelopeId] = (monthlySpentByEnvelope[txData.envelopeId] || 0) + (txData.amount || 0);
+          monthlySpentByEnvelope[txData.envelopeId] =
+            (monthlySpentByEnvelope[txData.envelopeId] || 0) +
+            txImpact({
+              amount: Number(txData.amount || 0),
+              isReimbursement: txData.isReimbursement ?? false,
+            });
         });
 
         const allEnvWithMonthlySpent = allEnvList.map((env) => ({
@@ -145,7 +153,8 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
     typeof transaction.date === "string" && transaction.date.slice(0, 7) === currentMonthKey
   );
   const currentMonthSpent = currentMonthOnlyTransactions.reduce(
-    (sum, transaction) => sum + (transaction.amount || 0),
+    (sum, transaction) =>
+      sum + txImpact({ amount: Number(transaction.amount || 0), isReimbursement: transaction.isReimbursement ?? false }),
     0
   );
   const currentMonthPercentOfBudget =
@@ -156,6 +165,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
     envelopeId: tx.envelopeId || '',
     amount: tx.amount || 0,
     date: tx.date || '',
+    isReimbursement: tx.isReimbursement ?? false,
   }));
 
   const envelopeForForecast = envelope
@@ -183,6 +193,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
         amount: transaction.amount || 0,
         date: transaction.date || "",
         description: transaction.description || "",
+        isReimbursement: transaction.isReimbursement ?? false,
       })),
       envelopeForecasts,
       isCurrentMonth,
@@ -403,7 +414,9 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="font-bold text-red-400">-{tx.amount} €</span>
+                    <span className={`font-bold ${tx.isReimbursement ? "text-emerald-400" : "text-red-400"}`}>
+                      {tx.isReimbursement ? "+" : "-"}{tx.amount} €
+                    </span>
                     <button
                       onClick={(e) => handleDeleteTransaction(tx.id, e)}
                       className="p-2 text-zinc-600 hover:text-red-500 transition-colors z-10"

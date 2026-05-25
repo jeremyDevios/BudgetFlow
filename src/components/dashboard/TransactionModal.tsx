@@ -32,6 +32,7 @@ type Transaction = {
   description: string;
   envelopeId: string;
   date: string;
+  isReimbursement?: boolean;
 };
 
 interface TransactionModalProps {
@@ -52,6 +53,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
   const [description, setDescription] = useState("");
   const [selectedEnvelopeId, setSelectedEnvelopeId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isReimbursement, setIsReimbursement] = useState(false);
 
   // Initialisation à l'ouverture ou au changement de transactionToEdit
   useEffect(() => {
@@ -61,11 +63,13 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             setDescription(transactionToEdit.description);
             setSelectedEnvelopeId(transactionToEdit.envelopeId);
             setDate(transactionToEdit.date.split('T')[0]);
+            setIsReimbursement(transactionToEdit.isReimbursement ?? false);
         } else {
             setAmount("");
             setDescription("");
             setSelectedEnvelopeId(defaultEnvelopeId || envelopes[0]?.id || "");
             setDate(new Date().toISOString().split('T')[0]);
+            setIsReimbursement(false);
         }
     } else {
       setSaveSuccess(false);
@@ -73,8 +77,11 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
   }, [isOpen, transactionToEdit, envelopes, defaultEnvelopeId]);
 
   const selectedEnv = envelopes.find((e) => e.id === selectedEnvelopeId);
+  const existingImpact = transactionToEdit?.envelopeId === selectedEnvelopeId
+    ? (transactionToEdit?.isReimbursement ? -(transactionToEdit?.amount ?? 0) : (transactionToEdit?.amount ?? 0))
+    : 0;
   const envRemaining = selectedEnv
-    ? (selectedEnv.budget ?? 0) - (selectedEnv.spent ?? 0) + (transactionToEdit?.envelopeId === selectedEnvelopeId ? (transactionToEdit?.amount ?? 0) : 0)
+    ? (selectedEnv.budget ?? 0) - (selectedEnv.spent ?? 0) + existingImpact
     : null;
   const remainingRatio = selectedEnv && (selectedEnv.budget ?? 0) > 0 && envRemaining !== null
     ? envRemaining / selectedEnv.budget
@@ -110,6 +117,8 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
     try {
       const numAmount = parseFloat(amount);
       const isEditing = !!transactionToEdit;
+      const txImpact = (tx: { amount: number; isReimbursement?: boolean }) =>
+        tx.isReimbursement ? -tx.amount : tx.amount;
       
       if (isEditing) {
         // --- MODE EDITION ---
@@ -124,23 +133,27 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             description,
             envelopeId: selectedEnvelopeId,
             date: new Date(date).toISOString(),
+          isReimbursement,
         });
 
         // 2. Update Envelopes Spent (Legacy support + consistency)
+        const oldImpact = txImpact({ amount: oldAmount, isReimbursement: oldTx.isReimbursement });
+        const newImpact = txImpact({ amount: numAmount, isReimbursement });
+
         if (oldEnvelopeId === selectedEnvelopeId) {
             // Même enveloppe -> on ajuste la différence
-            if (oldAmount !== numAmount) {
+          if (oldImpact !== newImpact) {
                 await updateDoc(doc(db, "users", user.uid, "envelopes", selectedEnvelopeId), {
-                    spent: increment(numAmount - oldAmount)
+              spent: increment(newImpact - oldImpact)
                 });
             }
         } else {
             // Changement d'enveloppe -> on retire de l'ancienne et ajoute à la nouvelle
             await updateDoc(doc(db, "users", user.uid, "envelopes", oldEnvelopeId), {
-                spent: increment(-oldAmount)
+            spent: increment(-oldImpact)
             });
             await updateDoc(doc(db, "users", user.uid, "envelopes", selectedEnvelopeId), {
-                spent: increment(numAmount)
+            spent: increment(newImpact)
             });
         }
 
@@ -153,13 +166,15 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             description,
             envelopeId: selectedEnvelopeId,
             date: new Date(date).toISOString(),
-            createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          isReimbursement,
         });
 
         // 2. Mettre à jour le 'spent' de l'enveloppe
         const envRef = doc(db, "users", user.uid, "envelopes", selectedEnvelopeId);
+        const spentImpact = isReimbursement ? -numAmount : numAmount;
         await updateDoc(envRef, {
-            spent: increment(numAmount)
+          spent: increment(spentImpact)
         });
       }
 
@@ -192,8 +207,11 @@ const handleDelete = async () => {
         const envRef = doc(db, "users", user.uid, "envelopes", transactionToEdit.envelopeId);
         // On vérifie si l'enveloppe est toujours là pour éviter crash si user a supprimé l'enveloppe entre temps
         // Mais pour simplifier ici :
+        const impactToReverse = transactionToEdit.isReimbursement
+          ? transactionToEdit.amount
+          : -transactionToEdit.amount;
         await updateDoc(envRef, {
-            spent: increment(-transactionToEdit.amount)
+            spent: increment(impactToReverse)
         });
 
         refreshData();
@@ -345,6 +363,28 @@ const handleDelete = async () => {
           </div>
 
           {/* Description & Date */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-app-bg border border-app-border">
+            <div>
+              <p className="text-sm font-medium text-app-text">Remboursement</p>
+              <p className="text-xs text-app-text-secondary">Ce montant sera déduit des dépenses de l&apos;enveloppe</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isReimbursement}
+              onClick={() => setIsReimbursement(v => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                isReimbursement ? "bg-emerald-500" : "bg-app-border"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isReimbursement ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
              <div>
                 <label className="block text-sm font-medium text-app-text-secondary mb-1">Note</label>

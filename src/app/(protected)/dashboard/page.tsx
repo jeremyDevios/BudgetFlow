@@ -149,6 +149,11 @@ interface Transaction {
   description: string;
   envelopeId: string;
   date: string;
+  isReimbursement?: boolean;
+}
+
+function getTransactionImpact(tx: { amount: number; isReimbursement?: boolean }) {
+  return tx.isReimbursement ? -tx.amount : tx.amount;
 }
 
 function getBentoTileSize(isWide: boolean) {
@@ -258,12 +263,17 @@ function SortableEnvelopeTile({
 
           <div className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
             {envTransactions.map((tx) => (
+              (() => {
+                const txAmount = getTransactionImpact(tx);
+                return (
               <div
                 key={tx.id}
                 className={`h-full ${env.color} border-r border-white/25 dark:border-zinc-900/80 box-border`}
-                style={{ width: `${env.budget > 0 ? (tx.amount / env.budget) * 100 : 0}%` }}
-                title={`${tx.description || "Dépense"}: ${Number(tx.amount).toFixed(2)}€`}
+                style={{ width: `${env.budget > 0 ? (Math.abs(txAmount) / env.budget) * 100 : 0}%` }}
+                title={`${tx.description || "Dépense"}: ${Number(txAmount).toFixed(2)}€`}
               />
+                );
+              })()
             ))}
           </div>
 
@@ -369,7 +379,7 @@ export default function DashboardPage() {
     const map = new Map<string, number>();
     transactions.forEach((tx) => {
       const day = tx.date?.split("T")[0];
-      if (day) map.set(day, (map.get(day) ?? 0) + tx.amount);
+      if (day) map.set(day, (map.get(day) ?? 0) + getTransactionImpact(tx));
     });
     return map;
   }, [transactions]);
@@ -398,7 +408,7 @@ export default function DashboardPage() {
       if (!day || !envelopeBudgetById.has(tx.envelopeId)) return;
       if (!raw.has(day)) raw.set(day, new Map());
       const dayMap = raw.get(day)!;
-      dayMap.set(tx.envelopeId, (dayMap.get(tx.envelopeId) ?? 0) + tx.amount);
+      dayMap.set(tx.envelopeId, (dayMap.get(tx.envelopeId) ?? 0) + getTransactionImpact(tx));
     });
 
     const result = new Map<string, import("@/lib/calendarSeverity").EnvelopeSpendEntry[]>();
@@ -500,6 +510,7 @@ export default function DashboardPage() {
     envelopeId: tx.envelopeId || '',
     amount: tx.amount || 0,
     date: tx.date || '',
+    isReimbursement: tx.isReimbursement ?? false,
   }));
 
   const { globalForecast, envelopeForecasts, loading: forecastLoading } = useSpendingForecast({
@@ -524,6 +535,7 @@ export default function DashboardPage() {
         amount: transaction.amount,
         date: transaction.date,
         description: transaction.description,
+        isReimbursement: transaction.isReimbursement ?? false,
       })),
       envelopeForecasts,
       isCurrentMonth,
@@ -623,12 +635,16 @@ export default function DashboardPage() {
                 description: typeof data.description === "string" ? data.description : "",
                 envelopeId: typeof data.envelopeId === "string" ? data.envelopeId : "",
                 date: typeof data.date === "string" ? data.date : "",
+                isReimbursement: data.isReimbursement ?? false,
             });
             
             // Ajouter au 'spent' de l'enveloppe correspondante
             const envIndex = envList.findIndex(e => e.id === data.envelopeId);
             if (envIndex !== -1) {
-                envList[envIndex].spent += (data.amount || 0);
+                envList[envIndex].spent += getTransactionImpact({
+                  amount: Number(data.amount || 0),
+                  isReimbursement: data.isReimbursement ?? false,
+                });
             }
           });
       } catch(e) { logger.warn("Transactions read failed"); }

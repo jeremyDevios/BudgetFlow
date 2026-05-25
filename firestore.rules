@@ -84,7 +84,7 @@ service cloud.firestore {
         && data.icon   is string && data.icon.size()  >= 1 && data.icon.size()  <= 100
         && data.color  is string && data.color.size() >= 1 && data.color.size() <= 100
         && data.budget is number && data.budget > 0         && data.budget <= 1000000
-        && data.spent  is number && data.spent  >= 0        && data.spent  <= 1000000
+        && data.spent  is number && data.spent  >= -1000000  && data.spent  <= 1000000
         && data.order  is number && data.order  >= 0        && data.order  <= 10000
         && (!('tileSize'    in data) || data.tileSize == null || data.tileSize in ['small', 'wide'])
         && (!('createdAt'   in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30))
@@ -95,17 +95,19 @@ service cloud.firestore {
 
     // Transaction: /users/{userId}/transactions/{transactionId}
     // Required: amount, envelopeId, date, createdAt
-    // Optional: description, note (note retained for backward-compat with pre-rename iOS clients)
+    // Optional: description, note (note retained for backward-compat with pre-rename iOS clients),
+    //           isReimbursement (bool; absent = false; when true the amount is a credit, not a debit)
     function isValidTransactionData(data) {
       return data.keys().hasOnly([
-            'amount', 'envelopeId', 'date', 'createdAt', 'description', 'note'
+            'amount', 'envelopeId', 'date', 'createdAt', 'description', 'note', 'isReimbursement'
           ])
         && data.amount     is number && data.amount > 0             && data.amount     <= 1000000
         && data.envelopeId is string && data.envelopeId.size() >= 1 && data.envelopeId.size() <= 128
         && data.date       is string && data.date.size()       >= 1 && data.date.size()       <= 30
         && data.createdAt  is string && data.createdAt.size()  >= 1 && data.createdAt.size()  <= 30
-        && (!('description' in data) || (data.description is string && data.description.size() <= 255))
-        && (!('note'        in data) || (data.note        is string && data.note.size()        <= 255));
+        && (!('description'     in data) || (data.description     is string && data.description.size()     <= 255))
+        && (!('note'            in data) || (data.note            is string && data.note.size()            <= 255))
+        && (!('isReimbursement' in data) || data.isReimbursement is bool);
     }
 
     // Daily activity: /users/{userId}/dailyActivity/{date}
