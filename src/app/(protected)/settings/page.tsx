@@ -322,12 +322,13 @@ export default function SettingsPage() {
   );
 
   // Pre-computed budget headroom fed into the form for the availability indicator.
+  // Temporary envelopes are intentionally excluded from this calculation.
   const budgetAvailable = useMemo(() => {
-    const otherTotal = envelopes
+    const otherTotal = permanentEnvelopes
       .filter((e) => !editingEnvelope || e.id !== editingEnvelope.id)
       .reduce((sum, e) => sum + e.budget, 0);
     return settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings - otherTotal;
-  }, [envelopes, editingEnvelope, settings]);
+  }, [editingEnvelope, permanentEnvelopes, settings]);
 
   // ---------------------------------------------------------------------------
   // Data fetching
