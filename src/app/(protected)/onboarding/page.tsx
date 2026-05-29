@@ -6,6 +6,9 @@ import { db } from "@/lib/firebase";
 import { doc, setDoc, collection, writeBatch } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
+import { DEFAULT_USER_SETTINGS, BudgetSubItem } from "@/types/settings";
+import { normalizeSettingsPayload, computeDetailedTotal } from "@/lib/settingsService";
+import BudgetDetailEditor from "@/components/settings/BudgetDetailEditor";
 import { 
   ArrowRight, 
   Wallet, 
@@ -94,6 +97,18 @@ export default function OnboardingPage() {
   const [fixedCosts, setFixedCosts] = useState("");
   const [savings, setSavings] = useState("");
 
+  // Mode détaillé — Charges fixes
+  const [fixedCostsDetailedEnabled, setFixedCostsDetailedEnabled] = useState(false);
+  const [fixedCostsItems, setFixedCostsItems] = useState<BudgetSubItem[]>([]);
+
+  // Mode détaillé — Épargne
+  const [savingsDetailedEnabled, setSavingsDetailedEnabled] = useState(false);
+  const [savingsItems, setSavingsItems] = useState<BudgetSubItem[]>([]);
+
+  // Visibilité du panneau détaillé dans l'onboarding (séparé du flag métier)
+  const [showFixedCostsDetail, setShowFixedCostsDetail] = useState(false);
+  const [showSavingsDetail, setShowSavingsDetail] = useState(false);
+
   // Étape 2 : Enveloppes (Charges variables)
   const [envelopes, setEnvelopes] = useState<EnvelopeDraft[]>([
     { id: "1", name: "Courses", amount: "300", icon: "ShoppingCart", color: "bg-blue-500" },
@@ -116,8 +131,12 @@ export default function OnboardingPage() {
   // Calcul du reste à vivre (Somme Disponible pour les enveloppes)
   const calculateAvailableAmount = () => {
     const inc = parseFloat(income) || 0;
-    const fix = parseFloat(fixedCosts) || 0;
-    const sav = parseFloat(savings) || 0;
+    const fix = fixedCostsDetailedEnabled
+      ? computeDetailedTotal(fixedCostsItems)
+      : (parseFloat(fixedCosts) || 0);
+    const sav = savingsDetailedEnabled
+      ? computeDetailedTotal(savingsItems)
+      : (parseFloat(savings) || 0);
     
     // Si on est à l'étape 2, on soustrait aussi le total des enveloppes DÉJÀ définies
     let envelopesTotal = 0;
@@ -134,8 +153,12 @@ export default function OnboardingPage() {
   const handleStepChange = () => {
     // Vérification avant de passer à l'étape 2
     const inc = parseFloat(income) || 0;
-    const fix = parseFloat(fixedCosts) || 0;
-    const sav = parseFloat(savings) || 0;
+    const fix = fixedCostsDetailedEnabled
+      ? computeDetailedTotal(fixedCostsItems)
+      : (parseFloat(fixedCosts) || 0);
+    const sav = savingsDetailedEnabled
+      ? computeDetailedTotal(savingsItems)
+      : (parseFloat(savings) || 0);
     const baseAvailable = inc - fix - sav;
 
     if (baseAvailable < 0) {
@@ -167,11 +190,25 @@ export default function OnboardingPage() {
       const batch = writeBatch(db);
       
       // 1. Sauvegarder les settings utilisateur
+      // normalizeSettingsPayload enforces write-time invariants (e.g. flag forced
+      // to false when items list is empty) — same rules as saveSettings.
       const settingsRef = doc(db, "users", user.uid, "settings", "general");
-      batch.set(settingsRef, {
+      const settingsPayload = normalizeSettingsPayload({
+        ...DEFAULT_USER_SETTINGS,
         monthlyIncome: parseFloat(income) || 0,
-        fixedCosts: parseFloat(fixedCosts) || 0,
-        monthlySavings: parseFloat(savings) || 0,
+        fixedCosts: fixedCostsDetailedEnabled
+          ? computeDetailedTotal(fixedCostsItems)
+          : (parseFloat(fixedCosts) || 0),
+        monthlySavings: savingsDetailedEnabled
+          ? computeDetailedTotal(savingsItems)
+          : (parseFloat(savings) || 0),
+        fixedCostsDetailedEnabled,
+        fixedCostsItems,
+        savingsDetailedEnabled,
+        savingsItems,
+      });
+      batch.set(settingsRef, {
+        ...settingsPayload,
         currency: "EUR", // Par défaut
         isOnboarded: true,
         createdAt: new Date().toISOString()
@@ -307,18 +344,69 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                 </label>
-                <div className="relative">
+                {/* Champ montant + bouton Détail sur la même ligne */}
+                <div className="flex gap-2 items-stretch">
+                  <div className="relative flex-1">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
-                    <input 
-                        type="number"
-                        inputMode="decimal"
-                        value={fixedCosts}
-                        onChange={(e) => setFixedCosts(e.target.value)}
-                        className="w-full bg-app-surface border border-app-border rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
-
-                        placeholder="1200"
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={fixedCostsDetailedEnabled ? computeDetailedTotal(fixedCostsItems) : fixedCosts}
+                      onChange={(e) => { if (!fixedCostsDetailedEnabled) setFixedCosts(e.target.value); }}
+                      readOnly={fixedCostsDetailedEnabled}
+                      className={`w-full bg-app-surface border border-app-border rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all ${fixedCostsDetailedEnabled ? "opacity-60 cursor-not-allowed" : ""}`}
+                      placeholder="1200"
                     />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (showFixedCostsDetail) {
+                        // Fermeture : désactive le mode détaillé et reporte le total
+                        setShowFixedCostsDetail(false);
+                        setFixedCostsDetailedEnabled(false);
+                        if (fixedCostsItems.length > 0) {
+                          setFixedCosts(String(computeDetailedTotal(fixedCostsItems)));
+                        }
+                      } else {
+                        // Ouverture : active le mode détaillé, initialise avec une ligne si vide
+                        if (fixedCostsItems.length === 0) {
+                          setFixedCostsItems([{ id: crypto.randomUUID(), name: "", amount: 0 }]);
+                        }
+                        setFixedCostsDetailedEnabled(true);
+                        setShowFixedCostsDetail(true);
+                      }
+                    }}
+                    className={`shrink-0 px-4 rounded-xl border text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                      showFixedCostsDetail
+                        ? "bg-amber-500 border-amber-500 text-white hover:bg-amber-600"
+                        : "bg-app-surface border-app-border text-app-text-secondary hover:border-amber-500/60 hover:text-amber-400"
+                    }`}
+                  >
+                    Détail
+                  </button>
                 </div>
+                {/* Panneau détaillé conditionnel */}
+                {showFixedCostsDetail && (
+                  <BudgetDetailEditor
+                    label="Charges fixes"
+                    category="fixedCosts"
+                    enabled={fixedCostsDetailedEnabled}
+                    items={fixedCostsItems}
+                    aggregateAmount={parseFloat(fixedCosts) || 0}
+                    onEnabledChange={(val) => {
+                      setFixedCostsDetailedEnabled(val);
+                      if (!val) {
+                        // L'utilisateur a désactivé via le toggle interne : on ferme le panneau
+                        setShowFixedCostsDetail(false);
+                        if (fixedCostsItems.length > 0) {
+                          setFixedCosts(String(computeDetailedTotal(fixedCostsItems)));
+                        }
+                      }
+                    }}
+                    onItemsChange={setFixedCostsItems}
+                  />
+                )}
               </div>
 
               {/* Épargne */}
@@ -328,17 +416,69 @@ export default function OnboardingPage() {
                   Objectif d'Épargne Mensuelle
                   <span className="text-xs text-app-text-secondary font-normal">(Crypto, Immo, Livret A...)</span>
                 </label>
-                <div className="relative">
+                {/* Champ montant + bouton Détail sur la même ligne */}
+                <div className="flex gap-2 items-stretch">
+                  <div className="relative flex-1">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
-                    <input 
-                        type="number"
-                        inputMode="decimal"
-                        value={savings}
-                        onChange={(e) => setSavings(e.target.value)}
-                        className="w-full bg-app-surface border border-app-border rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all"
-                        placeholder="300"
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={savingsDetailedEnabled ? computeDetailedTotal(savingsItems) : savings}
+                      onChange={(e) => { if (!savingsDetailedEnabled) setSavings(e.target.value); }}
+                      readOnly={savingsDetailedEnabled}
+                      className={`w-full bg-app-surface border border-app-border rounded-xl py-4 pl-10 pr-4 text-xl focus:ring-2 focus:ring-amber-500 focus:outline-none transition-all ${savingsDetailedEnabled ? "opacity-60 cursor-not-allowed" : ""}`}
+                      placeholder="300"
                     />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (showSavingsDetail) {
+                        // Fermeture : désactive le mode détaillé et reporte le total
+                        setShowSavingsDetail(false);
+                        setSavingsDetailedEnabled(false);
+                        if (savingsItems.length > 0) {
+                          setSavings(String(computeDetailedTotal(savingsItems)));
+                        }
+                      } else {
+                        // Ouverture : active le mode détaillé, initialise avec une ligne si vide
+                        if (savingsItems.length === 0) {
+                          setSavingsItems([{ id: crypto.randomUUID(), name: "", amount: 0 }]);
+                        }
+                        setSavingsDetailedEnabled(true);
+                        setShowSavingsDetail(true);
+                      }
+                    }}
+                    className={`shrink-0 px-4 rounded-xl border text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                      showSavingsDetail
+                        ? "bg-amber-500 border-amber-500 text-white hover:bg-amber-600"
+                        : "bg-app-surface border-app-border text-app-text-secondary hover:border-amber-500/60 hover:text-amber-400"
+                    }`}
+                  >
+                    Détail
+                  </button>
                 </div>
+                {/* Panneau détaillé conditionnel */}
+                {showSavingsDetail && (
+                  <BudgetDetailEditor
+                    label="Épargne"
+                    category="savings"
+                    enabled={savingsDetailedEnabled}
+                    items={savingsItems}
+                    aggregateAmount={parseFloat(savings) || 0}
+                    onEnabledChange={(val) => {
+                      setSavingsDetailedEnabled(val);
+                      if (!val) {
+                        // L'utilisateur a désactivé via le toggle interne : on ferme le panneau
+                        setShowSavingsDetail(false);
+                        if (savingsItems.length > 0) {
+                          setSavings(String(computeDetailedTotal(savingsItems)));
+                        }
+                      }
+                    }}
+                    onItemsChange={setSavingsItems}
+                  />
+                )}
               </div>
             </div>
 

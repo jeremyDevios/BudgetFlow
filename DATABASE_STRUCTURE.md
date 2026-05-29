@@ -55,6 +55,27 @@ Single document with fixed ID `general`.
 | `isOnboarded` | boolean | `UserSettings.isOnboarded` | `false` |
 | `createdAt` | string (ISO 8601) | `UserSettings.createdAt` | Creation date |
 | `updatedAt` | string (ISO 8601) | `UserSettings.updatedAt` | Last update date |
+| `fixedCostsDetailedEnabled` | boolean | `UserSettings.fixedCostsDetailedEnabled` | `false` |
+| `savingsDetailedEnabled` | boolean | `UserSettings.savingsDetailedEnabled` | `false` |
+| `fixedCostsItems` | array\<[FixedCostItem](#fixedcostitem--savingsitem-sub-document-shape)\> | `UserSettings.fixedCostsItems` (SwiftData relational — see below) | `[]` |
+| `savingsItems` | array\<[SavingsItem](#fixedcostitem--savingsitem-sub-document-shape)\> | `UserSettings.savingsItems` (SwiftData relational — see below) | `[]` |
+
+### `FixedCostItem` / `SavingsItem` — Sub-document shape
+
+Both `fixedCostsItems` and `savingsItems` store an array of objects with the following fields. In Firestore these are **embedded arrays**; on iOS they are persisted as a **separate SwiftData model** with a `@Relationship` to `UserSettings` (see [iOS SwiftData Models](#ios-swiftdata-models)).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string (UUID) | Stable identifier for the line item |
+| `name` | string | User-defined label (e.g. `"Loyer"`, `"Livret A"`) |
+| `amount` | number | Amount for this line item |
+
+### Detailed mode business rules
+
+- When `fixedCostsDetailedEnabled` is `true`, the sum of `fixedCostsItems[].amount` is used as the effective fixed-costs total; the global `fixedCosts` field is ignored.
+- When `savingsDetailedEnabled` is `true`, the sum of `savingsItems[].amount` is used as the effective savings total; the global `monthlySavings` field is ignored.
+- **Disabling** detailed mode does **not** delete the items — they are preserved so that re-enabling the mode restores the previous breakdown without data loss.
+- If `fixedCostsItems` (resp. `savingsItems`) is empty, the corresponding `*DetailedEnabled` flag **must** be `false`; the global manual amount is then used instead.
 
 ---
 
@@ -130,6 +151,24 @@ SwiftData mirrors the Firestore schema locally for offline mode. Key mapping not
 - `Transaction.firestoreId` — Firestore document ID (empty string when offline-only)
 - `UserSettings.isOnlineMode` — local flag to determine sync mode (not stored in Firestore)
 - `UserSettings.firebaseUserId` — UID from FirebaseAuth, used as Firestore user document ID
+
+### Detailed-mode sub-categories (iOS relational structure)
+
+The Firestore embedded arrays `fixedCostsItems` and `savingsItems` are modelled on iOS as **dedicated SwiftData models** linked via `@Relationship`:
+
+```
+UserSettings  1 ──────────────────── * FixedCostItem
+                @Relationship(.cascade)   id: String
+                fixedCostsItems            name: String
+                                           amount: Double
+
+UserSettings  1 ──────────────────── * SavingsItem
+                @Relationship(.cascade)   id: String
+                savingsItems               name: String
+                                           amount: Double
+```
+
+`deleteRule: .cascade` ensures sub-items are removed when the parent `UserSettings` record is deleted. During a Firestore → SwiftData sync, the arrays are diffed by `id` to avoid unnecessary deletes and re-inserts.
 
 ### Migration Notes
 

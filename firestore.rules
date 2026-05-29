@@ -38,11 +38,23 @@ service cloud.firestore {
 
     // App settings: /users/{userId}/settings/general
     // Required: monthlyIncome, fixedCosts, monthlySavings, isOnboarded
-    // Optional: currency, bentoPreset, createdAt, updatedAt
+    // Optional: currency, bentoPreset, createdAt, updatedAt,
+    //           fixedCostsDetailedEnabled, fixedCostsItems,
+    //           savingsDetailedEnabled, savingsItems
+    function isValidBudgetSubItems(items) {
+      // Firestore Security Rules cannot iterate a list of maps, so the nested
+      // item shape is validated client-side in settingsService. Rules still
+      // cap the list length to block oversized payloads.
+      return items is list
+        && items.size() <= 100;
+    }
+
     function isValidSettingsData(data) {
       return data.keys().hasOnly([
             'monthlyIncome', 'fixedCosts', 'monthlySavings',
-            'currency', 'bentoPreset', 'isOnboarded', 'createdAt', 'updatedAt'
+           'currency', 'bentoPreset', 'isOnboarded', 'createdAt', 'updatedAt',
+           'fixedCostsDetailedEnabled', 'fixedCostsItems',
+           'savingsDetailedEnabled', 'savingsItems'
           ])
         && data.monthlyIncome  is number && data.monthlyIncome  >= 0 && data.monthlyIncome  <= 100000000
         && data.fixedCosts     is number && data.fixedCosts     >= 0 && data.fixedCosts     <= 100000000
@@ -51,7 +63,13 @@ service cloud.firestore {
         && (!('currency'  in data) || (data.currency  is string && data.currency.size()  >= 1 && data.currency.size()  <= 10))
         && (!('bentoPreset' in data) || data.bentoPreset in ['compact', 'balanced', 'airy'])
         && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30))
-        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 30));
+        && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 30))
+        && (!('fixedCostsDetailedEnabled' in data) || data.fixedCostsDetailedEnabled is bool)
+        && (!('savingsDetailedEnabled' in data) || data.savingsDetailedEnabled is bool)
+        && (!('fixedCostsItems' in data) || isValidBudgetSubItems(data.fixedCostsItems))
+        && (!('savingsItems' in data) || isValidBudgetSubItems(data.savingsItems))
+        && (data.fixedCostsDetailedEnabled != true || (('fixedCostsItems' in data) && data.fixedCostsItems.size() > 0))
+        && (data.savingsDetailedEnabled != true || (('savingsItems' in data) && data.savingsItems.size() > 0));
     }
 
     // Envelope: /users/{userId}/envelopes/{envelopeId}
