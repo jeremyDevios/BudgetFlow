@@ -12,8 +12,16 @@ import {
   addDoc,
   writeBatch,
 } from "firebase/firestore";
+import {
+  loadSettings,
+  saveSettings,
+  resolveDetailedEnabled,
+  computeDetailedTotal,
+  createEmptyBudgetSubItem,
+} from "@/lib/settingsService";
+import { UserSettings, DEFAULT_USER_SETTINGS, BudgetSubItem } from "@/types/settings";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   MoveLeft,
   Plus,
@@ -47,6 +55,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { logger } from "@/lib/logger";
 import ThemeToggle from "@/components/ThemeToggle";
+import BudgetDetailEditor from "@/components/settings/BudgetDetailEditor";
 import { Envelope } from "@/types/envelope";
 import TemporaryEnvelopeForm, {
   ICON_MAP,
@@ -55,26 +64,16 @@ import TemporaryEnvelopeForm, {
 } from "@/components/settings/TemporaryEnvelopeForm";
 
 // ---------------------------------------------------------------------------
-// Types
+// Types  (imported from @/types/settings)
 // ---------------------------------------------------------------------------
-
-type BentoPreset = "compact" | "balanced" | "airy";
-
-interface UserSettings {
-  monthlyIncome: number;
-  fixedCosts: number;
-  monthlySavings: number;
-  bentoPreset: BentoPreset;
-}
+// BentoPreset, UserSettings, and DEFAULT_USER_SETTINGS are defined in
+// src/types/settings.ts and imported above. The local type declarations
+// and resolveBentoPreset helper that used to live here have been removed.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function resolveBentoPreset(value: string | undefined): BentoPreset {
-  if (value === "compact" || value === "balanced" || value === "airy") return value;
-  return "balanced";
-}
 
 function getInitials(displayName: string | null, email: string | null): string {
   if (displayName) {
@@ -289,13 +288,12 @@ export default function SettingsPage() {
   const [imgError, setImgError] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [settings, setSettings] = useState<UserSettings>({
-    monthlyIncome: 0,
-    fixedCosts: 0,
-    monthlySavings: 0,
-    bentoPreset: "balanced",
-  });
+  const [settings, setSettings] = useState<UserSettings>({ ...DEFAULT_USER_SETTINGS });
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
+  const latestDetailedItemsRef = useRef({
+    fixedCostsItems: DEFAULT_USER_SETTINGS.fixedCostsItems,
+    savingsItems: DEFAULT_USER_SETTINGS.savingsItems,
+  });
 
   // Modal state — individual form fields are managed inside TemporaryEnvelopeForm.
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -324,10 +322,16 @@ export default function SettingsPage() {
   // Pre-computed budget headroom fed into the form for the availability indicator.
   // Temporary envelopes are intentionally excluded from this calculation.
   const budgetAvailable = useMemo(() => {
+    const effectiveFixed = settings.fixedCostsDetailedEnabled
+      ? computeDetailedTotal(settings.fixedCostsItems)
+      : settings.fixedCosts;
+    const effectiveSav = settings.savingsDetailedEnabled
+      ? computeDetailedTotal(settings.savingsItems)
+      : settings.monthlySavings;
     const otherTotal = permanentEnvelopes
       .filter((e) => !editingEnvelope || e.id !== editingEnvelope.id)
       .reduce((sum, e) => sum + e.budget, 0);
-    return settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings - otherTotal;
+    return settings.monthlyIncome - effectiveFixed - effectiveSav - otherTotal;
   }, [editingEnvelope, permanentEnvelopes, settings]);
 
   // ---------------------------------------------------------------------------
@@ -337,18 +341,9 @@ export default function SettingsPage() {
   const fetchData = async () => {
     if (!user) return;
     try {
-      // Settings
-      const settingsRef = doc(db, "users", user.uid, "settings", "general");
-      const settingsSnap = await getDoc(settingsRef);
-      if (settingsSnap.exists()) {
-        const raw = settingsSnap.data() as Partial<UserSettings>;
-        setSettings({
-          monthlyIncome: Number(raw.monthlyIncome ?? 0),
-          fixedCosts: Number(raw.fixedCosts ?? 0),
-          monthlySavings: Number(raw.monthlySavings ?? 0),
-          bentoPreset: resolveBentoPreset(raw.bentoPreset),
-        });
-      }
+      // Settings — loadSettings handles defaults and new-field retrocompatibility.
+      const loaded = await loadSettings(user.uid);
+      setSettings(loaded);
 
       // Notification preference
       const userRef = doc(db, "users", user.uid);
@@ -372,6 +367,13 @@ export default function SettingsPage() {
     fetchData();
   }, [user]);
 
+  useEffect(() => {
+    latestDetailedItemsRef.current = {
+      fixedCostsItems: settings.fixedCostsItems,
+      savingsItems: settings.savingsItems,
+    };
+  }, [settings.fixedCostsItems, settings.savingsItems]);
+
   // ---------------------------------------------------------------------------
   // Settings handlers
   // ---------------------------------------------------------------------------
@@ -383,9 +385,106 @@ export default function SettingsPage() {
     const numValue = parseFloat(value) || 0;
     setSettings((s) => ({ ...s, [field]: numValue }));
     if (user) {
-      await updateDoc(doc(db, "users", user.uid, "settings", "general"), {
-        [field]: numValue,
-      });
+      await saveSettings(user.uid, { [field]: numValue });
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Entry points for future detailed-mode UI
+  // (Phase 2 wiring — no UI yet, handlers are ready for Phase 3+)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Toggles a detailed-mode flag.
+   *
+   * The invariant "flag is false when items list is empty" is enforced locally
+   * via `resolveDetailedEnabled` (mirrors the write-time rule in saveSettings).
+   * This prevents the UI from briefly showing an inconsistent state before the
+   * Firestore write completes.
+   */
+  const handleUpdateDetailedEnabled = async (
+    field: "fixedCostsDetailedEnabled" | "savingsDetailedEnabled",
+    value: boolean,
+  ) => {
+    const itemsField =
+      field === "fixedCostsDetailedEnabled" ? "fixedCostsItems" : "savingsItems";
+    const latestItems = latestDetailedItemsRef.current[itemsField];
+    const resolvedValue = resolveDetailedEnabled(value, latestItems);
+    logger.info(`settings.handleUpdateDetailedEnabled: ${field} → ${resolvedValue}`);
+    setSettings((s) => ({ ...s, [field]: resolvedValue }));
+    if (user) {
+      const payload: Partial<UserSettings> = resolvedValue
+        ? ({ [field]: resolvedValue, [itemsField]: latestItems } as Partial<UserSettings>)
+        : ({ [field]: resolvedValue } as Partial<UserSettings>);
+      await saveSettings(user.uid, payload);
+    }
+  };
+
+  const handleToggleDetailedBudget = async (
+    field: "fixedCostsDetailedEnabled" | "savingsDetailedEnabled",
+  ) => {
+    const itemsField =
+      field === "fixedCostsDetailedEnabled" ? "fixedCostsItems" : "savingsItems";
+    const latestItems = latestDetailedItemsRef.current[itemsField];
+
+    if (settings[field]) {
+      await handleUpdateDetailedEnabled(field, false);
+      return;
+    }
+
+    const nextItems = latestItems.length > 0 ? latestItems : [createEmptyBudgetSubItem()];
+    const nextEnabled = resolveDetailedEnabled(true, nextItems);
+
+    latestDetailedItemsRef.current = {
+      ...latestDetailedItemsRef.current,
+      [itemsField]: nextItems,
+    };
+
+    setSettings((current) => ({
+      ...current,
+      [itemsField]: nextItems,
+      [field]: nextEnabled,
+    }));
+
+    if (user) {
+      await saveSettings(user.uid, {
+        [itemsField]: nextItems,
+        [field]: nextEnabled,
+      } as Partial<UserSettings>);
+    }
+  };
+
+  /**
+   * Replaces a sub-items list and persists it.
+   *
+   * Saving an empty list automatically forces the corresponding flag to `false`
+   * (enforced by `saveSettings` → `normalizeSettingsPayload`). The local state
+   * is updated optimistically with the same invariant so the UI stays consistent.
+   */
+  const handleUpdateSubItems = async (
+    field: "fixedCostsItems" | "savingsItems",
+    items: BudgetSubItem[],
+  ) => {
+    const flagField =
+      field === "fixedCostsItems" ? "fixedCostsDetailedEnabled" : "savingsDetailedEnabled";
+    latestDetailedItemsRef.current = {
+      ...latestDetailedItemsRef.current,
+      [field]: items,
+    };
+    logger.info(
+      `settings.handleUpdateSubItems: ${field} updated (${items.length} items)`,
+    );
+    setSettings((s) => ({
+      ...s,
+      [field]: items,
+      // Mirror the write-time invariant locally.
+      [flagField]: items.length > 0 ? s[flagField] : false,
+    }));
+    if (user) {
+      const payload: Partial<UserSettings> = items.length === 0
+        ? ({ [field]: items, [flagField]: false } as Partial<UserSettings>)
+        : ({ [field]: items } as Partial<UserSettings>);
+      await saveSettings(user.uid, payload);
     }
   };
 
@@ -505,9 +604,15 @@ export default function SettingsPage() {
   // Budget calculations for the overview section
   // ---------------------------------------------------------------------------
 
+  const effectiveFixedCosts = settings.fixedCostsDetailedEnabled
+    ? computeDetailedTotal(settings.fixedCostsItems)
+    : settings.fixedCosts;
+  const effectiveSavings = settings.savingsDetailedEnabled
+    ? computeDetailedTotal(settings.savingsItems)
+    : settings.monthlySavings;
   const totalEnvelopes = permanentEnvelopes.reduce((acc, e) => acc + e.budget, 0);
   const remainingBudget =
-    settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings - totalEnvelopes;
+    settings.monthlyIncome - effectiveFixedCosts - effectiveSavings - totalEnvelopes;
   const isOverBudget = remainingBudget < 0;
 
   // ---------------------------------------------------------------------------
@@ -660,51 +765,133 @@ export default function SettingsPage() {
             Budget Global
           </h2>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-app-text-secondary mb-1">
-                  Revenus (Salaire)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={settings.monthlyIncome}
-                    onChange={(e) => handleUpdateNumericSetting("monthlyIncome", e.target.value)}
-                    className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                  <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm text-app-text-secondary mb-1">Frais Fixes</label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={settings.fixedCosts}
-                    onChange={(e) => handleUpdateNumericSetting("fixedCosts", e.target.value)}
-                    className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                  <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
-                </div>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-sm text-app-text-secondary mb-1">
-                  Épargne Souhaitée
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={settings.monthlySavings}
-                    onChange={(e) => handleUpdateNumericSetting("monthlySavings", e.target.value)}
-                    className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
-                  />
-                  <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
-                </div>
+
+            {/* Revenus mensuels — inchangé */}
+            <div>
+              <label className="block text-sm text-app-text-secondary mb-1">
+                Revenus (Salaire)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={settings.monthlyIncome}
+                  onChange={(e) => handleUpdateNumericSetting("monthlyIncome", e.target.value)}
+                  className="no-spinner w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
+                />
+                <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
               </div>
             </div>
+
+            {/* Frais Fixes — montant global + mode détaillé */}
+            <div>
+              <label className="block text-sm text-app-text-secondary mb-1">Frais Fixes</label>
+              <div className="flex items-stretch gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={effectiveFixedCosts}
+                    onChange={(e) => handleUpdateNumericSetting("fixedCosts", e.target.value)}
+                    disabled={settings.fixedCostsDetailedEnabled}
+                    readOnly={settings.fixedCostsDetailedEnabled}
+                    className={`no-spinner w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none transition-opacity ${
+                      settings.fixedCostsDetailedEnabled ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
+                  />
+                  <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleDetailedBudget("fixedCostsDetailedEnabled")}
+                  aria-label="Détails des frais fixes"
+                  aria-pressed={settings.fixedCostsDetailedEnabled}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                    settings.fixedCostsDetailedEnabled
+                      ? "bg-amber-700 text-amber-50 hover:bg-amber-800"
+                      : "bg-amber-400 text-black hover:bg-amber-500"
+                  }`}
+                >
+                  Détails
+                </button>
+              </div>
+              {settings.fixedCostsDetailedEnabled && (
+                <p className="text-xs text-amber-400 mt-1">
+                  Montant calculé automatiquement depuis les lignes détaillées.
+                </p>
+              )}
+            </div>
+
+            <BudgetDetailEditor
+              label="Charges fixes détaillées"
+              category="fixedCosts"
+              enabled={settings.fixedCostsDetailedEnabled}
+              items={settings.fixedCostsItems}
+              aggregateAmount={settings.fixedCosts}
+              variant="inline"
+              onEnabledChange={(v) =>
+                handleUpdateDetailedEnabled("fixedCostsDetailedEnabled", v)
+              }
+              onItemsChange={(items) =>
+                handleUpdateSubItems("fixedCostsItems", items)
+              }
+            />
+
+            {/* Épargne Souhaitée — montant global + mode détaillé */}
+            <div>
+              <label className="block text-sm text-app-text-secondary mb-1">
+                Épargne Souhaitée
+              </label>
+              <div className="flex items-stretch gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={effectiveSavings}
+                    onChange={(e) => handleUpdateNumericSetting("monthlySavings", e.target.value)}
+                    disabled={settings.savingsDetailedEnabled}
+                    readOnly={settings.savingsDetailedEnabled}
+                    className={`no-spinner w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none transition-opacity ${
+                      settings.savingsDetailedEnabled ? "opacity-60 cursor-not-allowed" : ""
+                    }`}
+                  />
+                  <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleDetailedBudget("savingsDetailedEnabled")}
+                  aria-label="Détails de l'épargne souhaitée"
+                  aria-pressed={settings.savingsDetailedEnabled}
+                  className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                    settings.savingsDetailedEnabled
+                      ? "bg-amber-700 text-amber-50 hover:bg-amber-800"
+                      : "bg-amber-400 text-black hover:bg-amber-500"
+                  }`}
+                >
+                  Détails
+                </button>
+              </div>
+              {settings.savingsDetailedEnabled && (
+                <p className="text-xs text-amber-400 mt-1">
+                  Montant calculé automatiquement depuis les lignes détaillées.
+                </p>
+              )}
+            </div>
+
+            <BudgetDetailEditor
+              label="Épargne détaillée"
+              category="savings"
+              enabled={settings.savingsDetailedEnabled}
+              items={settings.savingsItems}
+              aggregateAmount={settings.monthlySavings}
+              variant="inline"
+              onEnabledChange={(v) =>
+                handleUpdateDetailedEnabled("savingsDetailedEnabled", v)
+              }
+              onItemsChange={(items) =>
+                handleUpdateSubItems("savingsItems", items)
+              }
+            />
 
             {/* Balance indicator */}
             <div
@@ -720,7 +907,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex justify-between items-center mb-2 text-amber-600 dark:text-amber-500/80">
                 <span className="text-sm font-medium">Épargne visée</span>
-                <span className="font-bold">{Number(settings.monthlySavings).toFixed(2)} €</span>
+                <span className="font-bold">{effectiveSavings.toFixed(2)} €</span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-dashed border-app-border">
                 <span className="text-sm font-medium text-app-text">

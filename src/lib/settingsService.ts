@@ -1,0 +1,229 @@
+/**
+ * Firestore read/write helpers for user budget settings.
+ *
+ * All Firestore operations are scoped to:
+ *   users/{uid}/settings/general
+ *
+ * The pure helper functions (sanitize, compute, resolve) have no side effects
+ * and can be tested in isolation without a Firestore connection.
+ */
+
+import { doc, getDoc, setDoc } from "firebase/firestore";
+
+import { db } from "@/lib/firebase";
+import { logger } from "@/lib/logger";
+import {
+  BentoPreset,
+  BudgetSubItem,
+  DEFAULT_USER_SETTINGS,
+  UserSettings,
+} from "@/types/settings";
+
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves an unknown Firestore value to a valid `BentoPreset`.
+ * Falls back to `"balanced"` for any unrecognised value.
+ */
+export function resolveBentoPreset(value: unknown): BentoPreset {
+  if (value === "compact" || value === "balanced" || value === "airy") {
+    return value;
+  }
+  return "balanced";
+}
+
+/**
+ * Validates and sanitizes an unknown value into a `BudgetSubItem[]`.
+ *
+ * Malformed entries are silently dropped so that documents with unexpected
+ * Firestore shapes degrade gracefully rather than throwing.
+ */
+export function sanitizeSubItems(value: unknown): BudgetSubItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is BudgetSubItem => {
+    if (item === null || typeof item !== "object") return false;
+    const candidate = item as Record<string, unknown>;
+    return (
+      typeof candidate.id === "string" &&
+      candidate.id.length > 0 &&
+      typeof candidate.name === "string" &&
+      typeof candidate.amount === "number" &&
+      candidate.amount >= 0
+    );
+  });
+}
+
+/**
+ * Sums the `amount` of every item in a `BudgetSubItem` array.
+ * Returns `0` for an empty array.
+ */
+export function computeDetailedTotal(items: BudgetSubItem[]): number {
+  return items.reduce((sum, item) => sum + item.amount, 0);
+}
+
+/** Creates a new empty detailed-budget line with a stable client-side id. */
+export function createEmptyBudgetSubItem(): BudgetSubItem {
+  const supportsRandomUuid =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function";
+  return {
+    id: supportsRandomUuid ? crypto.randomUUID() : String(Date.now()),
+    name: "",
+    amount: 0,
+  };
+}
+
+/**
+ * Enforces the invariant: detailed mode is `false` when there are no sub-items.
+ *
+ * @param enabled - The stored boolean flag.
+ * @param items   - The associated sub-items array.
+ * @returns `true` only when `enabled` is `true` AND at least one item exists.
+ *
+ * @example
+ * resolveDetailedEnabled(true, [])         // → false  (no items → mode off)
+ * resolveDetailedEnabled(true, [item])     // → true
+ * resolveDetailedEnabled(false, [item])    // → false  (user disabled it)
+ */
+export function resolveDetailedEnabled(
+  enabled: boolean,
+  items: BudgetSubItem[],
+): boolean {
+  return enabled && items.length > 0;
+}
+
+/**
+ * Normalizes a partial settings payload before writing to Firestore.
+ *
+ * Rules applied at save time (mirrors the read-time invariant in `loadSettings`):
+ *  - Items arrays are sanitized via `sanitizeSubItems` (malformed entries dropped).
+ *  - If a sanitized items list is empty, the corresponding detailed-mode flag is
+ *    forced to `false` to satisfy the invariant "flag is false when no items exist".
+ *  - Items are NEVER deleted when the flag is `false`; they are preserved so the
+ *    user can re-enable detailed mode without data loss.
+ *
+ * Callers that only update the flag (without touching the items list) are not
+ * affected by this normalization — the read-time enforcement in `loadSettings`
+ * covers that case.
+ */
+export function normalizeSettingsPayload(
+  partial: Partial<UserSettings>,
+): Partial<UserSettings> {
+  const result: Partial<UserSettings> = { ...partial };
+
+  if ("fixedCostsItems" in result) {
+    const items = sanitizeSubItems(result.fixedCostsItems);
+    result.fixedCostsItems = items;
+    // Invariant: flag must be false when the items list is empty.
+    if (items.length === 0) {
+      result.fixedCostsDetailedEnabled = false;
+    }
+  }
+
+  if ("savingsItems" in result) {
+    const items = sanitizeSubItems(result.savingsItems);
+    result.savingsItems = items;
+    if (items.length === 0) {
+      result.savingsDetailedEnabled = false;
+    }
+  }
+
+  return result;
+}
+
+interface StoredSettingsDocument extends UserSettings {
+  isOnboarded: boolean;
+  currency?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSettingsDocument {
+  const fixedCostsItems = sanitizeSubItems(raw.fixedCostsItems);
+  const savingsItems = sanitizeSubItems(raw.savingsItems);
+
+  return {
+    monthlyIncome: Number(raw.monthlyIncome ?? DEFAULT_USER_SETTINGS.monthlyIncome),
+    fixedCosts: Number(raw.fixedCosts ?? DEFAULT_USER_SETTINGS.fixedCosts),
+    monthlySavings: Number(raw.monthlySavings ?? DEFAULT_USER_SETTINGS.monthlySavings),
+    bentoPreset: resolveBentoPreset(raw.bentoPreset),
+    fixedCostsItems,
+    savingsItems,
+    fixedCostsDetailedEnabled: resolveDetailedEnabled(
+      raw.fixedCostsDetailedEnabled === true,
+      fixedCostsItems,
+    ),
+    savingsDetailedEnabled: resolveDetailedEnabled(
+      raw.savingsDetailedEnabled === true,
+      savingsItems,
+    ),
+    isOnboarded: raw.isOnboarded !== false,
+    ...(typeof raw.currency === "string" ? { currency: raw.currency } : {}),
+    ...(typeof raw.createdAt === "string" ? { createdAt: raw.createdAt } : {}),
+    ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Firestore helpers
+// ---------------------------------------------------------------------------
+
+/** Returns the Firestore DocumentReference for a user's settings. */
+function settingsDocRef(uid: string) {
+  return doc(db, "users", uid, "settings", "general");
+}
+
+/**
+ * Loads the user's settings from Firestore and merges defaults for any
+ * missing fields.
+ *
+ * Retrocompatible: documents that pre-date the detailed-mode feature will
+ * transparently default to `fixedCostsDetailedEnabled = false`, empty arrays,
+ * etc., preserving existing aggregate-only behaviour.
+ *
+ * @throws Re-throws Firestore errors so callers can surface them to the user.
+ */
+export async function loadSettings(uid: string): Promise<UserSettings> {
+  const snap = await getDoc(settingsDocRef(uid));
+
+  if (!snap.exists()) {
+    logger.info(`settingsService.loadSettings: document absent, returning defaults for uid ${uid}`);
+    return { ...DEFAULT_USER_SETTINGS };
+  }
+
+  const stored = sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>);
+  const { isOnboarded: _ignored, currency: _currency, createdAt: _createdAt, updatedAt: _updatedAt, ...settings } = stored;
+  return settings;
+}
+
+/**
+ * Saves a partial settings update to Firestore using a canonical overwrite.
+ *
+ * Before writing, the existing document is reloaded and sanitized so legacy or
+ * malformed fields do not keep failing the Firestore allow-list rules. Missing
+ * `isOnboarded` is healed to `true` for already accessible settings pages.
+ *
+ * @throws Re-throws Firestore errors so callers can surface them to the user.
+ */
+export async function saveSettings(
+  uid: string,
+  partial: Partial<UserSettings>,
+): Promise<void> {
+  // Enforce write-time invariants (empty items list → flag forced to false).
+  const normalized = normalizeSettingsPayload(partial);
+  logger.info(
+    `settingsService.saveSettings: persisting fields [${Object.keys(normalized).join(", ")}] for uid ${uid}`,
+  );
+  const ref = settingsDocRef(uid);
+  const snap = await getDoc(ref);
+  const existing = snap.exists()
+    ? sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>)
+    : { ...DEFAULT_USER_SETTINGS, isOnboarded: true };
+  const nextDocument: StoredSettingsDocument = {
+    ...existing,
+    ...normalized,
+  };
+
+  await setDoc(ref, nextDocument);
+}
