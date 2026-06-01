@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, getDocs, doc, getDoc, where, writeBatch, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -50,6 +51,7 @@ import {
 import { isEnvelopeActiveForMonth } from "@/types/envelope";
 import TransactionModal from "@/components/dashboard/TransactionModal";
 import { logger } from "@/lib/logger";
+import { maskAmount } from "@/lib/maskAmount";
 import { motion, AnimatePresence } from "framer-motion";
 import SearchDropdown from "@/components/dashboard/SearchDropdown";
 import CalendarHeatmap from "@/components/dashboard/CalendarHeatmap";
@@ -167,6 +169,30 @@ function formatEurosNoDecimals(value: number) {
   return Math.round(value).toLocaleString("fr-FR");
 }
 
+const MASK_WITH_DECIMALS = "****,**";
+const MASK_WITHOUT_DECIMALS = "****";
+
+function maskEuroAmount(amount: number, mask = MASK_WITH_DECIMALS) {
+  return maskAmount({
+    amount: Number(amount || 0),
+    currency: "EUR",
+    locale: "fr-FR",
+    anonymousMode: true,
+    mask,
+  });
+}
+
+function maskEuroText(text: string) {
+  return text.replace(/([+-]?)(\d[\d\s.,]*)\s*€/gu, (_match, sign) => {
+    const masked = maskEuroAmount(sign === "-" ? -1 : 1, MASK_WITH_DECIMALS);
+    return sign === "+"
+      ? `+${masked}`
+      : sign === "-"
+        ? masked
+        : masked;
+  });
+}
+
 function SortableEnvelopeTile({
   env,
   transactions,
@@ -180,6 +206,7 @@ function SortableEnvelopeTile({
   onToggleTileSize,
   isResizing,
   isTemporary,
+  anonymousMode,
 }: {
   env: Envelope;
   transactions: Transaction[];
@@ -194,6 +221,7 @@ function SortableEnvelopeTile({
   isResizing: boolean;
   /** When true, renders the temporary-envelope visual cue on the tile. */
   isTemporary?: boolean;
+  anonymousMode: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: env.id });
   const Icon = ICON_MAP[env.icon] || ShoppingCart;
@@ -210,6 +238,9 @@ function SortableEnvelopeTile({
     : isResizing
       ? "scale-[1.02] ring-2 ring-cyan-400/65 shadow-[0_14px_34px_rgba(34,211,238,0.24)]"
       : "";
+
+  const formatCompactMaskedAmount = (amount: number) =>
+    maskEuroAmount(amount).replace(/\s*€/u, "€");
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -255,9 +286,11 @@ function SortableEnvelopeTile({
           <div className="space-y-0.5">
             <div className="flex items-center justify-between gap-2">
               <span className={`text-xl sm:text-2xl font-bold tabular-nums ${remaining < 0 ? "text-red-500" : "text-app-text"}`}>
-                {remaining.toFixed(2)}€
+                {anonymousMode ? formatCompactMaskedAmount(remaining) : `${remaining.toFixed(2)}€`}
               </span>
-              <span className="shrink-0 whitespace-nowrap text-xs text-app-text-secondary tabular-nums">sur {formatEurosNoDecimals(env.budget)}€</span>
+              <span className="shrink-0 whitespace-nowrap text-xs text-app-text-secondary tabular-nums">
+                sur {anonymousMode ? formatCompactMaskedAmount(env.budget) : `${formatEurosNoDecimals(env.budget)}€`}
+              </span>
             </div>
           </div>
 
@@ -270,7 +303,7 @@ function SortableEnvelopeTile({
                 key={tx.id}
                 className={`h-full ${env.color} border-r border-white/25 dark:border-zinc-900/80 box-border`}
                 style={{ width: `${env.budget > 0 ? (Math.abs(txAmount) / env.budget) * 100 : 0}%` }}
-                title={`${tx.description || "Dépense"}: ${Number(txAmount).toFixed(2)}€`}
+                title={`${tx.description || "Dépense"}: ${anonymousMode ? formatCompactMaskedAmount(txAmount) : `${Number(txAmount).toFixed(2)}€`}`}
               />
                 );
               })()
@@ -282,8 +315,8 @@ function SortableEnvelopeTile({
               {forecast.willExceed ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <TrendingUp className="h-3 w-3 shrink-0" />}
               <span className="leading-snug">
                 {forecast.willExceed
-                  ? `Surcoût est.: ${forecast.excessAmount.toFixed(0)}€`
-                  : `Rest est.: ${forecast.projectedRemaining.toFixed(0)}€`}
+                  ? `Surcoût est.: ${anonymousMode ? formatCompactMaskedAmount(forecast.excessAmount) : `${forecast.excessAmount.toFixed(0)}€`}`
+                  : `Rest est.: ${anonymousMode ? formatCompactMaskedAmount(forecast.projectedRemaining) : `${forecast.projectedRemaining.toFixed(0)}€`}`}
               </span>
             </div>
           )}
@@ -351,6 +384,7 @@ function SortableEnvelopeTile({
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { anonymousMode } = useAnonymousMode();
   const router = useRouter();
   
   const [loading, setLoading] = useState(true);
@@ -540,6 +574,14 @@ export default function DashboardPage() {
       envelopeForecasts,
       isCurrentMonth,
     });
+
+  const visibleGlobalNotifications = anonymousMode
+    ? globalNotifications.map((notification) => ({
+        ...notification,
+        title: maskEuroText(notification.title),
+        description: maskEuroText(notification.description),
+      }))
+    : globalNotifications;
 
   // --- Chargement des données ---
   const fetchData = async () => {
@@ -756,6 +798,20 @@ export default function DashboardPage() {
     router.push("/login"); // Force redirect
   };
 
+  const formatAmountWithoutCurrency = (amount: number, decimals = 2) => {
+    if (anonymousMode) {
+      return maskEuroAmount(amount, decimals === 0 ? MASK_WITHOUT_DECIMALS : MASK_WITH_DECIMALS).replace(/\s*€/u, "");
+    }
+    return Number(amount || 0).toFixed(decimals);
+  };
+
+  const formatAmountWithCurrency = (amount: number, decimals = 2) => {
+    if (anonymousMode) {
+      return maskEuroAmount(amount, decimals === 0 ? MASK_WITHOUT_DECIMALS : MASK_WITH_DECIMALS);
+    }
+    return `${Number(amount || 0).toFixed(decimals)} €`;
+  };
+
   if (loading) {
     return <div className="min-h-screen bg-app-bg flex items-center justify-center text-app-text">Chargement...</div>;
   }
@@ -880,17 +936,17 @@ export default function DashboardPage() {
             <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-1 py-3" aria-live="polite">
                 <span className="text-app-text-secondary text-xs font-medium tracking-wide uppercase">Reste disponible</span>
                 <h2 className={`text-4xl font-extrabold tracking-tighter ${currentMonthBalance < 0 ? 'text-red-500' : 'text-app-text'}`}>
-                    {currentMonthBalance.toFixed(2)} <span className="text-2xl text-app-text-secondary">€</span>
+                    {formatAmountWithoutCurrency(currentMonthBalance)} <span className="text-2xl text-app-text-secondary">€</span>
                 </h2>
                 <div className="text-xs text-app-text-secondary">
-                    Sur {monthlyTotalAvailable.toFixed(0)} € prévus
+                    Sur {formatAmountWithoutCurrency(monthlyTotalAvailable, 0)} € prévus
                 </div>
             </div>
 
             {/* Global Progress Bar */}
             <div className="mt-6 space-y-1.5">
                 <div className="flex justify-between text-xs font-medium text-app-text-secondary">
-                    <span>Dépenses : {totalSpentEnvelopes.toFixed(2)} €</span>
+                    <span>Dépenses : {formatAmountWithCurrency(totalSpentEnvelopes)}</span>
                     <span>{globalProgress.toFixed(0)}%</span>
                 </div>
                 <div className="h-3 rounded-full overflow-hidden bg-black/10 dark:bg-white/10">
@@ -944,17 +1000,17 @@ export default function DashboardPage() {
                                 <div className="flex w-full max-w-md flex-col items-center gap-1 text-center">
                                   <div className="flex items-center gap-2 text-red-400 text-sm font-semibold">
                                     <AlertTriangle className="h-4 w-4" />
-                                    <span>Surcoût est.: {globalForecast.excessAmount.toFixed(2)} €</span>
+                                    <span>Surcoût est.: {formatAmountWithCurrency(globalForecast.excessAmount)}</span>
                                   </div>
                                   <div className="text-xs text-app-text-secondary">
-                                    Projection fin de mois : {globalForecast.projectedTotal.toFixed(2)} € de dépenses
+                                    Projection fin de mois : {formatAmountWithCurrency(globalForecast.projectedTotal)} de dépenses
                                   </div>
                                 </div>
                                 {smartInsightsLoading ? (
                                   <div className="h-16 w-full max-w-[28rem] animate-pulse rounded-xl bg-black/10 dark:bg-white/10" />
                                 ) : (
                                   <RotatingSmartInsight
-                                    notifications={globalNotifications}
+                                    notifications={visibleGlobalNotifications}
                                     className="mx-auto w-full max-w-[28rem]"
                                   />
                                 )}
@@ -964,17 +1020,17 @@ export default function DashboardPage() {
                                 <div className="flex w-full max-w-md flex-col items-center gap-1 text-center">
                                   <div className="flex items-center gap-2 text-emerald-400 text-sm font-semibold">
                                     <TrendingUp className="h-4 w-4" />
-                                    <span>Rest est.: {globalForecast.projectedRemaining.toFixed(2)} €</span>
+                                    <span>Rest est.: {formatAmountWithCurrency(globalForecast.projectedRemaining)}</span>
                                   </div>
                                   <div className="text-xs text-app-text-secondary">
-                                    Projection dépenses totales : {globalForecast.projectedTotal.toFixed(2)} €
+                                    Projection dépenses totales : {formatAmountWithCurrency(globalForecast.projectedTotal)}
                                   </div>
                                 </div>
                                 {smartInsightsLoading ? (
                                   <div className="h-16 w-full max-w-[28rem] animate-pulse rounded-xl bg-black/10 dark:bg-white/10" />
                                 ) : (
                                   <RotatingSmartInsight
-                                    notifications={globalNotifications}
+                                    notifications={visibleGlobalNotifications}
                                     className="mx-auto w-full max-w-[28rem]"
                                   />
                                 )}
@@ -1035,6 +1091,7 @@ export default function DashboardPage() {
                           onToggleTileSize={handleEnvelopeTileSizeToggle}
                           isResizing={resizingEnvelopeId === env.id}
                           isTemporary={!!env.isTemporary}
+                          anonymousMode={anonymousMode}
                         />
                       </motion.div>
                       );

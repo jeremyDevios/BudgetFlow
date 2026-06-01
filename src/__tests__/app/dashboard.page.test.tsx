@@ -9,6 +9,7 @@ const getDocMock = jest.fn();
 const getDocsMock = jest.fn();
 const useSpendingForecastMock = jest.fn();
 const useSmartSpendingInsightsMock = jest.fn();
+const useAnonymousModeMock = jest.fn();
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -20,6 +21,10 @@ jest.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
     user: { uid: "user-1" },
   }),
+}));
+
+jest.mock("@/context/AnonymousModeContext", () => ({
+  useAnonymousMode: () => useAnonymousModeMock(),
 }));
 
 jest.mock("@/lib/firebase", () => ({
@@ -136,6 +141,8 @@ describe("DashboardPage", () => {
     getDocsMock.mockReset();
     useSpendingForecastMock.mockReset();
     useSmartSpendingInsightsMock.mockReset();
+    useAnonymousModeMock.mockReset();
+    useAnonymousModeMock.mockReturnValue({ anonymousMode: false });
 
     useSmartSpendingInsightsMock.mockReturnValue({
       globalNotifications: [],
@@ -278,5 +285,33 @@ describe("DashboardPage", () => {
     expect(
       screen.getByText(/Projection fin de mois : 1900.38 € de dépenses/i)
     ).toBeInTheDocument();
+  });
+
+  it("masks dashboard forecast and totals when anonymous mode is enabled", async () => {
+    useAnonymousModeMock.mockReturnValue({ anonymousMode: true });
+    useSpendingForecastMock.mockReturnValue({
+      globalForecast: {
+        projectedTotal: 266.8,
+        projectedRemaining: 1233.2,
+        willExceed: false,
+        excessAmount: 0,
+        confidenceScore: 1,
+        hasEnoughData: true,
+      },
+      envelopeForecasts: {},
+      loading: false,
+    });
+
+    render(<DashboardPage />);
+
+    await waitFor(() =>
+      expect(screen.getByText(/Rest est.: \*{4},\*{2} €/i)).toBeInTheDocument()
+    );
+
+    expect(
+      screen.getByText(/Projection dépenses totales : \*{4},\*{2} €/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Dépenses : \*{4},\*{2} €/i)).toBeInTheDocument();
+    expect(screen.queryByText(/1233\.20 €/i)).not.toBeInTheDocument();
   });
 });

@@ -66,6 +66,12 @@ export interface UserSettings {
   /** Dashboard grid density preference. */
   bentoPreset: BentoPreset;
 
+  /**
+   * Display-only privacy mode for masking currency amounts in the web UI.
+   * Legacy documents that do not store this field default to `false`.
+   */
+  anonymousMode?: boolean;
+
   // ── Detailed mode ──────────────────────────────────────────────────────────
 
   /**
@@ -109,6 +115,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   fixedCosts: 0,
   monthlySavings: 0,
   bentoPreset: "balanced",
+  anonymousMode: false,
   fixedCostsDetailedEnabled: false,
   savingsDetailedEnabled: false,
   fixedCostsItems: [],

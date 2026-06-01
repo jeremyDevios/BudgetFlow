@@ -1,7 +1,9 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db } from "@/lib/firebase";
+import { maskAmount } from "@/lib/maskAmount";
 import { collection, query, getDocs, where, doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, addMonths, isSameMonth } from "date-fns";
@@ -10,6 +12,18 @@ import { ChevronLeft, TrendingUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
 import { motion, AnimatePresence } from "framer-motion";
+
+const MASK_WITH_DECIMALS = "****,**";
+
+function maskEuroAmount(amount: number) {
+  return maskAmount({
+    amount: Number(amount || 0),
+    currency: "EUR",
+    locale: "fr-FR",
+    anonymousMode: true,
+    mask: MASK_WITH_DECIMALS,
+  });
+}
 
 interface UserSettings {
   monthlyIncome: number;
@@ -28,6 +42,7 @@ interface MonthlyData {
 
 export default function EvolutionPage() {
   const { user } = useAuth();
+  const { anonymousMode } = useAnonymousMode();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<MonthlyData[]>([]);
@@ -192,6 +207,24 @@ export default function EvolutionPage() {
   const totalEconomies = data.reduce((sum, d) => sum + d.remaining, 0);
   const totalEpargneRealisee = data.reduce((sum, d) => sum + d.savingsObjective, 0);
 
+  const formatAmount = (amount: number) => {
+    if (anonymousMode) {
+      return maskEuroAmount(amount);
+    }
+    return `${amount.toFixed(2)} €`;
+  };
+
+  const formatSignedAmount = (amount: number) => {
+    if (anonymousMode) {
+      const masked = maskEuroAmount(Math.abs(amount));
+      if (amount > 0) return `+${masked}`;
+      if (amount < 0) return `-${masked}`;
+      return masked;
+    }
+
+    return `${amount > 0 ? "+" : ""}${amount.toFixed(2)} €`;
+  };
+
   if (loading) {
      return <div className="min-h-screen bg-app-bg flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
   }
@@ -318,7 +351,7 @@ export default function EvolutionPage() {
                                                 animate={{ opacity: 1, scale: 1 }}
                                                 transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.05 }}
                                             >
-                                                {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
+                                                {formatSignedAmount(d.remaining)}
                                             </motion.span>
                                         </motion.div>
                                     )}
@@ -355,12 +388,12 @@ export default function EvolutionPage() {
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 bg-app-surface/30 border border-app-border rounded-2xl text-center">
             <div className="text-xs text-app-text-secondary">Total dépenses</div>
-            <div className="text-lg font-bold text-amber-500 tabular-nums">{totalDepenses.toFixed(2)} €</div>
+            <div className="text-lg font-bold text-amber-500 tabular-nums">{formatAmount(totalDepenses)}</div>
           </div>
 
           <div className="p-4 bg-app-surface/30 border border-app-border rounded-2xl text-center">
             <div className="text-xs text-app-text-secondary">Total économies</div>
-            <div className={`text-lg font-bold tabular-nums ${totalEconomies >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{totalEconomies >= 0 ? '+' : ''}{totalEconomies.toFixed(2)} €</div>
+            <div className={`text-lg font-bold tabular-nums ${totalEconomies >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatSignedAmount(totalEconomies)}</div>
           </div>
         </div>
       )}
@@ -402,7 +435,7 @@ export default function EvolutionPage() {
                                animate={{ opacity: 1, scale: 1 }}
                                transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.3 + i * 0.04 }}
                            >
-                               {d.totalSpent.toFixed(2)} €
+                               {formatAmount(d.totalSpent)}
                            </motion.span>
                       </div>
 
@@ -415,7 +448,7 @@ export default function EvolutionPage() {
                                animate={{ opacity: 1, scale: 1 }}
                                transition={{ type: "spring", stiffness: 300, damping: 20, delay: 0.35 + i * 0.04 }}
                            >
-                               {d.remaining > 0 ? '+' : ''}{d.remaining.toFixed(2)} €
+                               {formatSignedAmount(d.remaining)}
                            </motion.span>
                       </div>
                   </div>

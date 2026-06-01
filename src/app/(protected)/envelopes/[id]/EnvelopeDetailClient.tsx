@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db } from "@/lib/firebase";
 import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
 import { useSpendingForecast } from "@/hooks/useSpendingForecast";
@@ -13,7 +14,31 @@ import { useEffect, useState, use } from "react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
 import RotatingSmartInsight from "@/components/dashboard/RotatingSmartInsight";
 import { logger } from "@/lib/logger";
+import { maskAmount } from "@/lib/maskAmount";
 import { motion, AnimatePresence } from "framer-motion";
+
+const MASK_WITH_DECIMALS = "****,**";
+
+function maskEuroAmount(amount: number) {
+  return maskAmount({
+    amount: Number(amount || 0),
+    currency: "EUR",
+    locale: "fr-FR",
+    anonymousMode: true,
+    mask: MASK_WITH_DECIMALS,
+  });
+}
+
+function maskEuroText(text: string) {
+  return text.replace(/([+-]?)(\d[\d\s.,]*)\s*€/gu, (_match, sign) => {
+    const masked = maskEuroAmount(sign === "-" ? -1 : 1);
+    return sign === "+"
+      ? `+${masked}`
+      : sign === "-"
+        ? masked
+        : masked;
+  });
+}
 
 const ICON_MAP: Record<string, LucideIcon> = {
   ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee,
@@ -22,6 +47,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 export default function EnvelopeDetailClient({ params }: { params: Promise<{ id: string }> }) {
   const { user } = useAuth();
+  const { anonymousMode } = useAnonymousMode();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { id } = use(params);
@@ -202,6 +228,13 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
   const envelopeInsightNotifications = envelope
     ? envelopeNotifications[envelope.id] ?? []
     : [];
+  const visibleEnvelopeInsightNotifications = anonymousMode
+    ? envelopeInsightNotifications.map((notification) => ({
+        ...notification,
+        title: maskEuroText(notification.title),
+        description: maskEuroText(notification.description),
+      }))
+    : envelopeInsightNotifications;
 
   const handleDeleteTransaction = async (txId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -228,6 +261,20 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
   const handleOpenCreateModal = () => {
     setTransactionToEdit(null);
     setIsEditModalOpen(true);
+  };
+
+  const formatAmount = (amount: number, decimals = 2) => {
+    if (anonymousMode) {
+      return maskEuroAmount(amount);
+    }
+    return `${Number(amount || 0).toFixed(decimals)} €`;
+  };
+
+  const formatSignedAmount = (amount: number, sign: "+" | "-") => {
+    if (anonymousMode) {
+      return `${sign}${maskEuroAmount(Math.abs(amount))}`;
+    }
+    return `${sign}${amount} €`;
   };
 
   if (loading) return <div className="min-h-screen bg-app-bg text-app-text p-8">Chargement...</div>;
@@ -286,7 +333,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
                           Progression réelle du mois
                         </span>
                         <span className="tabular-nums">
-                          {currentMonthSpent.toFixed(2)} € / {(envelope?.budget || 0).toFixed(2)} €
+                          {formatAmount(currentMonthSpent)} / {formatAmount(envelope?.budget || 0)}
                         </span>
                       </div>
 
@@ -307,7 +354,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
                       <div className="flex justify-between gap-3 text-xs text-app-text-secondary">
                         <span>{currentMonthPercentOfBudget.toFixed(0)}% du budget consommé à date</span>
                         <span className="tabular-nums">
-                          Reste réel : {currentMonthRemaining.toFixed(2)} €
+                          Reste réel : {formatAmount(currentMonthRemaining)}
                         </span>
                       </div>
                     </div>
@@ -327,8 +374,8 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
                           )}
                           <span>
                             {forecast.willExceed
-                              ? `Risque de dépassement : +${forecast.excessAmount.toFixed(2)} €`
-                              : `Projection fin de mois : ${forecast.projectedSpend.toFixed(2)} € / ${(envelope?.budget || 0).toFixed(2)} €`
+                              ? `Risque de dépassement : +${formatAmount(forecast.excessAmount)}`
+                              : `Projection fin de mois : ${formatAmount(forecast.projectedSpend)} / ${formatAmount(envelope?.budget || 0)}`
                             }
                           </span>
                         </div>
@@ -358,7 +405,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
                       <div className="mt-2 h-16 animate-pulse rounded-xl bg-app-bg" />
                     ) : (
                       <RotatingSmartInsight
-                        notifications={envelopeInsightNotifications}
+                        notifications={visibleEnvelopeInsightNotifications}
                         className="mt-2"
                       />
                     )}
@@ -415,7 +462,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
                   </div>
                   <div className="flex items-center gap-4">
                     <span className={`font-bold ${tx.isReimbursement ? "text-emerald-400" : "text-red-400"}`}>
-                      {tx.isReimbursement ? "+" : "-"}{tx.amount} €
+                      {formatSignedAmount(Number(tx.amount || 0), tx.isReimbursement ? "+" : "-")}
                     </span>
                     <button
                       onClick={(e) => handleDeleteTransaction(tx.id, e)}

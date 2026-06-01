@@ -19,11 +19,17 @@ import BudgetDetailEditor, {
 } from "@/components/settings/BudgetDetailEditor";
 import { BudgetSubItem } from "@/types/settings";
 
+const useAnonymousModeMock = jest.fn();
+
 // ---------------------------------------------------------------------------
 // Mock Firebase (required by settingsService imported inside the component)
 // ---------------------------------------------------------------------------
 
 jest.mock("@/lib/firebase", () => ({ db: {}, auth: {}, app: {} }));
+
+jest.mock("@/context/AnonymousModeContext", () => ({
+  useAnonymousMode: () => useAnonymousModeMock(),
+}));
 
 // ---------------------------------------------------------------------------
 // Mock crypto.randomUUID to produce predictable IDs in tests
@@ -32,6 +38,8 @@ jest.mock("@/lib/firebase", () => ({ db: {}, auth: {}, app: {} }));
 let uuidCounter = 0;
 beforeEach(() => {
   uuidCounter = 0;
+  useAnonymousModeMock.mockReset();
+  useAnonymousModeMock.mockReturnValue({ anonymousMode: false });
   Object.defineProperty(globalThis, "crypto", {
     value: {
       randomUUID: () => `test-uuid-${++uuidCounter}`,
@@ -145,6 +153,15 @@ describe("BudgetDetailEditor – display (mode disabled)", () => {
     expect(screen.getByLabelText(/Montant global/i).textContent).toContain("950");
   });
 
+  it("masks the aggregate amount when anonymous mode is enabled", () => {
+    useAnonymousModeMock.mockReturnValue({ anonymousMode: true });
+
+    renderControlled({ aggregateAmount: 950 });
+
+    expect(screen.getByLabelText(/Montant global : \*{4},\*{2}\s€/i)).toBeInTheDocument();
+    expect(screen.queryByText(/950/)).not.toBeInTheDocument();
+  });
+
   it("does NOT render the detail panel when mode is disabled", () => {
     renderControlled();
     expect(
@@ -199,6 +216,15 @@ describe("BudgetDetailEditor – display (mode enabled)", () => {
   it("does NOT show the aggregate amount header span when mode is enabled", () => {
     renderControlled({ enabled: true, items: [itemA] });
     expect(screen.queryByLabelText(/Montant global/i)).not.toBeInTheDocument();
+  });
+
+  it("masks the detailed total when anonymous mode is enabled", () => {
+    useAnonymousModeMock.mockReturnValue({ anonymousMode: true });
+
+    renderControlled({ enabled: true, items: [itemA, itemB] });
+
+    expect(screen.getByLabelText(/Total détaillé : \*{4},\*{2}\s€/i)).toBeInTheDocument();
+    expect(screen.queryByText(/920/)).not.toBeInTheDocument();
   });
 });
 

@@ -195,7 +195,7 @@ describe("normalizeSettingsPayload", () => {
   // ── Passthrough when items keys are absent ────────────────────────────────
 
   it("returns the payload unchanged when neither items key is present", () => {
-    const partial = { monthlyIncome: 3000, fixedCosts: 800 };
+    const partial = { monthlyIncome: 3000, fixedCosts: 800, anonymousMode: true };
     expect(normalizeSettingsPayload(partial)).toEqual(partial);
   });
 

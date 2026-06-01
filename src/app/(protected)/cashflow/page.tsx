@@ -4,11 +4,26 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
+import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db } from "@/lib/firebase";
+import { maskAmount } from "@/lib/maskAmount";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { ChevronLeft, Workflow, Loader2 } from "lucide-react";
 import { Sankey, Tooltip, ResponsiveContainer, Layer } from 'recharts';
 import { logger } from "@/lib/logger";
+
+const MASK_WITH_DECIMALS = "****,**";
+const MASK_WITHOUT_DECIMALS = "****";
+
+function maskEuroAmount(amount: number, mask = MASK_WITH_DECIMALS) {
+  return maskAmount({
+    amount: Number(amount || 0),
+    currency: "EUR",
+    locale: "fr-FR",
+    anonymousMode: true,
+    mask,
+  });
+}
 
 interface UserSettings {
   monthlyIncome: number;
@@ -62,6 +77,7 @@ const resolveColor = (value?: string) => {
 
 export default function CashFlowPage() {
   const { user } = useAuth();
+  const { anonymousMode } = useAnonymousMode();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<UserSettings | null>(null);
@@ -152,6 +168,20 @@ export default function CashFlowPage() {
 
   const data = { nodes, links };
 
+  const formatAmount = (amount: number) => {
+    if (anonymousMode) {
+      return maskEuroAmount(amount);
+    }
+    return `${amount} €`;
+  };
+
+  const formatRoundedAmount = (amount: number) => {
+    if (anonymousMode) {
+      return maskEuroAmount(amount, MASK_WITHOUT_DECIMALS);
+    }
+    return `${amount.toFixed(0)} €`;
+  };
+
 
   // Custom Node Component
   const MyCustomNode = ({ x, y, width, height, index, payload, containerWidth }: any) => {
@@ -203,7 +233,7 @@ export default function CashFlowPage() {
             fill="#a1a1aa" // zinc-400
             fontSize="10"
           >
-            {payload.value?.toFixed(0)} €
+            {formatRoundedAmount(Number(payload.value || 0))}
           </text>
         </Layer>
       );
@@ -278,9 +308,9 @@ export default function CashFlowPage() {
                         itemStyle={{ color: '#fff' }}
                         formatter={(value: any, name: any, props: any) => {
                              if (props && props.payload && props.payload.target && props.payload.source) {
-                                 return [`${value} €`, `${props.payload.source.name} → ${props.payload.target.name}`];
+                                 return [formatAmount(Number(value || 0)), `${props.payload.source.name} → ${props.payload.target.name}`];
                              }
-                             return [`${value} €`, name];
+                             return [formatAmount(Number(value || 0)), name];
                         }}
                     />
                 </Sankey>
@@ -311,7 +341,7 @@ export default function CashFlowPage() {
                }}
              >
                  <span className="block text-app-text-secondary text-xs uppercase mb-1">Revenu Total</span>
-                 <span className="text-2xl font-bold text-emerald-400">{settings.monthlyIncome} €</span>
+                 <span className="text-2xl font-bold text-emerald-400">{formatAmount(settings.monthlyIncome)}</span>
              </motion.div>
              <motion.div
                className="bg-app-surface/50 p-4 rounded-2xl border border-app-border"
@@ -325,7 +355,7 @@ export default function CashFlowPage() {
                }}
              >
                  <span className="block text-app-text-secondary text-xs uppercase mb-1">Total Alloué</span>
-                 <span className="text-2xl font-bold text-amber-500">{totalAllocated} €</span>
+                 <span className="text-2xl font-bold text-amber-500">{formatAmount(totalAllocated)}</span>
              </motion.div>
        </motion.div>
 

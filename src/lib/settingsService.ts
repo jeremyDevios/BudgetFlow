@@ -148,6 +148,7 @@ function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSet
     fixedCosts: Number(raw.fixedCosts ?? DEFAULT_USER_SETTINGS.fixedCosts),
     monthlySavings: Number(raw.monthlySavings ?? DEFAULT_USER_SETTINGS.monthlySavings),
     bentoPreset: resolveBentoPreset(raw.bentoPreset),
+    anonymousMode: raw.anonymousMode === true,
     fixedCostsItems,
     savingsItems,
     fixedCostsDetailedEnabled: resolveDetailedEnabled(
@@ -193,8 +194,17 @@ export async function loadSettings(uid: string): Promise<UserSettings> {
   }
 
   const stored = sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>);
-  const { isOnboarded: _ignored, currency: _currency, createdAt: _createdAt, updatedAt: _updatedAt, ...settings } = stored;
-  return settings;
+  return {
+    monthlyIncome: stored.monthlyIncome,
+    fixedCosts: stored.fixedCosts,
+    monthlySavings: stored.monthlySavings,
+    bentoPreset: stored.bentoPreset,
+    anonymousMode: stored.anonymousMode,
+    fixedCostsDetailedEnabled: stored.fixedCostsDetailedEnabled,
+    savingsDetailedEnabled: stored.savingsDetailedEnabled,
+    fixedCostsItems: stored.fixedCostsItems,
+    savingsItems: stored.savingsItems,
+  };
 }
 
 /**

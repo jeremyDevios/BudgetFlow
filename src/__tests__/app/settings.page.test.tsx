@@ -7,6 +7,8 @@ import { DEFAULT_USER_SETTINGS } from "@/types/settings";
 
 const backMock = jest.fn();
 const useAuthMock = jest.fn();
+const useAnonymousModeMock = jest.fn();
+const setAnonymousModeMock = jest.fn();
 const loadSettingsMock = jest.fn();
 const saveSettingsMock = jest.fn();
 const getDocMock = jest.fn();
@@ -20,6 +22,10 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/context/AuthContext", () => ({
   useAuth: () => useAuthMock(),
+}));
+
+jest.mock("@/context/AnonymousModeContext", () => ({
+  useAnonymousMode: () => useAnonymousModeMock(),
 }));
 
 jest.mock("@/lib/firebase", () => ({
@@ -148,6 +154,8 @@ describe("SettingsPage", () => {
   beforeEach(() => {
     backMock.mockReset();
     useAuthMock.mockReset();
+    useAnonymousModeMock.mockReset();
+    setAnonymousModeMock.mockReset();
     loadSettingsMock.mockReset();
     saveSettingsMock.mockReset();
     getDocMock.mockReset();
@@ -160,6 +168,12 @@ describe("SettingsPage", () => {
         email: "budget@example.com",
         photoURL: null,
       },
+    });
+
+    useAnonymousModeMock.mockReturnValue({
+      anonymousMode: false,
+      anonymousModeReady: true,
+      setAnonymousMode: setAnonymousModeMock,
     });
 
     loadSettingsMock.mockResolvedValue({ ...DEFAULT_USER_SETTINGS });
@@ -203,5 +217,49 @@ describe("SettingsPage", () => {
         }),
       ],
     });
+  });
+
+  it("renders the confidentiality section with persisted anonymous mode state", async () => {
+    useAnonymousModeMock.mockReturnValue({
+      anonymousMode: true,
+      anonymousModeReady: true,
+      setAnonymousMode: setAnonymousModeMock,
+    });
+    loadSettingsMock.mockResolvedValue({
+      ...DEFAULT_USER_SETTINGS,
+      anonymousMode: true,
+    });
+
+    render(<SettingsPage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: /Confidentialité/i })).toBeInTheDocument(),
+    );
+
+    expect(screen.getByRole("switch", { name: /Mode anonyme/i })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  it("persists anonymous mode changes and updates the shared state", async () => {
+    render(<SettingsPage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: /Mode anonyme/i })).toBeInTheDocument(),
+    );
+
+    const anonymousModeSwitch = screen.getByRole("switch", { name: /Mode anonyme/i });
+
+    expect(anonymousModeSwitch).toHaveAttribute("aria-checked", "false");
+
+    await userEvent.click(anonymousModeSwitch);
+
+    await waitFor(() =>
+      expect(saveSettingsMock).toHaveBeenCalledWith("user-1", { anonymousMode: true }),
+    );
+
+    expect(setAnonymousModeMock).toHaveBeenCalledWith(true);
+    expect(anonymousModeSwitch).toHaveAttribute("aria-checked", "true");
   });
 });

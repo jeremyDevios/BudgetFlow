@@ -38,7 +38,7 @@ service cloud.firestore {
 
     // App settings: /users/{userId}/settings/general
     // Required: monthlyIncome, fixedCosts, monthlySavings, isOnboarded
-    // Optional: currency, bentoPreset, createdAt, updatedAt,
+    // Optional: currency, bentoPreset, anonymousMode, createdAt, updatedAt,
     //           fixedCostsDetailedEnabled, fixedCostsItems,
     //           savingsDetailedEnabled, savingsItems
     function isValidBudgetSubItems(items) {
@@ -52,7 +52,7 @@ service cloud.firestore {
     function isValidSettingsData(data) {
       return data.keys().hasOnly([
             'monthlyIncome', 'fixedCosts', 'monthlySavings',
-           'currency', 'bentoPreset', 'isOnboarded', 'createdAt', 'updatedAt',
+           'currency', 'bentoPreset', 'anonymousMode', 'isOnboarded', 'createdAt', 'updatedAt',
            'fixedCostsDetailedEnabled', 'fixedCostsItems',
            'savingsDetailedEnabled', 'savingsItems'
           ])
@@ -62,6 +62,7 @@ service cloud.firestore {
         && data.isOnboarded    is bool
         && (!('currency'  in data) || (data.currency  is string && data.currency.size()  >= 1 && data.currency.size()  <= 10))
         && (!('bentoPreset' in data) || data.bentoPreset in ['compact', 'balanced', 'airy'])
+        && (!('anonymousMode' in data) || data.anonymousMode is bool)
         && (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30))
         && (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 30))
         && (!('fixedCostsDetailedEnabled' in data) || data.fixedCostsDetailedEnabled is bool)

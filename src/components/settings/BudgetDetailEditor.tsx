@@ -18,8 +18,22 @@
 import { useId, useRef } from "react";
 import { Plus, Trash2, Info } from "lucide-react";
 
+import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { maskAmount } from "@/lib/maskAmount";
 import { BudgetSubItem } from "@/types/settings";
 import { computeDetailedTotal, createEmptyBudgetSubItem } from "@/lib/settingsService";
+
+const MASK_WITH_DECIMALS = "****,**";
+
+function maskEuroAmount(amount: number) {
+  return maskAmount({
+    amount: Number(amount || 0),
+    currency: "EUR",
+    locale: "fr-FR",
+    anonymousMode: true,
+    mask: MASK_WITH_DECIMALS,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Placeholders pédagogiques par catégorie
@@ -200,11 +214,18 @@ export default function BudgetDetailEditor({
   onItemsChange,
   variant = "card",
 }: BudgetDetailEditorProps) {
+  const { anonymousMode } = useAnonymousMode();
   const uid = useId();
   const addButtonRef = useRef<HTMLButtonElement>(null);
 
   const placeholders = PLACEHOLDERS[category];
   const detailedTotal = computeDetailedTotal(items);
+  const aggregateAmountDisplay = anonymousMode
+    ? maskEuroAmount(aggregateAmount)
+    : `${formatEur(aggregateAmount)} €`;
+  const detailedTotalDisplay = anonymousMode
+    ? maskEuroAmount(detailedTotal)
+    : `${formatEur(detailedTotal)} €`;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -325,7 +346,7 @@ export default function BudgetDetailEditor({
                 className="text-sm font-semibold tabular-nums text-app-text"
                 aria-live="polite"
               >
-                {formatEur(detailedTotal)} €
+                {detailedTotalDisplay}
               </span>
             </div>
           )}
@@ -372,9 +393,9 @@ export default function BudgetDetailEditor({
           {!enabled && (
             <span
               className="text-xs text-app-text-secondary tabular-nums"
-              aria-label={`Montant global : ${formatEur(aggregateAmount)} €`}
+              aria-label={`Montant global : ${aggregateAmountDisplay}`}
             >
-              — {formatEur(aggregateAmount)} €
+              — {aggregateAmountDisplay}
             </span>
           )}
 
@@ -384,9 +405,9 @@ export default function BudgetDetailEditor({
               id={totalId}
               className="text-xs text-amber-400 font-medium tabular-nums"
               aria-live="polite"
-              aria-label={`Total détaillé : ${formatEur(detailedTotal)} €`}
+              aria-label={`Total détaillé : ${detailedTotalDisplay}`}
             >
-              — {formatEur(detailedTotal)} €
+              — {detailedTotalDisplay}
             </span>
           )}
         </div>

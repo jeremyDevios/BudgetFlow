@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db } from "@/lib/firebase";
 import {
   collection,
@@ -277,6 +278,7 @@ function TemporaryEnvelopeRow({
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { anonymousMode, anonymousModeReady, setAnonymousMode } = useAnonymousMode();
   const router = useRouter();
   const {
     permission,
@@ -287,6 +289,7 @@ export default function SettingsPage() {
   const [dbNotifEnabled, setDbNotifEnabled] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [anonymousModeSaving, setAnonymousModeSaving] = useState(false);
 
   const [settings, setSettings] = useState<UserSettings>({ ...DEFAULT_USER_SETTINGS });
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
@@ -374,6 +377,16 @@ export default function SettingsPage() {
     };
   }, [settings.fixedCostsItems, settings.savingsItems]);
 
+  useEffect(() => {
+    if (!anonymousModeReady) {
+      return;
+    }
+
+    setSettings((current) =>
+      current.anonymousMode === anonymousMode ? current : { ...current, anonymousMode },
+    );
+  }, [anonymousMode, anonymousModeReady]);
+
   // ---------------------------------------------------------------------------
   // Settings handlers
   // ---------------------------------------------------------------------------
@@ -386,6 +399,30 @@ export default function SettingsPage() {
     setSettings((s) => ({ ...s, [field]: numValue }));
     if (user) {
       await saveSettings(user.uid, { [field]: numValue });
+    }
+  };
+
+  const handleToggleAnonymousMode = async () => {
+    if (!user || anonymousModeSaving) {
+      return;
+    }
+
+    const previousValue = settings.anonymousMode === true;
+    const nextValue = !previousValue;
+
+    setAnonymousModeSaving(true);
+    setSettings((current) => ({ ...current, anonymousMode: nextValue }));
+    setAnonymousMode(nextValue);
+
+    try {
+      await saveSettings(user.uid, { anonymousMode: nextValue });
+      logger.info(`settings.handleToggleAnonymousMode: anonymousMode → ${nextValue}`);
+    } catch (error) {
+      setSettings((current) => ({ ...current, anonymousMode: previousValue }));
+      setAnonymousMode(previousValue);
+      logger.sanitizedError("Erreur mise à jour mode anonyme", error);
+    } finally {
+      setAnonymousModeSaving(false);
     }
   };
 
@@ -706,6 +743,51 @@ export default function SettingsPage() {
           </div>
 
 
+        </section>
+
+        {/* ── Confidentialité ── */}
+        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
+          <h2 className="text-xl font-bold mb-4">Confidentialité</h2>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="font-medium text-app-text">Mode anonyme</h3>
+              <p className="text-sm text-app-text-secondary">
+                Masque les montants affichés dans l&apos;interface web pour protéger la
+                confidentialité visuelle. Cette option ne modifie jamais les calculs.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-sm text-app-text-secondary">
+                {settings.anonymousMode ? "Activé" : "Désactivé"}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-label="Mode anonyme"
+                aria-checked={settings.anonymousMode}
+                onClick={() => {
+                  void handleToggleAnonymousMode();
+                }}
+                disabled={!anonymousModeReady || anonymousModeSaving}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                  settings.anonymousMode ? "bg-amber-500" : "bg-zinc-700"
+                } ${
+                  !anonymousModeReady || anonymousModeSaving
+                    ? "opacity-60 cursor-not-allowed"
+                    : "cursor-pointer"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-white transition-transform ${
+                    settings.anonymousMode ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-app-text-secondary">
+            Le masquage complet des surfaces d&apos;affichage sera branché dans une phase suivante.
+          </p>
         </section>
 
         {/* ── Notifications ── */}
