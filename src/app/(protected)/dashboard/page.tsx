@@ -227,7 +227,10 @@ function SortableEnvelopeTile({
   const Icon = ICON_MAP[env.icon] || ShoppingCart;
   const remaining = env.budget - env.spent;
   const isWide = tileSize === "wide";
-  const envTransactions = transactions.filter((t) => t.envelopeId === env.id);
+  const envelopeProgress =
+    env.budget > 0
+      ? Math.min(100, (Math.max(0, env.spent) / env.budget) * 100)
+      : 0;
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -295,19 +298,11 @@ function SortableEnvelopeTile({
           </div>
 
           <div className="mt-1.5 flex h-1.5 w-full overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-            {envTransactions.map((tx) => (
-              (() => {
-                const txAmount = getTransactionImpact(tx);
-                return (
-              <div
-                key={tx.id}
-                className={`h-full ${env.color} border-r border-white/25 dark:border-zinc-900/80 box-border`}
-                style={{ width: `${env.budget > 0 ? (Math.abs(txAmount) / env.budget) * 100 : 0}%` }}
-                title={`${tx.description || "Dépense"}: ${anonymousMode ? formatCompactMaskedAmount(txAmount) : `${Number(txAmount).toFixed(2)}€`}`}
-              />
-                );
-              })()
-            ))}
+            <div
+              data-testid={`envelope-progress-${env.id}`}
+              className={`h-full ${env.color}`}
+              style={{ width: `${envelopeProgress}%` }}
+            />
           </div>
 
           {isCurrentMonth && forecast && forecast.hasData && (
@@ -533,7 +528,10 @@ export default function DashboardPage() {
     : 0;
   const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes;
   
-  const globalProgress = monthlyTotalAvailable > 0 ? (totalSpentEnvelopes / monthlyTotalAvailable) * 100 : 0;
+  const globalProgress =
+    monthlyTotalAvailable > 0
+      ? Math.max(0, (totalSpentEnvelopes / monthlyTotalAvailable) * 100)
+      : 0;
 
   const today = new Date();
   const isCurrentMonth =
@@ -947,10 +945,11 @@ export default function DashboardPage() {
             <div className="mt-6 space-y-1.5">
                 <div className="flex justify-between text-xs font-medium text-app-text-secondary">
                     <span>Dépenses : {formatAmountWithCurrency(totalSpentEnvelopes)}</span>
-                    <span>{globalProgress.toFixed(0)}%</span>
+                  <span data-testid="global-progress-label">{globalProgress.toFixed(0)}%</span>
                 </div>
                 <div className="h-3 rounded-full overflow-hidden bg-black/10 dark:bg-white/10">
                     <div 
+                    data-testid="global-progress-fill"
                         className={`h-full rounded-full transition-all duration-1000 ease-out ${globalProgress > 100 ? 'bg-red-500' : 'bg-gradient-to-r from-amber-400 to-orange-600'}`}
                         style={{ width: `${Math.min(globalProgress, 100)}%` }}
                     ></div>

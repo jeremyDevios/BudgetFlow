@@ -10,6 +10,7 @@ const getDocsMock = jest.fn();
 const useSpendingForecastMock = jest.fn();
 const useSmartSpendingInsightsMock = jest.fn();
 const useAnonymousModeMock = jest.fn();
+const mockUser = { uid: "user-1" };
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -19,7 +20,7 @@ jest.mock("next/navigation", () => ({
 
 jest.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
-    user: { uid: "user-1" },
+    user: mockUser,
   }),
 }));
 
@@ -313,5 +314,132 @@ describe("DashboardPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/Dépenses : \*{4},\*{2} €/i)).toBeInTheDocument();
     expect(screen.queryByText(/1233\.20 €/i)).not.toBeInTheDocument();
+  });
+
+  it("clamps envelope progress to 0% when envelope spent is negative", async () => {
+    useSpendingForecastMock.mockReturnValue({
+      globalForecast: null,
+      envelopeForecasts: {},
+      loading: false,
+    });
+
+    getDocMock.mockReset();
+    getDocMock
+      .mockResolvedValueOnce(
+        createDocSnapshot({
+          notificationsEnabled: true,
+        })
+      )
+      .mockResolvedValueOnce(
+        createDocSnapshot({
+          monthlyIncome: 3000,
+          fixedCosts: 1200,
+          monthlySavings: 300,
+        })
+      );
+
+    getDocsMock.mockReset();
+
+    getDocsMock
+      .mockResolvedValueOnce(
+        createCollectionSnapshot([
+          {
+            id: "env-negative",
+            data: {
+              name: "Remboursements",
+              budget: 400,
+              icon: "ShoppingCart",
+              color: "bg-blue-500",
+              order: 0,
+            },
+          },
+        ])
+      )
+      .mockResolvedValueOnce(
+        createCollectionSnapshot([
+          {
+            id: "tx-reimb-1",
+            data: {
+              amount: 150,
+              description: "Remboursement",
+              envelopeId: "env-negative",
+              date: "2026-04-14T12:00:00.000Z",
+              isReimbursement: true,
+            },
+          },
+        ])
+      );
+
+    render(<DashboardPage />);
+
+    const envelopeFill = await screen.findByTestId("envelope-progress-env-negative");
+    expect(envelopeFill).toHaveStyle({ width: "0%" });
+  });
+
+  it("clamps global progress to 0% when total spent is negative", async () => {
+    useSpendingForecastMock.mockReturnValue({
+      globalForecast: null,
+      envelopeForecasts: {},
+      loading: false,
+    });
+
+    getDocMock.mockReset();
+    getDocMock
+      .mockResolvedValueOnce(
+        createDocSnapshot({
+          notificationsEnabled: true,
+        })
+      )
+      .mockResolvedValueOnce(
+        createDocSnapshot({
+          monthlyIncome: 3000,
+          fixedCosts: 1200,
+          monthlySavings: 300,
+        })
+      );
+
+    getDocsMock.mockReset();
+
+    getDocsMock
+      .mockResolvedValueOnce(
+        createCollectionSnapshot([
+          {
+            id: "env-1",
+            data: {
+              name: "Autres",
+              budget: 400,
+              icon: "ShoppingCart",
+              color: "bg-blue-500",
+              order: 0,
+            },
+          },
+        ])
+      )
+      .mockResolvedValueOnce(
+        createCollectionSnapshot([
+          {
+            id: "tx-reimb-2",
+            data: {
+              amount: 861.24,
+              description: "Remboursement carte",
+              envelopeId: "env-1",
+              date: "2026-04-15T12:00:00.000Z",
+              isReimbursement: true,
+            },
+          },
+        ])
+      );
+
+    render(<DashboardPage />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByText((content) =>
+          content.includes("Dépenses :") && content.includes("-861.24")
+        )
+      ).toBeInTheDocument()
+    );
+    expect(screen.getByTestId("global-progress-label")).toHaveTextContent("0%");
+    expect(screen.getByTestId("global-progress-fill")).toHaveStyle({ width: "0%" });
   });
 });

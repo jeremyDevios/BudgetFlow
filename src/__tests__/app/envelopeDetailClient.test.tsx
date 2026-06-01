@@ -36,6 +36,12 @@ jest.mock("@/context/AuthContext", () => ({
   }),
 }));
 
+jest.mock("@/context/AnonymousModeContext", () => ({
+  useAnonymousMode: () => ({
+    anonymousMode: false,
+  }),
+}));
+
 jest.mock("@/lib/firebase", () => ({
   db: {},
 }));

@@ -213,6 +213,7 @@ iOS/BudgetFlowIOS/BudgetFlowTests/
 ├── CompanionSharedModelsTests.swift               — Watch shared model parsing
 ├── DashboardAvailableTotalRegressionTests.swift   — Available-total with temp envelopes
 ├── DesignSystemTests.swift                        — Color token resolution
+├── EnvelopeMutationServiceTests.swift             — Envelope create service (offline/online/coordinator)
 ├── FirebaseAuthMockTests.swift                    — Firebase auth mock flows
 ├── HapticsManagerTests.swift                      — Haptic manager API
 ├── LocalizationTests.swift                        — i18n string resolution
@@ -224,10 +225,10 @@ iOS/BudgetFlowIOS/BudgetFlowTests/
 ├── SpendingInsightsEngineTests.swift              — Exceptional spending + smart notification detection
 ├── SwiftDataOfflineTests.swift                    — SwiftData persistence & migrations
 ├── SyncServiceDataParsingTests.swift              — Firestore document parsing
-├── SyncServiceMockTests.swift                     — SyncService mock integration
+├── SyncServiceMockTests.swift                     — MockSyncService + MockSyncCoordinator + integration tests
 ├── TemporaryEnvelopeDateValidationRegressionTests.swift — Date validation regressions
 ├── TemporaryEnvelopeTests.swift                   — Temporary envelope activation logic
-├── TransactionMutationServiceTests.swift          — Transaction create/edit/delete service
+├── TransactionMutationServiceTests.swift          — Transaction create service (offline/online/coordinator)
 ├── WatchConnectivityManagerTests.swift            — WatchConnectivity quick-add relay
 ├── WidgetSnapshotSignatureTests.swift             — Widget snapshot signature
 └── WidgetSnapshotStoreTests.swift                 — Widget snapshot persistence
@@ -244,6 +245,7 @@ iOS/BudgetFlowIOS/BudgetFlowTests/
 | `CompanionSharedModelsTests.swift` | Watch `WatchEnvelope` / `WatchQuickAddExpenseRequest` serialization |
 | `DashboardAvailableTotalRegressionTests.swift` | available total includes active temporary envelope budgets |
 | `DesignSystemTests.swift` | semantic color token resolution in light/dark |
+| `EnvelopeMutationServiceTests.swift` | offline persist without sync, online mode queues via `MockSyncCoordinator`, missing userId persists locally without sync, `updatedAt` stamped |
 | `FirebaseAuthMockTests.swift` | mock Firebase auth flows |
 | `HapticsManagerTests.swift` | haptic feedback API |
 | `LocalizationTests.swift` | French / English string resolution |
@@ -255,11 +257,11 @@ iOS/BudgetFlowIOS/BudgetFlowTests/
 | `SpendingInsightsEngineTests.swift` | exceptional spending, rapid-spend alerts, repeated over/under budget detection, recurring-expense alerts |
 | `SwiftDataOfflineTests.swift` | SwiftData offline persistence and model migrations |
 | `SyncServiceDataParsingTests.swift` | Firestore document-to-SwiftData conversion |
-| `SyncServiceMockTests.swift` | SyncService mock integration |
+| `SyncServiceMockTests.swift` | `MockSyncService` (with `mergeFromFirestore`), `MockSyncCoordinator` (call tracking, expectation hooks), `checkDataExists`, `loadFromFirestore`, `saveToFirestore`, `syncSettings`, `syncEnvelope`, `deleteEnvelope`, `deleteTransaction` |
 | `TemporaryEnvelopeDateValidationRegressionTests.swift` | date validation edge cases for temporary envelopes |
 | `TemporaryEnvelopeTests.swift` | `Envelope.isActive(in:)` — permanent always active, temporary gated by `activeMonths` |
-| `TransactionMutationServiceTests.swift` | transaction create, edit, delete with `spent` aggregate update |
-| `WatchConnectivityManagerTests.swift` | quick-add relay from Watch, response encoding |
+| `TransactionMutationServiceTests.swift` | transaction created and `spent` updated, offline no-sync, online queues via `MockSyncCoordinator`, reimbursement decreases `spent`, `updatedAt` stamped on transaction and envelope |
+| `WatchConnectivityManagerTests.swift` | quick-add relay from Watch uses `MockSyncCoordinator`, success/missing-envelope responses |
 | `WidgetSnapshotSignatureTests.swift` | widget snapshot signature hashing |
 | `WidgetSnapshotStoreTests.swift` | widget snapshot persistence and retrieval |
 
