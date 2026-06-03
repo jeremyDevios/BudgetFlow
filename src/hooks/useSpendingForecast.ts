@@ -112,6 +112,10 @@ export function useSpendingForecast(
             envelopeId: data.envelopeId,
             amount: data.amount || 0,
             date: data.date,
+            isReimbursement:
+              typeof data.isReimbursement === "boolean"
+                ? data.isReimbursement
+                : false,
           });
         });
 

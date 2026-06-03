@@ -364,6 +364,73 @@ describe("buildSmartSpendingNotifications", () => {
     expect(notification?.description).toMatch(/55.00 €/);
   });
 
+  it("excludes reimbursements from exceptional spending detection", () => {
+    // A reimbursement of 905$ on a 100$ envelope should NOT be flagged as exceptional
+    const result = findExceptionalSpendingInsight({
+      envelopes: [{ id: "health", name: "Santé", budget: 100 }],
+      transactions: [
+        {
+          id: "tx-reimbursement",
+          amount: 905,
+          description: "Remboursement mutuelle",
+          envelopeId: "health",
+          date: "2026-03-08T12:00:00",
+          isReimbursement: true,
+        },
+      ],
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it("excludes reimbursements from monthly spend aggregation in buildSmartSpendingNotifications", () => {
+    // A reimbursement should not count toward monthly spending for overspend/underspend analysis
+    const result = buildSmartSpendingNotifications({
+      today,
+      envelopes: [{ id: "health", name: "Santé", budget: 100 }],
+      transactions: [
+        // Regular expense: 30€ (normal)
+        {
+          id: "tx-1",
+          amount: 30,
+          description: "Consultation",
+          envelopeId: "health",
+          date: "2026-03-05T12:00:00",
+        },
+        // Reimbursement: 905€ (should be ignored, not inflate spending to 935€)
+        {
+          id: "tx-reimbursement",
+          amount: 905,
+          description: "Remboursement mutuelle",
+          envelopeId: "health",
+          date: "2026-03-08T12:00:00",
+          isReimbursement: true,
+        },
+      ],
+      envelopeForecasts: {
+        health: forecast("health", {
+          projectedSpend: 30,
+          projectedRemaining: 70,
+          percentOfBudget: 30,
+          willExceed: false,
+          excessAmount: 0,
+        }),
+      },
+    });
+
+    // Should NOT have exceptional_spending notification
+    const exceptionalNotification = result.globalNotifications.find(
+      (entry) => entry.kind === "exceptional_spending"
+    );
+    expect(exceptionalNotification).toBeUndefined();
+
+    // Should NOT have frequent_overspend (30€ on 100€ budget is fine)
+    const overspendNotification = result.globalNotifications.find(
+      (entry) => entry.kind === "frequent_overspend"
+    );
+    expect(overspendNotification).toBeUndefined();
+  });
+
   it("returns no smart notifications when spending stays healthy", () => {
     const result = buildSmartSpendingNotifications({
       today,

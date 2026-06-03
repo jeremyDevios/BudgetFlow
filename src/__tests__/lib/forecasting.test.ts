@@ -126,6 +126,34 @@ describe("computeForecast", () => {
     expect(result.globalForecast.excessAmount).toBeCloseTo(130, 5);
   });
 
+  it("subtracts reimbursement amounts from past and current month spending", () => {
+    // A reimbursement should reduce net spending, not inflate it
+    const result = computeForecast({
+      envelopes: [{ id: "health", budget: 100, name: "Santé" }],
+      pastTransactions: [
+        { envelopeId: "health", amount: 905, date: "2026-01-10T12:00:00", isReimbursement: true },
+        { envelopeId: "health", amount: 50, date: "2026-01-15T12:00:00" },
+        { envelopeId: "health", amount: 60, date: "2026-02-10T12:00:00" },
+        { envelopeId: "health", amount: 55, date: "2026-03-10T12:00:00" },
+      ],
+      currentMonthTransactions: [
+        { envelopeId: "health", amount: 30, date: "2026-04-05T12:00:00" },
+        { envelopeId: "health", amount: 200, date: "2026-04-08T12:00:00", isReimbursement: true },
+      ],
+      monthlyBudget: 100,
+      today: new Date(2026, 3, 10),
+      pastMonthCount: 3,
+    });
+
+    // With reimbursement negated:
+    // Jan: 50 - 905 = -855, Feb: 60, Mar: 55 → avg = (-855+60+55)/3 = -246.67
+    // Current: 30 - 200 = -170
+    // projectedSpend clamped to currentSpent = -170, well under budget of 100
+    const forecast = result.envelopeForecasts.health;
+    expect(forecast.willExceed).toBe(false);
+    expect(forecast.projectedSpend).toBeLessThan(100);
+  });
+
   it("handles zero budget envelopes without dividing by zero", () => {
     const result = computeForecast({
       envelopes: [{ id: "misc", budget: 0, name: "Divers" }],

@@ -131,6 +131,10 @@ export function useSmartSpendingInsights(
             date: typeof data.date === "string" ? data.date : "",
             description:
               typeof data.description === "string" ? data.description : "",
+            isReimbursement:
+              typeof data.isReimbursement === "boolean"
+                ? data.isReimbursement
+                : false,
           });
         });
 

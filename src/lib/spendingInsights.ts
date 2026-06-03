@@ -6,6 +6,7 @@ export interface SpendingInsightTransaction {
   description: string;
   envelopeId: string;
   date: string;
+  isReimbursement?: boolean;
 }
 
 export interface SpendingInsightEnvelope {
@@ -155,7 +156,12 @@ export function findExceptionalSpendingInsight(params: {
 
   for (const transaction of transactions) {
     const envelope = envelopeById.get(transaction.envelopeId);
-    if (!envelope || envelope.budget <= 0 || transaction.amount <= 0) {
+    if (
+      !envelope ||
+      envelope.budget <= 0 ||
+      transaction.amount <= 0 ||
+      transaction.isReimbursement
+    ) {
       continue;
     }
 
@@ -213,7 +219,11 @@ export function buildSmartSpendingNotifications(params: {
     {};
 
   for (const transaction of transactions) {
-    if (!transaction.envelopeId || transaction.amount <= 0) {
+    if (
+      !transaction.envelopeId ||
+      transaction.amount <= 0 ||
+      transaction.isReimbursement
+    ) {
       continue;
     }
 

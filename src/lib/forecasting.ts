@@ -2,6 +2,7 @@ export interface ForecastTransaction {
   envelopeId: string;
   amount: number;
   date: string; // ISO "YYYY-MM-DD..."
+  isReimbursement?: boolean;
 }
 
 export interface ForecastEnvelope {
@@ -114,8 +115,9 @@ export function computeForecast(params: {
       pastTxCountByEnvByMonth[tx.envelopeId] = {};
     }
 
+    const contribution = tx.isReimbursement ? -tx.amount : tx.amount;
     const currentAmount = pastByEnvByMonth[tx.envelopeId][monthKey] ?? 0;
-    pastByEnvByMonth[tx.envelopeId][monthKey] = currentAmount + tx.amount;
+    pastByEnvByMonth[tx.envelopeId][monthKey] = currentAmount + contribution;
 
     const currentCount = pastTxCountByEnvByMonth[tx.envelopeId][monthKey] ?? 0;
     pastTxCountByEnvByMonth[tx.envelopeId][monthKey] = currentCount + 1;
@@ -129,8 +131,9 @@ export function computeForecast(params: {
 
   const currentSpentByEnvelope: Record<string, number> = {};
   for (const tx of currentMonthTransactions) {
+    const contribution = tx.isReimbursement ? -tx.amount : tx.amount;
     const current = currentSpentByEnvelope[tx.envelopeId] ?? 0;
-    currentSpentByEnvelope[tx.envelopeId] = current + tx.amount;
+    currentSpentByEnvelope[tx.envelopeId] = current + contribution;
   }
 
   const currentYear = today.getFullYear();
