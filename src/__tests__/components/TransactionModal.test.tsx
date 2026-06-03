@@ -397,6 +397,7 @@ describe("TransactionModal", () => {
         description: "Taxi",
         envelopeId: "env-1",
         date: "2026-04-10T00:00:00.000Z",
+        updatedAt: "2026-04-14T12:00:00.000Z",
         isReimbursement: false,
       }
     );

@@ -133,6 +133,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             description,
             envelopeId: selectedEnvelopeId,
             date: new Date(date).toISOString(),
+          updatedAt: new Date().toISOString(),
           isReimbursement,
         });
 
@@ -161,12 +162,14 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         // --- MODE CREATION ---
         
         // 1. Ajouter la transaction
+        const nowISO = new Date().toISOString();
         await addDoc(collection(db, "users", user.uid, "transactions"), {
             amount: numAmount,
             description,
             envelopeId: selectedEnvelopeId,
             date: new Date(date).toISOString(),
-          createdAt: new Date().toISOString(),
+          createdAt: nowISO,
+          updatedAt: nowISO,
           isReimbursement,
         });
 

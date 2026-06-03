@@ -97,7 +97,7 @@ service cloud.firestore {
     function isValidEnvelopeData(data) {
       return data.keys().hasOnly([
             'name', 'budget', 'spent', 'icon', 'color', 'order',
-            'tileSize', 'createdAt', 'isTemporary', 'activeMonths'
+            'tileSize', 'createdAt', 'updatedAt', 'isTemporary', 'activeMonths'
           ])
         && data.name   is string && data.name.size()  >= 1 && data.name.size()  <= 50
         && data.icon   is string && data.icon.size()  >= 1 && data.icon.size()  <= 100
@@ -107,6 +107,7 @@ service cloud.firestore {
         && data.order  is number && data.order  >= 0        && data.order  <= 10000
         && (!('tileSize'    in data) || data.tileSize == null || data.tileSize in ['small', 'wide'])
         && (!('createdAt'   in data) || (data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30))
+        && (!('updatedAt'   in data) || (data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 30))
         // ── Temporary-envelope optional fields ────────────────────────────────
         && (!('isTemporary'  in data) || data.isTemporary is bool)
         && (!('activeMonths' in data) || isValidActiveMonths(data.activeMonths));
@@ -118,12 +119,13 @@ service cloud.firestore {
     //           isReimbursement (bool; absent = false; when true the amount is a credit, not a debit)
     function isValidTransactionData(data) {
       return data.keys().hasOnly([
-            'amount', 'envelopeId', 'date', 'createdAt', 'description', 'note', 'isReimbursement'
+            'amount', 'envelopeId', 'date', 'createdAt', 'updatedAt', 'description', 'note', 'isReimbursement'
           ])
         && data.amount     is number && data.amount > 0             && data.amount     <= 1000000
         && data.envelopeId is string && data.envelopeId.size() >= 1 && data.envelopeId.size() <= 128
         && data.date       is string && data.date.size()       >= 1 && data.date.size()       <= 30
         && data.createdAt  is string && data.createdAt.size()  >= 1 && data.createdAt.size()  <= 30
+        && (!('updatedAt'      in data) || (data.updatedAt      is string && data.updatedAt.size()      >= 1 && data.updatedAt.size()      <= 30))
         && (!('description'     in data) || (data.description     is string && data.description.size()     <= 255))
         && (!('note'            in data) || (data.note            is string && data.note.size()            <= 255))
         && (!('isReimbursement' in data) || data.isReimbursement is bool);

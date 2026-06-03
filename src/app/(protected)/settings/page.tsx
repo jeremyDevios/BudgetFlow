@@ -550,6 +550,7 @@ export default function SettingsPage() {
           color: values.color,
           isTemporary: values.isTemporary,
           activeMonths: values.activeMonths,
+          updatedAt: new Date().toISOString(),
         });
         setEnvelopes((prev) =>
           prev.map((e) =>
@@ -569,6 +570,7 @@ export default function SettingsPage() {
       } else {
         // Create — isTemporary and activeMonths are written from the form.
         const newOrder = envelopes.length;
+        const nowISO = new Date().toISOString();
         const docRef = await addDoc(collection(db, "users", user.uid, "envelopes"), {
           name: values.name,
           budget: numBudget,
@@ -578,6 +580,8 @@ export default function SettingsPage() {
           activeMonths: values.activeMonths,
           spent: 0,
           order: newOrder,
+          createdAt: nowISO,
+          updatedAt: nowISO,
         });
         setEnvelopes((prev) => [
           ...prev,

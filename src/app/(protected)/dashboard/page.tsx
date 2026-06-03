@@ -760,7 +760,7 @@ export default function DashboardPage() {
     );
 
     try {
-      await updateDoc(doc(db, "users", user.uid, "envelopes", envelopeId), { tileSize: nextSize });
+      await updateDoc(doc(db, "users", user.uid, "envelopes", envelopeId), { tileSize: nextSize, updatedAt: new Date().toISOString() });
     } catch {
       logger.warn("Envelope tile size save failed");
     } finally {
