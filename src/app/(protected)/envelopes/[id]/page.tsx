@@ -1,8 +1,12 @@
 // Server component — envelope IDs are user-specific and resolved client-side.
-// Uses force-dynamic to avoid Firebase SDK initialization during build.
+// Firebase SDK now uses lazy init (Proxy) so prerendering is safe.
 import EnvelopeDetailClient from "./EnvelopeDetailClient";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-static";
+
+export function generateStaticParams() {
+  return [{ id: "__placeholder__" }];
+}
 
 export default function EnvelopeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   return <EnvelopeDetailClient params={params} />;
