@@ -1,7 +1,7 @@
 # Marketing BudgetFlow — Plan de Publication App Store
 
 > Document de référence pour la publication et la croissance de **BudgetFlow** sur l'App Store.
-> Mis à jour : 3 juin 2026 — Version 2.0 (Chantier App Store — Phase 1 terminée)
+> Mis à jour : 4 juin 2026 — Version 2.1 (Chantier App Store — Phases 1 & 2 terminées)
 
 ---
 
@@ -9,9 +9,9 @@
 
 > Cette section évalue l'application iOS **en l'état actuel** par rapport aux exigences du Plan de Publication App Store.
 
-### Verdict global : 🟡 EN PROGRÈS — Bloqueurs critiques résolus, Phase 2 restante
+### Verdict global : 🟢 PROCHE — Bloqueurs critiques + accessibilité résolus, Phase 3 restante
 
-**Progrès réalisés le 3 juin 2026 :**
+**Progrès réalisés (3-4 juin 2026) :**
 
 | Chantier | Statut |
 |---|---|
@@ -91,13 +91,13 @@
 5. ✅ **Liens légaux iOS** : `AuthView.swift` — `Link` cliquables vers CGU et confidentialité.
 6. ✅ **`.dockerignore`** : Complété avec `.env*` et `scripts/service-account*.json`.
 
-#### Phase 2 — Accessibilité et conformité technique (2–3 semaines) ⬜ À faire
+#### ✅ Phase 2 — Accessibilité et conformité technique (COMPLÉTÉE le 4 juin 2026)
 
-7. **Dynamic Type** : Remplacer les `.font(.system(size:))` par des styles sémantiques dans `AddTransactionView.swift` et `BalanceSummaryCard.swift`.
-8. **`accessibilityReduceMotion`** : Ajouter `@Environment(\.accessibilityReduceMotion)` dans les 6 fichiers manquants.
-9. **Barre de progression** : Ajouter `accessibilityLabel` et `accessibilityValue` à `GlobalProgressBar` et `EnvelopeSegmentBar`.
-10. **Statuts budgétaires** : Ajouter un texte explicite à côté des indicateurs de couleur.
-11. **Confirmation de suppression** : Ajouter `confirmationDialog` dans `HistoryView.swift`.
+7. ✅ **Dynamic Type** : 10 `.font(.system(size:))` remplacés par des styles sémantiques (.caption, .body, .largeTitle, .subheadline, .title3) dans `AddTransactionView.swift` et `BalanceSummaryCard.swift`.
+8. ✅ **`accessibilityReduceMotion`** : 40+ animations conditionnées sur `reduceMotion ? .none : .original` dans les 6 fichiers : `DashboardView.swift`, `EnvelopeGridSection.swift`, `CashFlowView.swift`, `AddTransactionView.swift`, `HistoryView.swift`, `CalendarHeatmapView.swift`.
+9. ✅ **Barre de progression** : `GlobalProgressBar` → `.accessibilityLabel("Progression budgétaire globale")` + `.accessibilityValue("\(percent) %")`. `EnvelopeSegmentBar` → `.accessibilityLabel("Répartition du budget par enveloppe")`.
+10. ✅ **Statuts budgétaires** : `statusLabel` ("Budget dépassé" / "Budget quasi épuisé" / "Budget maîtrisé") + `statusColor` (.red / .orange / .green) ajoutés sous le solde dans `BalanceSummaryCard.swift` (WCAG 1.4.1).
+11. ✅ **Confirmation de suppression** : `confirmationDialog` remplace la suppression directe dans `HistoryView.swift`. Le `allowsFullSwipe` est passé à `false` pour éviter les suppressions accidentelles.
 
 #### Phase 3 — Publication (1–2 semaines)
 

@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { logger } from "@/lib/logger";
 
+// Force dynamic — this route uses Firebase Admin SDK which requires
+// runtime environment variables (not available during build).
+export const dynamic = "force-dynamic";
+
 /**
  * POST /api/account/delete
  *
