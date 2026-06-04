@@ -29,32 +29,67 @@ function getOrInitApp(): FirebaseApp {
   return _app;
 }
 
-// Lazy getters that only init Firebase when actually accessed.
-export const app: FirebaseApp = new Proxy({} as FirebaseApp, {
-  get(_, prop) { return (getOrInitApp() as any)[prop]; },
+/** Create a lazy proxy that delegates all operations (including
+ *  instanceof) to the real instance, initializing on first access. */
+function lazyProxy<T>(
+  key: { current: T | null },
+  factory: () => T,
+): T {
+  return new Proxy(
+    // Use a function target so `instanceof` walks up to the real
+    // instance via getPrototypeOf, not Object.prototype.
+    function () {} as unknown as T,
+    {
+      get(_, prop, receiver) {
+        let inst = key.current;
+        if (!inst) {
+          inst = factory();
+          key.current = inst;
+        }
+        return Reflect.get(inst as object, prop, inst as object);
+      },
+      getPrototypeOf() {
+        let inst = key.current;
+        if (!inst) {
+          inst = factory();
+          key.current = inst;
+        }
+        return Object.getPrototypeOf(inst);
+      },
+      set(_, prop, value) {
+        let inst = key.current;
+        if (!inst) {
+          inst = factory();
+          key.current = inst;
+        }
+        return Reflect.set(inst as object, prop, value, inst as object);
+      },
+    } as ProxyHandler<object>,
+  ) as T;
+}
+
+// ── Lazy exports ──────────────────────────────────────────────────
+const _appRef = { current: _app };
+const _authRef = { current: _auth };
+const _dbRef = { current: _db };
+const _messagingRef = { current: _messaging };
+
+export const app: FirebaseApp = lazyProxy(_appRef, () => getOrInitApp());
+
+export const auth: Auth = lazyProxy(_authRef, () => {
+  const a = getOrInitApp();
+  return getAuth(a);
 });
 
-export const auth: Auth = new Proxy({} as Auth, {
-  get(_, prop) {
-    if (!_auth) _auth = getAuth(getOrInitApp());
-    return (_auth as any)[prop];
-  },
+export const db: Firestore = lazyProxy(_dbRef, () => {
+  const a = getOrInitApp();
+  return getFirestore(a);
 });
 
-export const db: Firestore = new Proxy({} as Firestore, {
-  get(_, prop) {
-    if (!_db) _db = getFirestore(getOrInitApp());
-    return (_db as any)[prop];
-  },
-});
-
-export const messaging: any = new Proxy({} as any, {
-  get(_, prop) {
-    if (typeof window === "undefined") return undefined;
-    if (!_messaging) {
-      // isSupported is async; try sync init for the common case
-      _messaging = getMessaging(getOrInitApp());
-    }
-    return _messaging?.[prop as string | symbol];
-  },
+export const messaging: any = lazyProxy(_messagingRef, () => {
+  if (typeof window === "undefined") {
+    // On SSR return a stub — messaging is browser-only.
+    return { getToken: () => Promise.resolve(null) } as any;
+  }
+  return getMessaging(getOrInitApp());
 });
