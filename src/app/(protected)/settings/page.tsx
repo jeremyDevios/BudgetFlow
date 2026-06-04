@@ -638,8 +638,14 @@ export default function SettingsPage() {
       if (!response.ok) {
         throw new Error(data.error || "Échec de la suppression du compte.");
       }
-      // Sign out and redirect to home
-      await signOut(auth);
+      // Sign out (best-effort) and redirect to home.
+      // signOut may fail with "user-not-found" since the Auth account was
+      // already deleted server-side — that's expected and non-fatal.
+      try {
+        await signOut(auth);
+      } catch {
+        // Ignore signOut errors: the account is already deleted.
+      }
       router.push("/");
     } catch (error) {
       setDeleteAccountError(
