@@ -1,12 +1,117 @@
 # Marketing BudgetFlow — Plan de Publication App Store
 
 > Document de référence pour la publication et la croissance de **BudgetFlow** sur l'App Store.
-> Mis à jour : mars 2026 — Version 1.1
+> Mis à jour : 3 juin 2026 — Version 2.0 (Chantier App Store — Phase 1 terminée)
+
+---
+
+## 0. Audit de conformité App Store — État des lieux (3 juin 2026 — mis à jour après chantier)
+
+> Cette section évalue l'application iOS **en l'état actuel** par rapport aux exigences du Plan de Publication App Store.
+
+### Verdict global : 🟡 EN PROGRÈS — Bloqueurs critiques résolus, Phase 2 restante
+
+**Progrès réalisés le 3 juin 2026 :**
+
+| Chantier | Statut |
+|---|---|
+| 4 bloqueurs critiques | ✅ Résolus — code implémenté |
+| Pages légales (Confidentialité, CGU, Support) | ✅ Créées sur vizualy.app |
+| API suppression de compte (Admin SDK) | ✅ Déployée (`POST /api/account/delete`) |
+| iOS : `deleteAccount()` + UI Settings + liens légaux | ✅ Code prêt |
+| Web : UI suppression compte avec confirmation | ✅ Code prêt |
+| `.dockerignore` complété | ✅ Patterns `.env*` et `service-account*.json` ajoutés |
+
+**⚠️ Reste à faire :** build Xcode, test sur appareil réel, screenshots, configuration App Store Connect, publication des pages légales (après déploiement Vercel).
+
+---
+
+### 🔴 Bloqueurs critiques — ÉTAT ACTUEL
+
+| # | Exigence | Statut | Détail |
+|---|---|---|---|
+| 1 | **Suppression de compte** | ✅ Implémenté | iOS : `FirebaseManager.deleteAccount()` → POST `/api/account/delete` → `user.delete()` + clear local. UI dans `SettingsView` avec confirmation et ProgressView. Web : bouton "Supprimer mon compte" avec modal de confirmation (taper DELETE). |
+| 2 | **Politique de confidentialité en ligne** | ✅ Créée | URL : `https://vizualy.app/confidentialite` — page dédiée BudgetFlow avec 9 sections (données collectées, Firebase, sécurité, suppression, RGPD, contact). À déployer sur Vercel. |
+| 3 | **URL de support** | ✅ Créée | URL : `https://vizualy.app/support` — page avec contact email, carte de présentation et FAQ 6 questions. À déployer sur Vercel. |
+| 4 | **Suppression des données serveur** | ✅ Implémentée | API `POST /api/account/delete` : `adminDb.recursiveDelete()` sur `users/{uid}` + `adminAuth.deleteUser(uid)`. Appelée depuis iOS et Web avec token Firebase. |
+
+---
+
+### 🟠 Bloqueurs techniques (rejet probable)
+
+| # | Exigence | Statut | Détail |
+|---|---|---|---|
+| 5 | **Dynamic Type** (Accessibilité) | ❌ Non conforme | Les tailles de police sont fixes dans les vues critiques : `AddTransactionView.swift` (`.system(size: 48)`, `.system(size: 32)`, `.system(size: 12)`), `BalanceSummaryCard.swift` (`.system(size: 40)`). Très peu de styles sémantiques (`.body`, `.title`) sont utilisés. |
+| 6 | **Animations et `accessibilityReduceMotion`** | ❌ Partiel | Seulement 2 fichiers sur 8 utilisent `@Environment(\.accessibilityReduceMotion)` : `ForecastSectionView.swift` et `SmartInsightsCarouselView.swift`. Les 6 autres (`DashboardView`, `EnvelopeGridSection`, `CashFlowView`, `AddTransactionView`, `HistoryView`, `CalendarHeatmapView`) ont des animations non conditionnées. |
+| 7 | **Barre de progression sans VoiceOver** | ❌ Non conforme | `GlobalProgressBar` et `EnvelopeSegmentBar` dans `BalanceSummaryCard.swift` n'ont pas d'`accessibilityLabel` ni d'`accessibilityValue`. |
+| 8 | **Statuts communiqués par couleur seule** | ❌ Non conforme | `currentMonthBalance < 0 ? .red : Color.appText` et le changement de couleur de `GlobalProgressBar` (ambre → rouge) ne sont pas accompagnés de texte. |
+| 9 | **Suppression de transaction sans confirmation** | ❌ Non conforme | `HistoryView.swift` : `.swipeActions(edge: .trailing, allowsFullSwipe: true)` supprime directement sans `confirmationDialog`. Un swipe accidentel est définitif. |
+
+---
+
+### 🟡 Points à améliorer (non bloquants mais recommandés)
+
+| # | Exigence | Statut | Détail |
+|---|---|---|---|
+| 10 | **Screenshots App Store** | ❌ Non préparés | Minimum 3 screenshots iPhone 6.7" (1290×2796 px) et 3 screenshots iPhone 6.5" (1242×2688 px) requis. Aucun screenshot produit. |
+| 11 | **App Preview Video** | ❌ Non préparée | Optionnelle mais fortement recommandée. Script de 30 secondes rédigé dans la section 5. |
+| 12 | **SKStoreReviewController** | ❌ Non implémenté | Aucune demande d'avis in-app. La section 7 du plan détaille les moments optimaux. |
+| 13 | **Icône App Store** | ⚠️ À vérifier | Icône 1024×1024 px PNG sans alpha requise. À vérifier dans les assets Xcode. |
+| 14 | **Compte Apple Developer** | ⚠️ À configurer | Abonnement 99 $/an, contrat "Paid Applications Agreement" à signer. |
+| 15 | **App Store Connect** | ❌ Non configuré | Bundle ID, fiche app, métadonnées ASO, classification 4+ à renseigner. |
+| 16 | **Méthodes email/password inutilisées** | ⚠️ Code mort | `FirebaseManager.swift` contient `signIn(email:password:)` et `register(email:password:)` qui ne sont pas exposés dans l'UI mais restent accessibles. |
+| 17 | **Crash reporting** | ⚠️ Non vérifié | Firebase Crashlytics non mentionné dans les dépendances iOS. Xcode Organizer peut suffire. |
+
+---
+
+### ✅ Points conformes
+
+| # | Exigence | Statut |
+|---|---|---|
+| 18 | **Authentification Google uniquement** | ✅ Conforme — `AuthView.swift` expose uniquement `performGoogleSignIn()` |
+| 19 | **Langue principale Français** | ✅ Conforme — l'UI est en français |
+| 20 | **Pas d'API privées** | ✅ Conforme — SwiftUI standard uniquement |
+| 21 | **Pas de contenu placeholder** | ✅ À vérifier lors du build release |
+| 22 | **Orientation portrait** | ✅ Conforme — SwiftUI par défaut |
+| 23 | **Métadonnées ASO** | ✅ Rédigées — sections 3.2 (FR) et 3.3 (EN) prêtes |
+| 24 | **Script App Preview** | ✅ Rédigé — section 5 |
+| 25 | **Stratégie de lancement** | ✅ Documentée — sections 6, 7, 8, 10 |
+| 26 | **Template politique de confidentialité** | ✅ Publié — `https://vizualy.app/confidentialite` |
+
+---
+
+### Plan d'action priorisé pour la mise en conformité
+
+#### ✅ Phase 1 — Bloqueurs critiques (COMPLÉTÉE le 3 juin 2026)
+
+1. ✅ **Suppression de compte** : `FirebaseManager.deleteAccount()` → `POST /api/account/delete` → `adminDb.recursiveDelete()` + `adminAuth.deleteUser()`. UI iOS (SettingsView) + UI Web (settings/page.tsx) avec confirmations.
+2. ✅ **Politique de confidentialité** : Page créée sur `https://vizualy.app/confidentialite` (à déployer).
+3. ✅ **URL de support** : Page créée sur `https://vizualy.app/support` (à déployer).
+4. ✅ **CGU** : Page créée sur `https://vizualy.app/cgu` (à déployer).
+5. ✅ **Liens légaux iOS** : `AuthView.swift` — `Link` cliquables vers CGU et confidentialité.
+6. ✅ **`.dockerignore`** : Complété avec `.env*` et `scripts/service-account*.json`.
+
+#### Phase 2 — Accessibilité et conformité technique (2–3 semaines) ⬜ À faire
+
+7. **Dynamic Type** : Remplacer les `.font(.system(size:))` par des styles sémantiques dans `AddTransactionView.swift` et `BalanceSummaryCard.swift`.
+8. **`accessibilityReduceMotion`** : Ajouter `@Environment(\.accessibilityReduceMotion)` dans les 6 fichiers manquants.
+9. **Barre de progression** : Ajouter `accessibilityLabel` et `accessibilityValue` à `GlobalProgressBar` et `EnvelopeSegmentBar`.
+10. **Statuts budgétaires** : Ajouter un texte explicite à côté des indicateurs de couleur.
+11. **Confirmation de suppression** : Ajouter `confirmationDialog` dans `HistoryView.swift`.
+
+#### Phase 3 — Publication (1–2 semaines)
+
+9. Produire les screenshots (section 4).
+10. Produire l'App Preview Video (section 5).
+11. Configurer App Store Connect (section 2).
+12. Implémenter `SKStoreReviewController` (section 7).
+13. Nettoyer les méthodes email/password dans `FirebaseManager.swift`.
 
 ---
 
 ## Table des matières
 
+0. [Audit de conformité App Store — État des lieux](#0-audit-de-conformité-app-store--état-des-lieux-3-juin-2026)
 1. [Checklist de validation App Store](#1-checklist-de-validation-app-store)
 2. [Préparation App Store Connect](#2-préparation-app-store-connect)
 3. [Métadonnées ASO](#3-métadonnées-aso)
@@ -869,11 +974,11 @@ Dans App Store Connect → App Privacy, déclarer :
 ## Récapitulatif des priorités
 
 ```
-PRIORITÉ 1 (avant soumission)
-  → Politique de confidentialité en ligne
-  → Suppression de données dans l'app
-  → Screenshots iPhone 6.7" et 6.5" prêts
-  → App Store Connect configuré
+PRIORITÉ 1 (avant soumission) — ✅ 2/4 complétés
+  ✅ Politique de confidentialité en ligne → https://vizualy.app/confidentialite
+  ✅ Suppression de données dans l'app → iOS + Web + API
+  ⬜ Screenshots iPhone 6.7" et 6.5" prêts
+  ⬜ App Store Connect configuré
 
 PRIORITÉ 2 (jour J)
   → Métadonnées ASO finalisées (titre + keywords + description)
@@ -890,4 +995,4 @@ PRIORITÉ 3 (semaines 1-4)
 
 ---
 
-*Document généré le 14 mars 2026 — à mettre à jour après chaque mise à jour majeure de l'app.*
+*Document généré le 14 mars 2026 — dernière mise à jour le 3 juin 2026 (chantier App Store Phase 1).*

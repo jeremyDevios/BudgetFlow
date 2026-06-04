@@ -2,7 +2,8 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
 import {
   collection,
   doc,
@@ -290,6 +291,12 @@ export default function SettingsPage() {
   const [imgError, setImgError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [anonymousModeSaving, setAnonymousModeSaving] = useState(false);
+
+  // Account deletion state
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteAccountError, setDeleteAccountError] = useState("");
 
   const [settings, setSettings] = useState<UserSettings>({ ...DEFAULT_USER_SETTINGS });
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
@@ -614,6 +621,36 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+    setIsDeletingAccount(true);
+    setDeleteAccountError("");
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Échec de la suppression du compte.");
+      }
+      // Sign out and redirect to home
+      await signOut(auth);
+      router.push("/");
+    } catch (error) {
+      setDeleteAccountError(
+        error instanceof Error ? error.message : "Erreur lors de la suppression."
+      );
+      setIsDeletingAccount(false);
+      setShowDeleteAccountConfirm(false);
+      setDeleteConfirmText("");
+    }
+  };
+
   // DnD reordering — operates only on permanent envelopes.
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -792,6 +829,30 @@ export default function SettingsPage() {
           <p className="mt-3 text-xs text-app-text-secondary">
             Le masquage complet des surfaces d&apos;affichage sera branché dans une phase suivante.
           </p>
+        </section>
+
+        {/* ── Suppression du compte ── */}
+        <section className="bg-app-surface/50 border border-red-900/30 rounded-2xl p-6">
+          <h2 className="text-xl font-bold mb-4 text-red-500">Zone dangereuse</h2>
+          <div>
+            <h3 className="font-medium text-app-text">Supprimer mon compte</h3>
+            <p className="text-sm text-app-text-secondary mt-1 mb-4">
+              Supprimez définitivement votre compte et toutes les données associées
+              (enveloppes, transactions, paramètres). Cette action est irréversible.
+            </p>
+            <button
+              onClick={() => setShowDeleteAccountConfirm(true)}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors text-sm"
+              disabled={isDeletingAccount}
+            >
+              {isDeletingAccount ? "Suppression en cours..." : "Supprimer mon compte"}
+            </button>
+            {deleteAccountError && (
+              <p className="mt-3 text-sm text-red-400" role="alert">
+                {deleteAccountError}
+              </p>
+            )}
+          </div>
         </section>
 
         {/* ── Notifications ── */}
@@ -1102,6 +1163,47 @@ export default function SettingsPage() {
         </section>
 
       </div>
+
+      {/* ── Modal: confirmation suppression compte ── */}
+      {showDeleteAccountConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl">
+            <h2 className="text-xl font-bold mb-2 text-red-500">Supprimer mon compte</h2>
+            <p className="text-sm text-app-text-secondary mb-6">
+              Cette action est <strong className="text-red-400">irréversible</strong>. Toutes vos données seront définitivement supprimées : compte Firebase, enveloppes, transactions, paramètres et activité quotidienne.
+            </p>
+            <p className="text-sm text-app-text-secondary mb-4">
+              Pour confirmer, tapez <code className="bg-red-900/30 text-red-400 px-1.5 py-0.5 rounded text-xs font-bold">DELETE</code> ci-dessous :
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="w-full px-3 py-2 bg-app-bg border border-app-border rounded-lg text-app-text text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-red-500"
+              autoFocus
+            />
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteAccountConfirm(false);
+                  setDeleteConfirmText("");
+                }}
+                className="px-4 py-2 text-sm text-app-text-secondary hover:text-app-text transition-colors"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirmText !== "DELETE" || isDeletingAccount}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium text-sm transition-colors"
+              >
+                {isDeletingAccount ? "Suppression..." : "Supprimer définitivement"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal: create / edit envelope ── */}
       {isModalOpen && (

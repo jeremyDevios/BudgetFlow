@@ -7,3 +7,10 @@ test-results
 backups
 .git
 *.log
+
+# Secrets — must never be included in Docker images
+.env*
+.env.local
+.env.local.*
+scripts/service-account*.json
+scripts/*.service-account*.json
