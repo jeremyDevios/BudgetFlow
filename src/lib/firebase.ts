@@ -31,7 +31,7 @@ function getOrInitApp(): FirebaseApp {
 
 /** Create a lazy proxy that delegates all operations (including
  *  instanceof) to the real instance, initializing on first access. */
-function lazyProxy<T>(
+function lazyProxy<T extends object>(
   key: { current: T | null },
   factory: () => T,
 ): T {
