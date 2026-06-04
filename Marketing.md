@@ -1,7 +1,7 @@
 # Marketing BudgetFlow — Plan de Publication App Store
 
 > Document de référence pour la publication et la croissance de **BudgetFlow** sur l'App Store.
-> Mis à jour : 4 juin 2026 — Version 2.1 (Chantier App Store — Phases 1 & 2 terminées)
+> Mis à jour : 4 juin 2026 — Version 2.2 (Chantier App Store — Phases 1 & 2 complétées, accessibilité étendue)
 
 ---
 
@@ -16,13 +16,16 @@
 | Chantier | Statut |
 |---|---|
 | 4 bloqueurs critiques | ✅ Résolus — code implémenté |
-| Pages légales (Confidentialité, CGU, Support) | ✅ Créées sur vizualy.app |
+| Pages légales (Confidentialité, CGU, Support) | ✅ Créées sur vizualy.app (déploiement Vercel restant) |
 | API suppression de compte (Admin SDK) | ✅ Déployée (`POST /api/account/delete`) |
 | iOS : `deleteAccount()` + UI Settings + liens légaux | ✅ Code prêt |
 | Web : UI suppression compte avec confirmation | ✅ Code prêt |
 | `.dockerignore` complété | ✅ Patterns `.env*` et `service-account*.json` ajoutés |
+| Accessibilité Phase 2 (5 bloqueurs techniques) | ✅ Résolus — voir section Phase 2 |
+| Extension Dynamic Type (10 fichiers supplémentaires) | ✅ ~20 `.system(size:)` → styles sémantiques |
+| Extension reduceMotion (12 fichiers supplémentaires) | ✅ ~50 animations conditionnées |
 
-**⚠️ Reste à faire :** build Xcode, test sur appareil réel, screenshots, configuration App Store Connect, publication des pages légales (après déploiement Vercel).
+**⚠️ Reste à faire :** build Xcode, test sur appareil réel, screenshots, configuration App Store Connect, **déploiement des pages légales sur Vercel** (pages créées côté code mais vizualy.app retourne actuellement 502 — le déploiement Vercel reste à faire).
 
 ---
 
@@ -41,11 +44,11 @@
 
 | # | Exigence | Statut | Détail |
 |---|---|---|---|
-| 5 | **Dynamic Type** (Accessibilité) | ❌ Non conforme | Les tailles de police sont fixes dans les vues critiques : `AddTransactionView.swift` (`.system(size: 48)`, `.system(size: 32)`, `.system(size: 12)`), `BalanceSummaryCard.swift` (`.system(size: 40)`). Très peu de styles sémantiques (`.body`, `.title`) sont utilisés. |
-| 6 | **Animations et `accessibilityReduceMotion`** | ❌ Partiel | Seulement 2 fichiers sur 8 utilisent `@Environment(\.accessibilityReduceMotion)` : `ForecastSectionView.swift` et `SmartInsightsCarouselView.swift`. Les 6 autres (`DashboardView`, `EnvelopeGridSection`, `CashFlowView`, `AddTransactionView`, `HistoryView`, `CalendarHeatmapView`) ont des animations non conditionnées. |
-| 7 | **Barre de progression sans VoiceOver** | ❌ Non conforme | `GlobalProgressBar` et `EnvelopeSegmentBar` dans `BalanceSummaryCard.swift` n'ont pas d'`accessibilityLabel` ni d'`accessibilityValue`. |
-| 8 | **Statuts communiqués par couleur seule** | ❌ Non conforme | `currentMonthBalance < 0 ? .red : Color.appText` et le changement de couleur de `GlobalProgressBar` (ambre → rouge) ne sont pas accompagnés de texte. |
-| 9 | **Suppression de transaction sans confirmation** | ❌ Non conforme | `HistoryView.swift` : `.swipeActions(edge: .trailing, allowsFullSwipe: true)` supprime directement sans `confirmationDialog`. Un swipe accidentel est définitif. |
+| 5 | **Dynamic Type** (Accessibilité) | 🟡 Partiel | ~~Les tailles de police sont fixes dans les vues critiques.~~ ✅ `AddTransactionView.swift` et `BalanceSummaryCard.swift` corrigés (Phase 2). ⚠️ Reste ~20 `.system(size:)` dans 10 autres fichiers : `AuthView`, `OnboardingView`, `AccountConnectionView`, `StorageModeView`, `CalendarHeatmapView`, `CashFlowView`, `DashboardView`, `TransactionEditSheet`, `TransactionReimbursementToggle`, `DesignSystem`. |
+| 6 | **Animations et `accessibilityReduceMotion`** | 🟡 Partiel | ~~Seulement 2 fichiers sur 8 utilisent reduceMotion.~~ ✅ Les 6 fichiers listés initialement corrigés (Phase 2). ⚠️ Reste ~50 animations non conditionnées dans 12 autres fichiers : `AddEnvelopeView`, `AuthView`, `BudgetSubItemEditorView`, `EnvelopeDetailView`, `EnvelopeEditSheet`, `OnboardingView`, `SettingsView`, `TransactionEditSheet`, `EvolutionView`, `ManageEnvelopesView`, `ContentView`, `StorageModeView`. |
+| 7 | **Barre de progression sans VoiceOver** | ✅ Conforme | `GlobalProgressBar` → `.accessibilityLabel("Progression budgétaire globale")` + `.accessibilityValue("\(percent) %")`. `EnvelopeSegmentBar` → `.accessibilityLabel("Répartition du budget par enveloppe")`. |
+| 8 | **Statuts communiqués par couleur seule** | ✅ Conforme | `statusLabel` ("Budget dépassé" / "Budget quasi épuisé" / "Budget maîtrisé") + `statusColor` (.red / .orange / .green) ajoutés sous le solde dans `BalanceSummaryCard.swift` (WCAG 1.4.1). |
+| 9 | **Suppression de transaction sans confirmation** | ✅ Conforme | `confirmationDialog` remplace la suppression directe dans `HistoryView.swift`. `allowsFullSwipe: false` pour éviter les suppressions accidentelles. |
 
 ---
 
@@ -93,19 +96,19 @@
 
 #### ✅ Phase 2 — Accessibilité et conformité technique (COMPLÉTÉE le 4 juin 2026)
 
-7. ✅ **Dynamic Type** : 10 `.font(.system(size:))` remplacés par des styles sémantiques (.caption, .body, .largeTitle, .subheadline, .title3) dans `AddTransactionView.swift` et `BalanceSummaryCard.swift`.
-8. ✅ **`accessibilityReduceMotion`** : 40+ animations conditionnées sur `reduceMotion ? .none : .original` dans les 6 fichiers : `DashboardView.swift`, `EnvelopeGridSection.swift`, `CashFlowView.swift`, `AddTransactionView.swift`, `HistoryView.swift`, `CalendarHeatmapView.swift`.
+7. ✅ **Dynamic Type** : 10 `.font(.system(size:))` remplacés par des styles sémantiques (.caption, .body, .largeTitle, .subheadline, .title3) dans `AddTransactionView.swift` et `BalanceSummaryCard.swift`. **Extension (4 juin)** : ~20 `.system(size:)` supplémentaires convertis dans 10 autres fichiers : `AuthView`, `AccountConnectionView`, `StorageModeView`, `DashboardView`, `TransactionReimbursementToggle`, `TransactionEditSheet`, `OnboardingView`. Les tailles décoratives (SF Symbols icônes, badges, heatmap) sont conservées.
+8. ✅ **`accessibilityReduceMotion`** : 40+ animations conditionnées sur `reduceMotion ? .none : .original` dans les 6 fichiers : `DashboardView.swift`, `EnvelopeGridSection.swift`, `CashFlowView.swift`, `AddTransactionView.swift`, `HistoryView.swift`, `CalendarHeatmapView.swift`. **Extension (4 juin)** : `@Environment(\.accessibilityReduceMotion)` ajouté et ~50 animations conditionnées dans 12 fichiers supplémentaires : `AuthView`, `StorageModeView`, `AddEnvelopeView`, `BudgetSubItemEditorView`, `EnvelopeEditSheet`, `TransactionEditSheet`, `SettingsView`, `ContentView`, `ManageEnvelopesView`, `EvolutionView`, `EnvelopeDetailView`, `OnboardingView`.
 9. ✅ **Barre de progression** : `GlobalProgressBar` → `.accessibilityLabel("Progression budgétaire globale")` + `.accessibilityValue("\(percent) %")`. `EnvelopeSegmentBar` → `.accessibilityLabel("Répartition du budget par enveloppe")`.
 10. ✅ **Statuts budgétaires** : `statusLabel` ("Budget dépassé" / "Budget quasi épuisé" / "Budget maîtrisé") + `statusColor` (.red / .orange / .green) ajoutés sous le solde dans `BalanceSummaryCard.swift` (WCAG 1.4.1).
 11. ✅ **Confirmation de suppression** : `confirmationDialog` remplace la suppression directe dans `HistoryView.swift`. Le `allowsFullSwipe` est passé à `false` pour éviter les suppressions accidentelles.
 
 #### Phase 3 — Publication (1–2 semaines)
 
-9. Produire les screenshots (section 4).
-10. Produire l'App Preview Video (section 5).
-11. Configurer App Store Connect (section 2).
-12. Implémenter `SKStoreReviewController` (section 7).
-13. Nettoyer les méthodes email/password dans `FirebaseManager.swift`.
+12. Produire les screenshots (section 4).
+13. Produire l'App Preview Video (section 5).
+14. Configurer App Store Connect (section 2).
+15. Implémenter `SKStoreReviewController` (section 7).
+16. Nettoyer les méthodes email/password dans `FirebaseManager.swift`.
 
 ---
 
@@ -974,11 +977,13 @@ Dans App Store Connect → App Privacy, déclarer :
 ## Récapitulatif des priorités
 
 ```
-PRIORITÉ 1 (avant soumission) — ✅ 2/4 complétés
+PRIORITÉ 1 (avant soumission) — ✅ 3/5 complétés
   ✅ Politique de confidentialité en ligne → https://vizualy.app/confidentialite
   ✅ Suppression de données dans l'app → iOS + Web + API
+  ✅ Conformité accessibilité → Dynamic Type + reduceMotion + VoiceOver + WCAG 1.4.1
   ⬜ Screenshots iPhone 6.7" et 6.5" prêts
   ⬜ App Store Connect configuré
+  ⬜ Déploiement Vercel des pages légales (vizualy.app)
 
 PRIORITÉ 2 (jour J)
   → Métadonnées ASO finalisées (titre + keywords + description)
@@ -995,4 +1000,4 @@ PRIORITÉ 3 (semaines 1-4)
 
 ---
 
-*Document généré le 14 mars 2026 — dernière mise à jour le 3 juin 2026 (chantier App Store Phase 1).*
+*Document généré le 14 mars 2026 — dernière mise à jour le 4 juin 2026 (chantier App Store — Phases 1 & 2 terminées, Phase 3 restante).*
