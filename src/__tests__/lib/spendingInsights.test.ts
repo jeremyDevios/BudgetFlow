@@ -190,7 +190,7 @@ describe("buildSmartSpendingNotifications", () => {
       severity: "warning",
     });
     expect(notification?.description).toMatch(/jours/);
-    expect(notification?.description).toMatch(/60.00 €/);
+    expect(notification?.description).toMatch(/60,00[ \xA0]€/);
     expect(
       result.envelopeNotifications.groceries?.some(
         (entry) => entry.kind === "rapid_spending"
@@ -246,7 +246,7 @@ describe("buildSmartSpendingNotifications", () => {
       observedMonthCount: 3,
       suggestedBudget: 143,
     });
-    expect(notification?.description).toMatch(/143.00 €/);
+    expect(notification?.description).toMatch(/143,00[ \xA0]€/);
     expect(
       result.envelopeNotifications.transport?.some(
         (entry) => entry.kind === "frequent_overspend"
@@ -302,7 +302,7 @@ describe("buildSmartSpendingNotifications", () => {
       suggestedBudget: 63,
       severity: "info",
     });
-    expect(notification?.description).toMatch(/63.00 €/);
+    expect(notification?.description).toMatch(/63,00[ \xA0]€/);
   });
 
   it("detects recurring expenses that contribute to an overrun", () => {
@@ -361,7 +361,7 @@ describe("buildSmartSpendingNotifications", () => {
       observedMonthCount: 3,
     });
     expect(notification?.description).toMatch(/Netflix/);
-    expect(notification?.description).toMatch(/55.00 €/);
+    expect(notification?.description).toMatch(/55,00[ \xA0]€/);
   });
 
   it("excludes reimbursements from exceptional spending detection", () => {

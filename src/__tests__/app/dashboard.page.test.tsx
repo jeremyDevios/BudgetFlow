@@ -306,13 +306,13 @@ describe("DashboardPage", () => {
     render(<DashboardPage />);
 
     await waitFor(() =>
-      expect(screen.getByText(/Rest est.: \*{4},\*{2} €/i)).toBeInTheDocument()
+      expect(screen.getByText(/Rest est.: •{4}\s?€/i)).toBeInTheDocument()
     );
 
     expect(
-      screen.getByText(/Projection dépenses totales : \*{4},\*{2} €/i)
+      screen.getByText(/Projection dépenses totales : •{4}\s?€/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/Dépenses : \*{4},\*{2} €/i)).toBeInTheDocument();
+    expect(screen.getByText(/Dépenses : •{4}\s?€/i)).toBeInTheDocument();
     expect(screen.queryByText(/1233\.20 €/i)).not.toBeInTheDocument();
   });
 

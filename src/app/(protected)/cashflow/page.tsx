@@ -4,26 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
-import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { db } from "@/lib/firebase";
-import { maskAmount } from "@/lib/maskAmount";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { ChevronLeft, Workflow, Loader2 } from "lucide-react";
 import { Sankey, Tooltip, ResponsiveContainer, Layer } from 'recharts';
 import { logger } from "@/lib/logger";
-
-const MASK_WITH_DECIMALS = "****,**";
-const MASK_WITHOUT_DECIMALS = "****";
-
-function maskEuroAmount(amount: number, mask = MASK_WITH_DECIMALS) {
-  return maskAmount({
-    amount: Number(amount || 0),
-    currency: "EUR",
-    locale: "fr-FR",
-    anonymousMode: true,
-    mask,
-  });
-}
 
 interface UserSettings {
   monthlyIncome: number;
@@ -77,7 +63,7 @@ const resolveColor = (value?: string) => {
 
 export default function CashFlowPage() {
   const { user } = useAuth();
-  const { anonymousMode } = useAnonymousMode();
+  const { formatAmount, formatAmountNoDecimals, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<UserSettings | null>(null);
@@ -168,21 +154,6 @@ export default function CashFlowPage() {
 
   const data = { nodes, links };
 
-  const formatAmount = (amount: number) => {
-    if (anonymousMode) {
-      return maskEuroAmount(amount);
-    }
-    return `${amount} €`;
-  };
-
-  const formatRoundedAmount = (amount: number) => {
-    if (anonymousMode) {
-      return maskEuroAmount(amount, MASK_WITHOUT_DECIMALS);
-    }
-    return `${amount.toFixed(0)} €`;
-  };
-
-
   // Custom Node Component
   const MyCustomNode = ({ x, y, width, height, index, payload, containerWidth }: any) => {
       const isOut = x + width + 6 > containerWidth;
@@ -233,7 +204,7 @@ export default function CashFlowPage() {
             fill="#a1a1aa" // zinc-400
             fontSize="10"
           >
-            {formatRoundedAmount(Number(payload.value || 0))}
+            {formatAmountNoDecimals(Number(payload.value || 0))}
           </text>
         </Layer>
       );

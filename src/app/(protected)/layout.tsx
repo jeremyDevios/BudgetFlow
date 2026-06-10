@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { AnonymousModeProvider } from "@/context/AnonymousModeContext";
+import { CurrencyProvider } from "@/context/CurrencyContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
@@ -97,5 +98,9 @@ export default function ProtectedLayout({
     return null;
   }
 
-  return <AnonymousModeProvider>{children}</AnonymousModeProvider>;
+  return (
+    <CurrencyProvider>
+      <AnonymousModeProvider>{children}</AnonymousModeProvider>
+    </CurrencyProvider>
+  );
 }

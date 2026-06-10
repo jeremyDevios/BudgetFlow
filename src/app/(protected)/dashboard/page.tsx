@@ -2,6 +2,8 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
+import { getCurrencySymbol, getCurrencyLocale } from "@/types/currency";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, getDocs, doc, getDoc, where, writeBatch, updateDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -165,26 +167,18 @@ function getBentoTileSize(isWide: boolean) {
   return "col-span-1";
 }
 
-function formatEurosNoDecimals(value: number) {
-  return Math.round(value).toLocaleString("fr-FR");
-}
-
-const MASK_WITH_DECIMALS = "****,**";
-const MASK_WITHOUT_DECIMALS = "****";
-
-function maskEuroAmount(amount: number, mask = MASK_WITH_DECIMALS) {
-  return maskAmount({
-    amount: Number(amount || 0),
-    currency: "EUR",
-    locale: "fr-FR",
-    anonymousMode: true,
-    mask,
-  });
-}
-
-function maskEuroText(text: string) {
-  return text.replace(/([+-]?)(\d[\d\s.,]*)\s*€/gu, (_match, sign) => {
-    const masked = maskEuroAmount(sign === "-" ? -1 : 1, MASK_WITH_DECIMALS);
+function maskCurrencyText(text: string, currency: string) {
+  const symbol = getCurrencySymbol(currency as import("@/types/currency").CurrencyCode);
+  const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`([+-]?)(\\d[\\d\\s.,]*)\\s*${escapedSymbol}`, "gu");
+  return text.replace(regex, (_match: string, sign: string) => {
+    const locale = getCurrencyLocale(currency as import("@/types/currency").CurrencyCode);
+    const masked = maskAmount({
+      amount: sign === "-" ? -1 : 1,
+      currency,
+      locale,
+      anonymousMode: true,
+    });
     return sign === "+"
       ? `+${masked}`
       : sign === "-"
@@ -207,6 +201,7 @@ function SortableEnvelopeTile({
   isResizing,
   isTemporary,
   anonymousMode,
+  currency,
 }: {
   env: Envelope;
   transactions: Transaction[];
@@ -222,6 +217,7 @@ function SortableEnvelopeTile({
   /** When true, renders the temporary-envelope visual cue on the tile. */
   isTemporary?: boolean;
   anonymousMode: boolean;
+  currency: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: env.id });
   const Icon = ICON_MAP[env.icon] || ShoppingCart;
@@ -242,8 +238,16 @@ function SortableEnvelopeTile({
       ? "scale-[1.02] ring-2 ring-cyan-400/65 shadow-[0_14px_34px_rgba(34,211,238,0.24)]"
       : "";
 
+  const locale = getCurrencyLocale(currency as import("@/types/currency").CurrencyCode);
+  const cySymbol = getCurrencySymbol(currency as import("@/types/currency").CurrencyCode);
+
   const formatCompactMaskedAmount = (amount: number) =>
-    maskEuroAmount(amount).replace(/\s*€/u, "€");
+    maskAmount({
+      amount: Number(amount || 0),
+      currency,
+      locale,
+      anonymousMode: true,
+    });
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -289,10 +293,10 @@ function SortableEnvelopeTile({
           <div className="space-y-0.5">
             <div className="flex items-center justify-between gap-2">
               <span className={`text-xl sm:text-2xl font-bold tabular-nums ${remaining < 0 ? "text-red-500" : "text-app-text"}`}>
-                {anonymousMode ? formatCompactMaskedAmount(remaining) : `${remaining.toFixed(2)}€`}
+                {anonymousMode ? formatCompactMaskedAmount(remaining) : `${remaining.toFixed(2)}${cySymbol}`}
               </span>
               <span className="shrink-0 whitespace-nowrap text-xs text-app-text-secondary tabular-nums">
-                sur {anonymousMode ? formatCompactMaskedAmount(env.budget) : `${formatEurosNoDecimals(env.budget)}€`}
+                sur {anonymousMode ? formatCompactMaskedAmount(env.budget) : `${Math.round(env.budget).toLocaleString("fr-FR")}${cySymbol}`}
               </span>
             </div>
           </div>
@@ -310,8 +314,8 @@ function SortableEnvelopeTile({
               {forecast.willExceed ? <AlertTriangle className="h-3 w-3 shrink-0" /> : <TrendingUp className="h-3 w-3 shrink-0" />}
               <span className="leading-snug">
                 {forecast.willExceed
-                  ? `Surcoût est.: ${anonymousMode ? formatCompactMaskedAmount(forecast.excessAmount) : `${forecast.excessAmount.toFixed(0)}€`}`
-                  : `Rest est.: ${anonymousMode ? formatCompactMaskedAmount(forecast.projectedRemaining) : `${forecast.projectedRemaining.toFixed(0)}€`}`}
+                  ? `Surcoût est.: ${anonymousMode ? formatCompactMaskedAmount(forecast.excessAmount) : `${forecast.excessAmount.toFixed(0)}${cySymbol}`}`
+                  : `Rest est.: ${anonymousMode ? formatCompactMaskedAmount(forecast.projectedRemaining) : `${forecast.projectedRemaining.toFixed(0)}${cySymbol}`}`}
               </span>
             </div>
           )}
@@ -380,6 +384,7 @@ function SortableEnvelopeTile({
 export default function DashboardPage() {
   const { user } = useAuth();
   const { anonymousMode } = useAnonymousMode();
+  const { formatAmount, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
   
   const [loading, setLoading] = useState(true);
@@ -571,13 +576,14 @@ export default function DashboardPage() {
       })),
       envelopeForecasts,
       isCurrentMonth,
+      currency,
     });
 
   const visibleGlobalNotifications = anonymousMode
     ? globalNotifications.map((notification) => ({
         ...notification,
-        title: maskEuroText(notification.title),
-        description: maskEuroText(notification.description),
+        title: maskCurrencyText(notification.title, currency),
+        description: maskCurrencyText(notification.description, currency),
       }))
     : globalNotifications;
 
@@ -798,16 +804,28 @@ export default function DashboardPage() {
 
   const formatAmountWithoutCurrency = (amount: number, decimals = 2) => {
     if (anonymousMode) {
-      return maskEuroAmount(amount, decimals === 0 ? MASK_WITHOUT_DECIMALS : MASK_WITH_DECIMALS).replace(/\s*€/u, "");
+      const locale = getCurrencyLocale(currency);
+      return maskAmount({
+        amount: Number(amount || 0),
+        currency,
+        locale,
+        anonymousMode: true,
+      }).replace(new RegExp(`\\s*${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "u"), "");
     }
     return Number(amount || 0).toFixed(decimals);
   };
 
   const formatAmountWithCurrency = (amount: number, decimals = 2) => {
     if (anonymousMode) {
-      return maskEuroAmount(amount, decimals === 0 ? MASK_WITHOUT_DECIMALS : MASK_WITH_DECIMALS);
+      const locale = getCurrencyLocale(currency);
+      return maskAmount({
+        amount: Number(amount || 0),
+        currency,
+        locale,
+        anonymousMode: true,
+      });
     }
-    return `${Number(amount || 0).toFixed(decimals)} €`;
+    return `${Number(amount || 0).toFixed(decimals)} ${symbol}`;
   };
 
   if (loading) {
@@ -934,10 +952,10 @@ export default function DashboardPage() {
             <div className="relative z-10 flex flex-col items-center justify-center text-center space-y-1 py-3" aria-live="polite">
                 <span className="text-app-text-secondary text-xs font-medium tracking-wide uppercase">Reste disponible</span>
                 <h2 className={`text-4xl font-extrabold tracking-tighter ${currentMonthBalance < 0 ? 'text-red-500' : 'text-app-text'}`}>
-                    {formatAmountWithoutCurrency(currentMonthBalance)} <span className="text-2xl text-app-text-secondary">€</span>
+                    {formatAmountWithoutCurrency(currentMonthBalance)} <span className="text-2xl text-app-text-secondary">{symbol}</span>
                 </h2>
                 <div className="text-xs text-app-text-secondary">
-                    Sur {formatAmountWithoutCurrency(monthlyTotalAvailable, 0)} € prévus
+                    Sur {formatAmountWithoutCurrency(monthlyTotalAvailable, 0)} {symbol} prévus
                 </div>
             </div>
 
@@ -1091,6 +1109,7 @@ export default function DashboardPage() {
                           isResizing={resizingEnvelopeId === env.id}
                           isTemporary={!!env.isTemporary}
                           anonymousMode={anonymousMode}
+                          currency={currency}
                         />
                       </motion.div>
                       );

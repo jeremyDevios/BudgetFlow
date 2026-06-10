@@ -18,22 +18,10 @@
 import { useId, useRef } from "react";
 import { Plus, Trash2, Info } from "lucide-react";
 
-import { useAnonymousMode } from "@/context/AnonymousModeContext";
-import { maskAmount } from "@/lib/maskAmount";
+import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { BudgetSubItem } from "@/types/settings";
 import { computeDetailedTotal, createEmptyBudgetSubItem } from "@/lib/settingsService";
 
-const MASK_WITH_DECIMALS = "****,**";
-
-function maskEuroAmount(amount: number) {
-  return maskAmount({
-    amount: Number(amount || 0),
-    currency: "EUR",
-    locale: "fr-FR",
-    anonymousMode: true,
-    mask: MASK_WITH_DECIMALS,
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Placeholders pédagogiques par catégorie
@@ -107,13 +95,6 @@ export interface BudgetDetailEditorProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Formate un montant en euros avec 2 décimales. */
-function formatEur(amount: number): string {
-  return amount.toLocaleString("fr-FR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Sous-composant : une ligne éditable
@@ -129,6 +110,7 @@ interface LineRowProps {
   onDelete: () => void;
   /** Numéro de ligne visible (1-based) pour aria-label. */
   lineNumber: number;
+  currencySymbol: string;
 }
 
 function LineRow({
@@ -140,6 +122,7 @@ function LineRow({
   onAmountChange,
   onDelete,
   lineNumber,
+  currencySymbol,
 }: LineRowProps) {
   return (
     <div
@@ -183,7 +166,7 @@ function LineRow({
           className="absolute right-2.5 top-1/2 -translate-y-1/2 text-app-text-secondary text-xs pointer-events-none"
           aria-hidden="true"
         >
-          €
+          {currencySymbol}
         </span>
       </div>
 
@@ -214,18 +197,14 @@ export default function BudgetDetailEditor({
   onItemsChange,
   variant = "card",
 }: BudgetDetailEditorProps) {
-  const { anonymousMode } = useAnonymousMode();
   const uid = useId();
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  const { formatAmount, symbol } = useCurrencyFormatting();
 
   const placeholders = PLACEHOLDERS[category];
   const detailedTotal = computeDetailedTotal(items);
-  const aggregateAmountDisplay = anonymousMode
-    ? maskEuroAmount(aggregateAmount)
-    : `${formatEur(aggregateAmount)} €`;
-  const detailedTotalDisplay = anonymousMode
-    ? maskEuroAmount(detailedTotal)
-    : `${formatEur(detailedTotal)} €`;
+  const aggregateAmountDisplay = formatAmount(aggregateAmount);
+  const detailedTotalDisplay = formatAmount(detailedTotal);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -331,6 +310,7 @@ export default function BudgetDetailEditor({
                       onNameChange={(v) => handleNameChange(item.id, v)}
                       onAmountChange={(v) => handleAmountChange(item.id, v)}
                       onDelete={() => handleDeleteLine(item.id)}
+                      currencySymbol={symbol}
                     />
                   </li>
                 );

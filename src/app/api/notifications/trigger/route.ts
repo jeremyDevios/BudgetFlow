@@ -118,8 +118,32 @@ async function runNotificationTrigger(now = new Date()): Promise<TriggerStats> {
         }
       });
 
+      // Read user's currency preference (default EUR)
+      let currency = "EUR";
+      try {
+        const settingsSnap = await adminDb
+          .collection("users")
+          .doc(userDoc.id)
+          .collection("settings")
+          .doc("general")
+          .get();
+        if (settingsSnap.exists) {
+          const settingsData = settingsSnap.data();
+          if (typeof settingsData?.currency === "string") {
+            currency = settingsData.currency;
+          }
+        }
+      } catch {
+        // Fall back to EUR if settings read fails
+      }
+
+      const formattedTotal = new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency,
+      }).format(dailyTotal);
+
       const body = transactionCount > 0
-        ? `Vous avez déjà saisi ${dailyTotal.toFixed(2)}€ aujourd'hui (${transactionCount} dépenses). Avez-vous oublié quelque chose ?`
+        ? `Vous avez déjà saisi ${formattedTotal} aujourd'hui (${transactionCount} dépenses). Avez-vous oublié quelque chose ?`
         : "Aucune dépense saisie aujourd'hui. Rien à déclarer ?";
 
       notifications.push(

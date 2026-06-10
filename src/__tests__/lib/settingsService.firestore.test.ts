@@ -122,6 +122,7 @@ describe("settingsService Firestore persistence", () => {
       monthlyIncome: 3200,
       fixedCosts: 900,
       monthlySavings: 400,
+      currency: "EUR",
       bentoPreset: "compact",
       anonymousMode: true,
       fixedCostsDetailedEnabled: false,

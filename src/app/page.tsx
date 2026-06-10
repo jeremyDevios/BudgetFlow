@@ -22,8 +22,10 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { getCurrencySymbol, DEFAULT_CURRENCY } from "@/types/currency";
 
 export default function Home() {
+  const symbol = getCurrencySymbol(DEFAULT_CURRENCY);
   const { user, loading } = useAuth();
   const router = useRouter();
 
@@ -47,7 +49,7 @@ export default function Home() {
     { 
       icon: Dog, 
       label: "Vétérinaire", 
-      price: "-49€", 
+      price: `-49${symbol}`, 
       color: "bg-purple-500", 
       position: "top-[15%] left-[5%] md:left-[15%]", 
       rotate: "-rotate-6",
@@ -58,7 +60,7 @@ export default function Home() {
     { 
       icon: Utensils, 
       label: "Macdo", 
-      price: "-18€", 
+      price: `-18${symbol}`, 
       color: "bg-yellow-500 text-black", 
       position: "top-[25%] right-[5%] md:right-[15%]", 
       rotate: "rotate-12",
@@ -69,7 +71,7 @@ export default function Home() {
     { 
       icon: ShoppingBag, 
       label: "Shopping", 
-      price: "-89€", 
+      price: `-89${symbol}`, 
       color: "bg-orange-500", 
       position: "bottom-[30%] left-[5%] md:left-[10%]", 
       rotate: "-rotate-12",
@@ -80,7 +82,7 @@ export default function Home() {
     { 
       icon: Coffee, 
       label: "Café", 
-      price: "-4.50€", 
+      price: `-4.50${symbol}`, 
       color: "bg-emerald-500", 
       position: "bottom-[20%] right-[10%] md:right-[20%]", 
       rotate: "rotate-6",
@@ -92,7 +94,7 @@ export default function Home() {
     { 
         icon: Plane, 
         label: "Séville", 
-        price: "-120€", 
+        price: `-120${symbol}`, 
         color: "bg-sky-500", 
         position: "top-[10%] right-[30%]", 
         rotate: "rotate-3",
@@ -103,7 +105,7 @@ export default function Home() {
       { 
         icon: Gift, 
         label: "Anniv", 
-        price: "-35€", 
+        price: `-35${symbol}`, 
         color: "bg-red-500", 
         position: "bottom-[15%] left-[30%]", 
         rotate: "-rotate-3",

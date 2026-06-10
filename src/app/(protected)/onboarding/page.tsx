@@ -7,6 +7,7 @@ import { doc, setDoc, collection, writeBatch } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
 import { DEFAULT_USER_SETTINGS, BudgetSubItem } from "@/types/settings";
+import { DEFAULT_CURRENCY, getCurrencySymbol } from "@/types/currency";
 import { normalizeSettingsPayload, computeDetailedTotal } from "@/lib/settingsService";
 import BudgetDetailEditor from "@/components/settings/BudgetDetailEditor";
 import { 
@@ -90,6 +91,7 @@ export default function OnboardingPage() {
   const { user } = useAuth();
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const symbol = getCurrencySymbol(DEFAULT_CURRENCY);
   const [loading, setLoading] = useState(false);
 
   // Étape 1 : Revenus et Charges Fixes
@@ -183,7 +185,7 @@ export default function OnboardingPage() {
         .filter((env) => env.budget > 0);
 
       if (normalizedEnvelopes.length === 0) {
-        alert("Ajoutez au moins une enveloppe avec un budget supérieur à 0 €.");
+        alert(`Ajoutez au moins une enveloppe avec un budget supérieur à 0 ${symbol}.`);
         return;
       }
 
@@ -209,7 +211,7 @@ export default function OnboardingPage() {
       });
       batch.set(settingsRef, {
         ...settingsPayload,
-        currency: "EUR", // Par défaut
+        currency: DEFAULT_CURRENCY, // Par défaut
         isOnboarded: true,
         createdAt: new Date().toISOString()
       });
@@ -308,7 +310,7 @@ export default function OnboardingPage() {
             <div className={`p-4 rounded-xl border ${availableAmount >= 0 ? 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900' : 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900'} transition-colors`}>
                 <p className="text-sm text-app-text-secondary">Capacité pour vos enveloppes :</p>
                 <p className={`text-3xl font-bold ${availableAmount >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                    {availableAmount.toFixed(2)} €
+                    {availableAmount.toFixed(2)} {symbol}
                 </p>
             </div>
 
@@ -320,7 +322,7 @@ export default function OnboardingPage() {
                   Salaire Mensuel Net
                 </label>
                 <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">{symbol}</span>
                     <input 
                         type="number"
                         inputMode="decimal"
@@ -347,7 +349,7 @@ export default function OnboardingPage() {
                 {/* Champ montant + bouton Détail sur la même ligne */}
                 <div className="flex gap-2 items-stretch">
                   <div className="relative flex-1">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">{symbol}</span>
                     <input
                       type="number"
                       inputMode="decimal"
@@ -419,7 +421,7 @@ export default function OnboardingPage() {
                 {/* Champ montant + bouton Détail sur la même ligne */}
                 <div className="flex gap-2 items-stretch">
                   <div className="relative flex-1">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">{symbol}</span>
                     <input
                       type="number"
                       inputMode="decimal"
@@ -503,7 +505,7 @@ export default function OnboardingPage() {
                 <div className="flex justify-between items-center">
                 <p className="text-sm text-app-text-secondary">Reste à attribuer :</p>
                 <p className={`text-2xl font-bold ${availableAmount >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
-                        {availableAmount.toFixed(2)} €
+                        {availableAmount.toFixed(2)} {symbol}
                     </p>
                 </div>
                 {availableAmount < 0 && (
@@ -529,7 +531,7 @@ export default function OnboardingPage() {
                                 autoFocus
                             />
                             
-                            <div className="flex gap-2 text-sm text-app-text-secondary">Montant (€)</div>
+                            <div className="flex gap-2 text-sm text-app-text-secondary">Montant ({symbol})</div>
                             <input 
                                 type="number"
                                 inputMode="decimal"
@@ -589,7 +591,7 @@ export default function OnboardingPage() {
                     <p className="text-xs text-app-text-secondary">Budget mensuel</p>
                   </div>
                   <div className="relative w-32">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-app-text-secondary">€</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-app-text-secondary">{symbol}</span>
                     <input 
                         type="number"
                         inputMode="decimal"

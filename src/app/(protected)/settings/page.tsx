@@ -2,6 +2,8 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { useCurrency } from "@/context/CurrencyContext";
+import { SUPPORTED_CURRENCIES, CurrencyCode, getCurrencySymbol } from "@/types/currency";
 import { db, auth } from "@/lib/firebase";
 import { signOut } from "firebase/auth";
 import {
@@ -104,10 +106,12 @@ function SortableEnvelopeRow({
   env,
   openModal,
   handleDeleteEnvelope,
+  symbol,
 }: {
   env: Envelope;
   openModal: (env?: Envelope) => void;
   handleDeleteEnvelope: (id: string, name: string) => void;
+  symbol: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: env.id });
@@ -146,7 +150,7 @@ function SortableEnvelopeRow({
         <div>
           <h3 className="font-bold">{env.name}</h3>
           <p className="text-sm text-app-text-secondary">
-            {Number(env.budget).toFixed(2)} € / mois
+            {Number(env.budget).toFixed(2)} {symbol} / mois
           </p>
         </div>
       </div>
@@ -177,10 +181,12 @@ function TemporaryEnvelopeRow({
   env,
   openModal,
   handleDeleteEnvelope,
+  symbol,
 }: {
   env: Envelope;
   openModal: (env?: Envelope) => void;
   handleDeleteEnvelope: (id: string, name: string) => void;
+  symbol: string;
 }) {
   const Icon = ICON_MAP[env.icon] || ICON_MAP["ShoppingCart"];
   const months = env.activeMonths ?? [];
@@ -219,7 +225,7 @@ function TemporaryEnvelopeRow({
           </div>
 
           <p className="text-sm text-app-text-secondary">
-            {Number(env.budget).toFixed(2)} € / mois
+            {Number(env.budget).toFixed(2)} {symbol} / mois
           </p>
 
           {/* Active-month chips */}
@@ -280,6 +286,8 @@ function TemporaryEnvelopeRow({
 export default function SettingsPage() {
   const { user } = useAuth();
   const { anonymousMode, anonymousModeReady, setAnonymousMode } = useAnonymousMode();
+  const { currency, setCurrency } = useCurrency();
+  const symbol = getCurrencySymbol(currency);
   const router = useRouter();
   const {
     permission,
@@ -431,6 +439,12 @@ export default function SettingsPage() {
     } finally {
       setAnonymousModeSaving(false);
     }
+  };
+
+  const handleCurrencyChange = async (newCode: CurrencyCode) => {
+    if (!user) return;
+    setCurrency(newCode);
+    await saveSettings(user.uid, { currency: newCode });
   };
 
   // ---------------------------------------------------------------------------
@@ -792,6 +806,45 @@ export default function SettingsPage() {
 
         </section>
 
+        {/* ── Monnaie ── */}
+        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
+          <h2 className="text-xl font-bold mb-4">Monnaie</h2>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="font-medium text-app-text whitespace-nowrap">Devise d&apos;affichage</h3>
+              <p className="text-sm text-app-text-secondary whitespace-nowrap">
+                Les montants sont affichés dans cette devise (sans conversion).
+              </p>
+            </div>
+            <div className="relative shrink-0">
+              <select
+                value={currency}
+                onChange={(e) => {
+                  void handleCurrencyChange(e.target.value as CurrencyCode);
+                }}
+                className="appearance-none bg-app-bg border border-app-border rounded-lg pl-3 pr-8 py-2 text-sm font-medium focus:ring-2 focus:ring-amber-500 outline-none cursor-pointer"
+              >
+                {SUPPORTED_CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.symbol} - {c.name}
+                  </option>
+                ))}
+              </select>
+              {/* Chevron personnalisé */}
+              <svg
+                className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-app-text-secondary"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+          </div>
+        </section>
+
         {/* ── Confidentialité ── */}
         <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
           <h2 className="text-xl font-bold mb-4">Confidentialité</h2>
@@ -932,7 +985,7 @@ export default function SettingsPage() {
                   onChange={(e) => handleUpdateNumericSetting("monthlyIncome", e.target.value)}
                   className="no-spinner w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
                 />
-                <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
+                <span className="absolute right-3 top-2 text-app-text-secondary">{symbol}</span>
               </div>
             </div>
 
@@ -952,7 +1005,7 @@ export default function SettingsPage() {
                       settings.fixedCostsDetailedEnabled ? "opacity-60 cursor-not-allowed" : ""
                     }`}
                   />
-                  <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
+                  <span className="absolute right-3 top-2 text-app-text-secondary">{symbol}</span>
                 </div>
                 <button
                   type="button"
@@ -1008,7 +1061,7 @@ export default function SettingsPage() {
                       settings.savingsDetailedEnabled ? "opacity-60 cursor-not-allowed" : ""
                     }`}
                   />
-                  <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
+                  <span className="absolute right-3 top-2 text-app-text-secondary">{symbol}</span>
                 </div>
                 <button
                   type="button"
@@ -1056,11 +1109,11 @@ export default function SettingsPage() {
             >
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium text-app-text">Total Enveloppes</span>
-                <span className="font-bold text-app-text">{totalEnvelopes.toFixed(2)} €</span>
+                <span className="font-bold text-app-text">{totalEnvelopes.toFixed(2)} {symbol}</span>
               </div>
               <div className="flex justify-between items-center mb-2 text-amber-600 dark:text-amber-500/80">
                 <span className="text-sm font-medium">Épargne visée</span>
-                <span className="font-bold">{effectiveSavings.toFixed(2)} €</span>
+                <span className="font-bold">{effectiveSavings.toFixed(2)} {symbol}</span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-dashed border-app-border">
                 <span className="text-sm font-medium text-app-text">
@@ -1073,7 +1126,7 @@ export default function SettingsPage() {
                       isOverBudget ? "text-red-600 dark:text-red-500" : "text-green-700 dark:text-green-500"
                     }`}
                   >
-                    {remainingBudget.toFixed(2)} €
+                    {remainingBudget.toFixed(2)} {symbol}
                   </span>
                 </div>
               </div>
@@ -1115,6 +1168,7 @@ export default function SettingsPage() {
                     env={env}
                     openModal={openModal}
                     handleDeleteEnvelope={handleDeleteEnvelope}
+                    symbol={symbol}
                   />
                 ))}
               </SortableContext>
@@ -1151,6 +1205,7 @@ export default function SettingsPage() {
                   env={env}
                   openModal={openModal}
                   handleDeleteEnvelope={handleDeleteEnvelope}
+                  symbol={symbol}
                 />
               ))
             ) : (

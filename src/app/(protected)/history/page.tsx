@@ -3,7 +3,6 @@
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db } from "@/lib/firebase";
-import { maskAmount } from "@/lib/maskAmount";
 import { collection, doc, getDocs, orderBy, query, limit, where, getDoc } from "firebase/firestore";
 import { MoveLeft, ArrowDown, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -12,18 +11,7 @@ import TransactionModal from "@/components/dashboard/TransactionModal";
 import { logger } from "@/lib/logger";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X } from "lucide-react";
-
-const MASK_WITH_DECIMALS = "****,**";
-
-function maskEuroAmount(amount: number) {
-  return maskAmount({
-    amount: Number(amount || 0),
-    currency: "EUR",
-    locale: "fr-FR",
-    anonymousMode: true,
-    mask: MASK_WITH_DECIMALS,
-  });
-}
+import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 
 const ICON_MAP: Record<string, LucideIcon> = {
   ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee,
@@ -33,6 +21,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 export default function HistoryPage() {
   const { user } = useAuth();
   const { anonymousMode } = useAnonymousMode();
+  const { formatAmount, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
 
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -110,13 +99,6 @@ export default function HistoryPage() {
   const closeModal = () => {
     setIsEditModalOpen(false);
     setTransactionToEdit(null);
-  };
-
-  const formatHistoryAmount = (amount: number) => {
-    if (anonymousMode) {
-      return maskEuroAmount(amount);
-    }
-    return `${amount} €`;
   };
 
   if (loading) return <div className="min-h-screen bg-app-bg text-app-text p-8">Chargement...</div>;
@@ -241,7 +223,7 @@ export default function HistoryPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="font-bold text-red-500 text-lg">-{formatHistoryAmount(tx.amount)}</span>
+                    <span className="font-bold text-red-500 text-lg">-{formatAmount(tx.amount)}</span>
                   </div>
                 </motion.div>
               );

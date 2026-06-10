@@ -12,6 +12,8 @@
  */
 
 import { useState } from "react";
+import { getCurrencySymbol } from "@/types/currency";
+import { useCurrency } from "@/context/CurrencyContext";
 import {
   AlertTriangle,
   Clock,
@@ -125,6 +127,9 @@ export default function TemporaryEnvelopeForm({
   const [isTemporary, setIsTemporary] = useState(initialValues.isTemporary);
   const [activeMonths, setActiveMonths] = useState<string[]>(initialValues.activeMonths);
 
+  const { currency } = useCurrency();
+  const symbol = getCurrencySymbol(currency);
+
   const currentBudget = parseFloat(budget) || 0;
   const afterAllocation = budgetAvailable - currentBudget;
 
@@ -188,7 +193,7 @@ export default function TemporaryEnvelopeForm({
             className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
             placeholder="0"
           />
-          <span className="absolute right-3 top-2 text-app-text-secondary">€</span>
+          <span className="absolute right-3 top-2 text-app-text-secondary">{symbol}</span>
         </div>
 
         {/* Availability indicator */}
@@ -201,7 +206,7 @@ export default function TemporaryEnvelopeForm({
         >
           <p className="text-xs text-app-text-secondary">
             Budget disponible :{" "}
-            <span className="font-semibold text-app-text">{budgetAvailable.toFixed(2)} €</span>
+            <span className="font-semibold text-app-text">{budgetAvailable.toFixed(2)} {symbol}</span>
           </p>
           <p className="text-xs mt-1">
             Après allocation :{" "}
@@ -210,7 +215,7 @@ export default function TemporaryEnvelopeForm({
                 afterAllocation >= 0 ? "text-emerald-400" : "text-red-400"
               }`}
             >
-              {afterAllocation.toFixed(2)} €
+              {afterAllocation.toFixed(2)} {symbol}
             </span>
           </p>
           {afterAllocation < 0 && (

@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
+import { resolveCurrencyCode } from "@/types/currency";
 import {
   BentoPreset,
   BudgetSubItem,
@@ -134,7 +135,6 @@ export function normalizeSettingsPayload(
 
 interface StoredSettingsDocument extends UserSettings {
   isOnboarded: boolean;
-  currency?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -160,7 +160,7 @@ function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSet
       savingsItems,
     ),
     isOnboarded: raw.isOnboarded !== false,
-    ...(typeof raw.currency === "string" ? { currency: raw.currency } : {}),
+    currency: resolveCurrencyCode(raw.currency),
     ...(typeof raw.createdAt === "string" ? { createdAt: raw.createdAt } : {}),
     ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),
   };
@@ -199,6 +199,7 @@ export async function loadSettings(uid: string): Promise<UserSettings> {
     fixedCosts: stored.fixedCosts,
     monthlySavings: stored.monthlySavings,
     bentoPreset: stored.bentoPreset,
+    currency: stored.currency,
     anonymousMode: stored.anonymousMode,
     fixedCostsDetailedEnabled: stored.fixedCostsDetailedEnabled,
     savingsDetailedEnabled: stored.savingsDetailedEnabled,

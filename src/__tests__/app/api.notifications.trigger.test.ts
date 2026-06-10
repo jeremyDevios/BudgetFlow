@@ -172,7 +172,7 @@ describe("notifications trigger route", () => {
         token: "token-1",
         notification: expect.objectContaining({
           title: "Bilan Quotidien",
-          body: expect.stringContaining("15.00€"),
+          body: expect.stringContaining("15,00"),
         }),
       })
     );

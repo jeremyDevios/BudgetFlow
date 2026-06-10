@@ -18,6 +18,7 @@ interface UseSmartSpendingInsightsParams {
   envelopeForecasts?: Record<string, EnvelopeForecast | undefined>;
   isCurrentMonth: boolean;
   analysisMonthCount?: number;
+  currency?: string;
 }
 
 interface UseSmartSpendingInsightsReturn {
@@ -43,6 +44,7 @@ export function useSmartSpendingInsights(
     envelopeForecasts = {},
     isCurrentMonth,
     analysisMonthCount = 3,
+    currency = "EUR",
   } = params;
 
   const [globalNotifications, setGlobalNotifications] = useState<
@@ -144,6 +146,7 @@ export function useSmartSpendingInsights(
           envelopeForecasts,
           today,
           analysisMonthCount,
+          currency,
         });
 
         setGlobalNotifications(result.globalNotifications);

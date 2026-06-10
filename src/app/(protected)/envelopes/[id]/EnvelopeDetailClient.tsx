@@ -15,23 +15,22 @@ import TransactionModal from "@/components/dashboard/TransactionModal";
 import RotatingSmartInsight from "@/components/dashboard/RotatingSmartInsight";
 import { logger } from "@/lib/logger";
 import { maskAmount } from "@/lib/maskAmount";
+import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { motion, AnimatePresence } from "framer-motion";
+import { getCurrencySymbol, getCurrencyLocale } from "@/types/currency";
 
-const MASK_WITH_DECIMALS = "****,**";
-
-function maskEuroAmount(amount: number) {
-  return maskAmount({
-    amount: Number(amount || 0),
-    currency: "EUR",
-    locale: "fr-FR",
-    anonymousMode: true,
-    mask: MASK_WITH_DECIMALS,
-  });
-}
-
-function maskEuroText(text: string) {
-  return text.replace(/([+-]?)(\d[\d\s.,]*)\s*€/gu, (_match, sign) => {
-    const masked = maskEuroAmount(sign === "-" ? -1 : 1);
+function maskCurrencyText(text: string, currency: string) {
+  const symbol = getCurrencySymbol(currency as import("@/types/currency").CurrencyCode);
+  const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`([+-]?)(\\d[\\d\\s.,]*)\\s*${escapedSymbol}`, "gu");
+  return text.replace(regex, (_match: string, sign: string) => {
+    const locale = getCurrencyLocale(currency as import("@/types/currency").CurrencyCode);
+    const masked = maskAmount({
+      amount: sign === "-" ? -1 : 1,
+      currency,
+      locale,
+      anonymousMode: true,
+    });
     return sign === "+"
       ? `+${masked}`
       : sign === "-"
@@ -48,6 +47,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 export default function EnvelopeDetailClient({ params }: { params: Promise<{ id: string }> }) {
   const { user } = useAuth();
   const { anonymousMode } = useAnonymousMode();
+  const { formatAmount, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { id } = use(params);
@@ -231,8 +231,8 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
   const visibleEnvelopeInsightNotifications = anonymousMode
     ? envelopeInsightNotifications.map((notification) => ({
         ...notification,
-        title: maskEuroText(notification.title),
-        description: maskEuroText(notification.description),
+        title: maskCurrencyText(notification.title, currency),
+        description: maskCurrencyText(notification.description, currency),
       }))
     : envelopeInsightNotifications;
 
@@ -263,19 +263,6 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
     setIsEditModalOpen(true);
   };
 
-  const formatAmount = (amount: number, decimals = 2) => {
-    if (anonymousMode) {
-      return maskEuroAmount(amount);
-    }
-    return `${Number(amount || 0).toFixed(decimals)} €`;
-  };
-
-  const formatSignedAmount = (amount: number, sign: "+" | "-") => {
-    if (anonymousMode) {
-      return `${sign}${maskEuroAmount(Math.abs(amount))}`;
-    }
-    return `${sign}${amount} €`;
-  };
 
   if (loading) return <div className="min-h-screen bg-app-bg text-app-text p-8">Chargement...</div>;
   if (!envelope) return null;
@@ -462,7 +449,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
                   </div>
                   <div className="flex items-center gap-4">
                     <span className={`font-bold ${tx.isReimbursement ? "text-emerald-400" : "text-red-400"}`}>
-                      {formatSignedAmount(Number(tx.amount || 0), tx.isReimbursement ? "+" : "-")}
+                      {`${tx.isReimbursement ? "+" : "-"}${formatAmount(Number(tx.amount || 0))}`}
                     </span>
                     <button
                       onClick={(e) => handleDeleteTransaction(tx.id, e)}

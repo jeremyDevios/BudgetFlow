@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 
 type Transaction = {
   id: string;
@@ -39,6 +40,7 @@ export default function SearchDropdown({ transactions, envelopes, currentDate }:
   const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const { formatAmount } = useCurrencyFormatting();
   const envelopeMap = Object.fromEntries(envelopes.map((e) => [e.id, e]));
 
   const results = query.trim().length > 0
@@ -163,7 +165,7 @@ export default function SearchDropdown({ transactions, envelopes, currentDate }:
                           </p>
                         </div>
                         <span className="text-sm font-bold text-red-400 flex-shrink-0">
-                          -{tx.amount.toFixed(2)} €
+                          -{formatAmount(tx.amount)}
                         </span>
                       </button>
                     </motion.li>

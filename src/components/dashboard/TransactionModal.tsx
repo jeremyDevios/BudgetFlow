@@ -12,6 +12,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
 import { type Envelope, isEnvelopeActiveForMonth } from "@/types/envelope";
+import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 
 // French month names indexed 1-based (index 0 unused).
 const FRENCH_MONTHS = [
@@ -46,6 +47,7 @@ interface TransactionModalProps {
 
 export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId }: TransactionModalProps) {
   const { user } = useAuth();
+  const { formatAmount, symbol } = useCurrencyFormatting();
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   
@@ -272,7 +274,7 @@ const handleDelete = async () => {
             <label className="block text-sm font-medium text-app-text-secondary mb-1">Montant</label>
             <div>
               <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary font-bold text-xl">€</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary font-bold text-xl">{symbol}</span>
                   <input
                       type="number"
                   aria-label="Montant de la transaction"
@@ -339,7 +341,7 @@ const handleDelete = async () => {
                   transition={{ duration: 0.2 }}
                   className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${remainingToneClass}`}
                 >
-                  Reste disponible : {envRemaining.toFixed(2)} €
+                  Reste disponible : {envRemaining.toFixed(2)} {symbol}
                 </motion.div>
               )}
             </AnimatePresence>

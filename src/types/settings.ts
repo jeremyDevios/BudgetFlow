@@ -7,6 +7,8 @@
  * Firestore path: users/{uid}/settings/general
  */
 
+import { CurrencyCode } from "@/types/currency";
+
 // ---------------------------------------------------------------------------
 // Sub-items
 // ---------------------------------------------------------------------------
@@ -67,6 +69,13 @@ export interface UserSettings {
   bentoPreset: BentoPreset;
 
   /**
+   * Display-only currency code controlling how amounts are rendered.
+   * No conversion is performed — stored amounts are always raw numbers.
+   * Legacy documents that do not store this field default to `"EUR"`.
+   */
+  currency: CurrencyCode;
+
+  /**
    * Display-only privacy mode for masking currency amounts in the web UI.
    * Legacy documents that do not store this field default to `false`.
    */
@@ -115,6 +124,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   fixedCosts: 0,
   monthlySavings: 0,
   bentoPreset: "balanced",
+  currency: "EUR",
   anonymousMode: false,
   fixedCostsDetailedEnabled: false,
   savingsDetailedEnabled: false,

@@ -158,7 +158,7 @@ describe("BudgetDetailEditor – display (mode disabled)", () => {
 
     renderControlled({ aggregateAmount: 950 });
 
-    expect(screen.getByLabelText(/Montant global : \*{4},\*{2}\s€/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Montant global : •{4}\s?€/i)).toBeInTheDocument();
     expect(screen.queryByText(/950/)).not.toBeInTheDocument();
   });
 
@@ -223,7 +223,7 @@ describe("BudgetDetailEditor – display (mode enabled)", () => {
 
     renderControlled({ enabled: true, items: [itemA, itemB] });
 
-    expect(screen.getByLabelText(/Total détaillé : \*{4},\*{2}\s€/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Total détaillé : •{4}\s?€/i)).toBeInTheDocument();
     expect(screen.queryByText(/920/)).not.toBeInTheDocument();
   });
 });

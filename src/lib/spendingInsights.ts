@@ -75,8 +75,11 @@ function roundCurrency(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function formatCurrency(value: number): string {
-  return roundCurrency(value).toFixed(2);
+function formatCurrency(value: number, currency: string): string {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency,
+  }).format(roundCurrency(value));
 }
 
 function normalizeTransactionName(value: string): string {
@@ -199,6 +202,7 @@ export function buildSmartSpendingNotifications(params: {
   envelopeForecasts?: Record<string, EnvelopeForecast | undefined>;
   today?: Date;
   analysisMonthCount?: number;
+  currency?: string;
 }): SmartSpendingNotificationsResult {
   const {
     transactions,
@@ -206,6 +210,7 @@ export function buildSmartSpendingNotifications(params: {
     envelopeForecasts = {},
     today = new Date(),
     analysisMonthCount = DEFAULT_ANALYSIS_MONTH_COUNT,
+    currency = "EUR",
   } = params;
 
   if (envelopes.length === 0 || analysisMonthCount <= 0) {
@@ -288,8 +293,8 @@ export function buildSmartSpendingNotifications(params: {
       description: `"${exceptionalInsight.transactionName}" prend à lui seul ${Math.round(
         exceptionalInsight.budgetRatio * 100
       )}% de l'enveloppe ${exceptionalInsight.envelopeName} (${formatCurrency(
-        exceptionalInsight.envelopeBudget
-      )} €).`,
+        exceptionalInsight.envelopeBudget, currency
+      )}).`,
       envelopeId: exceptionalInsight.envelopeId,
       envelopeName: exceptionalInsight.envelopeName,
     });
@@ -363,8 +368,8 @@ export function buildSmartSpendingNotifications(params: {
           )}% du budget est déjà utilisé alors qu'il reste encore ${remainingDaysInMonth} jour${
             remainingDaysInMonth > 1 ? "s" : ""
           } avant la fin du mois. À ce rythme, un dépassement d'environ ${formatCurrency(
-            forecast.excessAmount
-          )} € est probable.`,
+            forecast.excessAmount, currency
+          )} est probable.`,
           envelopeId: envelope.id,
           envelopeName: envelope.name,
         };
@@ -389,8 +394,8 @@ export function buildSmartSpendingNotifications(params: {
         scope: "global",
         title: `${envelope.name} dépasse souvent son budget`,
         description: `Cette enveloppe a dépassé son budget ${overspendCount} mois sur ${analysisMonthCount}. Un budget d'environ ${formatCurrency(
-          suggestedBudget
-        )} € serait plus adapté à vos habitudes.`,
+          suggestedBudget, currency
+        )} serait plus adapté à vos habitudes.`,
         envelopeId: envelope.id,
         envelopeName: envelope.name,
         suggestedBudget,
@@ -421,8 +426,8 @@ export function buildSmartSpendingNotifications(params: {
         scope: "global",
         title: `${envelope.name} utilise rarement tout son budget`,
         description: `Cette enveloppe est restée bien en dessous de son budget ${underspendCount} mois sur ${analysisMonthCount}. Un budget d'environ ${formatCurrency(
-          suggestedBudget
-        )} € serait plus proche de vos dépenses habituelles.`,
+          suggestedBudget, currency
+        )} serait plus proche de vos dépenses habituelles.`,
         envelopeId: envelope.id,
         envelopeName: envelope.name,
         suggestedBudget,
@@ -464,8 +469,8 @@ export function buildSmartSpendingNotifications(params: {
         scope: "global",
         title: `Dépense récurrente à surveiller dans ${envelope.name}`,
         description: `"${topRecurringCandidate.label}" revient presque tous les mois pour environ ${formatCurrency(
-          averageRecurringAmount
-        )} € par mois. Cette dépense mérite votre attention.`,
+          averageRecurringAmount, currency
+        )} par mois. Cette dépense mérite votre attention.`,
         envelopeId: envelope.id,
         envelopeName: envelope.name,
         recurringLabel: topRecurringCandidate.label,
