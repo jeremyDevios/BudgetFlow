@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
-import { db } from "@/lib/firebase";
+import { db, enableOfflinePersistence } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { usePathname } from "next/navigation";
 import { logger } from "@/lib/logger";
@@ -20,6 +20,11 @@ export default function ProtectedLayout({
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+
+  // Activer la persistance offline Firestore au montage
+  useEffect(() => {
+    enableOfflinePersistence();
+  }, []);
 
   useEffect(() => {
     const checkOnboarding = async () => {

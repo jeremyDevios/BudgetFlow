@@ -59,3 +59,96 @@ export function validatePassword(password: unknown): password is string {
     /[0-9]/.test(password)
   );
 }
+
+// ── Quota limits ──
+
+export const QUOTA_CONSTRAINTS = {
+  MAX_ENVELOPES: 50,
+  MAX_TRANSACTIONS_PER_MONTH: 500,
+} as const;
+
+export function checkEnvelopeQuota(currentEnvelopeCount: number): {
+  allowed: boolean;
+  message: string;
+} {
+  if (currentEnvelopeCount >= QUOTA_CONSTRAINTS.MAX_ENVELOPES) {
+    return {
+      allowed: false,
+      message: `Limite atteinte : maximum ${QUOTA_CONSTRAINTS.MAX_ENVELOPES} enveloppes autorisées. Supprimez une enveloppe existante pour en créer une nouvelle.`,
+    };
+  }
+  return { allowed: true, message: "" };
+}
+
+export function checkTransactionQuota(
+  currentMonthlyTransactionCount: number
+): {
+  allowed: boolean;
+  message: string;
+} {
+  if (currentMonthlyTransactionCount >= QUOTA_CONSTRAINTS.MAX_TRANSACTIONS_PER_MONTH) {
+    return {
+      allowed: false,
+      message: `Limite atteinte : maximum ${QUOTA_CONSTRAINTS.MAX_TRANSACTIONS_PER_MONTH} transactions par mois.`,
+    };
+  }
+  return { allowed: true, message: "" };
+}
+
+// ── Validation avec messages d'erreur en français ──
+
+export function validateAmountWithMessage(
+  amount: unknown
+): { valid: boolean; message: string } {
+  if (typeof amount !== "number" || isNaN(amount)) {
+    return { valid: false, message: "Le montant doit être un nombre valide." };
+  }
+  if (amount <= 0) {
+    return {
+      valid: false,
+      message: "Le montant doit être supérieur à 0.",
+    };
+  }
+  if (amount > VALIDATION_CONSTRAINTS.AMOUNT_MAX) {
+    return {
+      valid: false,
+      message: `Le montant ne peut pas dépasser ${VALIDATION_CONSTRAINTS.AMOUNT_MAX.toLocaleString("fr-FR")}.`,
+    };
+  }
+  return { valid: true, message: "" };
+}
+
+export function validateDescriptionWithMessage(
+  desc: unknown
+): { valid: boolean; message: string } {
+  if (typeof desc !== "string" || desc.trim().length === 0) {
+    return { valid: false, message: "La description ne peut pas être vide." };
+  }
+  if (desc.length > VALIDATION_CONSTRAINTS.DESCRIPTION_MAX_LENGTH) {
+    return {
+      valid: false,
+      message: `La description ne peut pas dépasser ${VALIDATION_CONSTRAINTS.DESCRIPTION_MAX_LENGTH} caractères.`,
+    };
+  }
+  return { valid: true, message: "" };
+}
+
+export function validateEnvelopeNameWithMessage(
+  name: unknown
+): { valid: boolean; message: string } {
+  if (typeof name !== "string" || name.trim().length === 0) {
+    return { valid: false, message: "Le nom de l'enveloppe ne peut pas être vide." };
+  }
+  if (name.length > VALIDATION_CONSTRAINTS.ENVELOPE_NAME_MAX_LENGTH) {
+    return {
+      valid: false,
+      message: `Le nom ne peut pas dépasser ${VALIDATION_CONSTRAINTS.ENVELOPE_NAME_MAX_LENGTH} caractères.`,
+    };
+  }
+  return { valid: true, message: "" };
+}
+
+/** Construit la clé de mois utilisée dans le document compteur (ex: "tx_2026_06"). */
+export function getMonthKey(dateStr: string): string {
+  return "tx_" + dateStr.slice(0, 7).replace("-", "_");
+}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, limit } from "firebase/firestore";
 
 import type { EnvelopeForecast } from "@/lib/forecasting";
 import { db } from "@/lib/firebase";
@@ -115,7 +115,8 @@ export function useSmartSpendingInsights(
         const pastTransactionsQuery = query(
           txRef,
           where("date", ">=", formatDate(rangeStart)),
-          where("date", "<=", `${formatDate(rangeEnd)}T23:59:59`)
+          where("date", "<=", `${formatDate(rangeEnd)}T23:59:59`),
+          limit(5000)
         );
 
         const snapshot = await getDocs(pastTransactionsQuery);

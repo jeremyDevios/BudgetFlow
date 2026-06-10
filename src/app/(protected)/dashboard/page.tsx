@@ -5,7 +5,7 @@ import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { getCurrencySymbol, getCurrencyLocale } from "@/types/currency";
 import { db, auth } from "@/lib/firebase";
-import { collection, query, getDocs, doc, getDoc, where, writeBatch, updateDoc } from "firebase/firestore";
+import { collection, query, getDocs, doc, getDoc, where, writeBatch, updateDoc, limit } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
@@ -666,9 +666,10 @@ export default function DashboardPage() {
       try {
           const txRef = collection(db, "users", user.uid, "transactions");
           const q = query(
-            txRef, 
+            txRef,
             where("date", ">=", start),
-            where("date", "<=", end)
+            where("date", "<=", end),
+            limit(500)
           );
           
           const txSnap = await getDocs(q);

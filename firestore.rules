@@ -140,6 +140,22 @@ service cloud.firestore {
         && data.date == dateId;
     }
 
+    // ── Counters (quotas) ─────────────────────────────────────────────────────
+    //
+    // Document: /counters/{userId}
+    // Fields:
+    //   envelopeCount  — number of envelopes the user has (incremented atomically)
+    //   tx_YYYY_MM     — number of transactions created in that month
+    //
+    // These documents are written with {merge:true} / increment() from the client
+    // and read via getAfter() in envelope/transaction create rules to enforce
+    // per-user quotas that Firestore cannot express with collection counts.
+
+    match /counters/{userId} {
+      allow read: if isGoogleAuth() && isOwner(userId);
+      allow write: if isGoogleAuth() && isOwner(userId);
+    }
+
     // ── User document ────────────────────────────────────────────────────────
 
     match /users/{userId} {
@@ -168,7 +184,14 @@ service cloud.firestore {
       match /envelopes/{envelopeId} {
         allow read:   if isGoogleAuth() && isOwner(userId);
         allow create: if isGoogleAuth() && isOwner(userId)
-                         && isValidEnvelopeData(request.resource.data);
+                         && isValidEnvelopeData(request.resource.data)
+                         // Enforce 50-envelope quota via counter document.
+                         // getAfter reads the counter document state AFTER the
+                         // batched increment(1) has been applied, so the rule
+                         // checks the post-write count.
+                         && getAfter(
+                              /databases/$(database)/documents/counters/$(userId)
+                            ).data.envelopeCount <= 50;
         allow update: if isGoogleAuth() && isOwner(userId)
                          && isValidEnvelopeData(request.resource.data);
         allow delete: if isGoogleAuth() && isOwner(userId);

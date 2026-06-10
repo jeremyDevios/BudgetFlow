@@ -86,6 +86,21 @@ export const db: Firestore = lazyProxy(_dbRef, () => {
   return getFirestore(a);
 });
 
+/** Active la persistance offline Firestore (IndexedDB). */
+export async function enableOfflinePersistence(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    const { enableMultiTabIndexedDbPersistence } = await import("firebase/firestore");
+    await enableMultiTabIndexedDbPersistence(db);
+  } catch (err: any) {
+    if (err.code === "failed-precondition") {
+      // Déjà activée dans un autre onglet
+    } else if (err.code === "unimplemented") {
+      // Navigateur incompatible
+    }
+  }
+}
+
 export const messaging: any = lazyProxy(_messagingRef, () => {
   if (typeof window === "undefined") {
     // On SSR return a stub — messaging is browser-only.

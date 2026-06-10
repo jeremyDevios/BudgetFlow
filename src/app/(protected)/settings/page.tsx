@@ -15,7 +15,12 @@ import {
   deleteDoc,
   addDoc,
   writeBatch,
+  increment,
 } from "firebase/firestore";
+import {
+  validateEnvelopeNameWithMessage,
+  checkEnvelopeQuota,
+} from "@/lib/validation";
 import {
   loadSettings,
   saveSettings,
@@ -38,7 +43,10 @@ import {
   GripVertical,
   Briefcase,
   Clock,
+  Coffee,
 } from "lucide-react";
+
+const DONATION_URL = "https://ko-fi.com/vizualy";
 import { useNotifications } from "@/hooks/useNotifications";
 import {
   DndContext,
@@ -561,6 +569,21 @@ export default function SettingsPage() {
     if (!user) return;
     const numBudget = parseFloat(values.budget);
 
+    // --- Validation côté client ---
+    const nameCheck = validateEnvelopeNameWithMessage(values.name);
+    if (!nameCheck.valid) {
+      alert(nameCheck.message);
+      return;
+    }
+
+    if (!editingEnvelope) {
+      const quotaCheck = checkEnvelopeQuota(envelopes.length);
+      if (!quotaCheck.allowed) {
+        alert(quotaCheck.message);
+        return;
+      }
+    }
+
     try {
       if (editingEnvelope) {
         // Update — always persist isTemporary + activeMonths explicitly.
@@ -604,6 +627,13 @@ export default function SettingsPage() {
           createdAt: nowISO,
           updatedAt: nowISO,
         });
+
+        // Incrémenter le compteur d'enveloppes
+        const counterRef = doc(db, "counters", user.uid);
+        await updateDoc(counterRef, {
+          envelopeCount: increment(1),
+        }).catch(() => {/* compteur absent, ignoré */});
+
         setEnvelopes((prev) => [
           ...prev,
           {
@@ -629,6 +659,13 @@ export default function SettingsPage() {
     if (!user) return;
     try {
       await deleteDoc(doc(db, "users", user.uid, "envelopes", id));
+
+      // Décrémenter le compteur d'enveloppes
+      const counterRef = doc(db, "counters", user.uid);
+      await updateDoc(counterRef, {
+        envelopeCount: increment(-1),
+      }).catch(() => {/* compteur absent, ignoré */});
+
       setEnvelopes((prev) => prev.filter((e) => e.id !== id));
     } catch (error) {
       logger.sanitizedError("Erreur suppression", error);
@@ -786,6 +823,32 @@ export default function SettingsPage() {
               <p className="text-sm text-app-text-secondary truncate">
                 {user?.email || "Aucun email"}
               </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Soutenir le développeur ── */}
+        <section className="bg-app-surface/50 border border-amber-500/30 rounded-2xl p-6 bg-gradient-to-br from-amber-50/40 to-transparent dark:from-amber-950/20 dark:to-transparent">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center text-2xl shrink-0">
+              ☕️
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-app-text mb-1">
+                Soutenir le développeur
+              </h2>
+              <p className="text-sm text-app-text-secondary mb-4 leading-relaxed">
+                Chaque café offert m&apos;aide à rester éveillé pour traquer les bugs et améliorer l&apos;application. Merci pour votre soutien ! 🚀
+              </p>
+              <a
+                href={DONATION_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-semibold text-sm transition-all duration-200 hover:shadow-lg hover:shadow-amber-500/25 active:scale-95"
+              >
+                <Coffee className="w-4 h-4" />
+                Offrez-moi un café
+              </a>
             </div>
           </div>
         </section>

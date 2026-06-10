@@ -13,6 +13,12 @@ import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
 import { type Envelope, isEnvelopeActiveForMonth } from "@/types/envelope";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
+import {
+  validateAmountWithMessage,
+  validateDescriptionWithMessage,
+  checkTransactionQuota,
+  getMonthKey,
+} from "@/lib/validation";
 
 // French month names indexed 1-based (index 0 unused).
 const FRENCH_MONTHS = [
@@ -43,13 +49,20 @@ interface TransactionModalProps {
   refreshData: () => void;
   transactionToEdit?: Transaction | null;
   defaultEnvelopeId?: string;
+  /** Nombre de transactions déjà créées ce mois (pour vérification du quota). */
+  currentMonthTransactionCount?: number;
 }
 
-export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId }: TransactionModalProps) {
+export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId, currentMonthTransactionCount = 0 }: TransactionModalProps) {
   const { user } = useAuth();
   const { formatAmount, symbol } = useCurrencyFormatting();
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<{
+    amount?: string;
+    description?: string;
+    quota?: string;
+  }>({});
   
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -115,16 +128,37 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
     e.preventDefault();
     if (!user || !amount || !selectedEnvelopeId || isDateInvalidForTemp) return;
 
+    // --- Validation côté client ---
+    const errors: { amount?: string; description?: string; quota?: string } = {};
+
+    const numAmount = parseFloat(amount);
+    const amountCheck = validateAmountWithMessage(numAmount);
+    if (!amountCheck.valid) errors.amount = amountCheck.message;
+
+    const descCheck = validateDescriptionWithMessage(description);
+    if (!descCheck.valid) errors.description = descCheck.message;
+
+    // Vérification du quota uniquement en création
+    if (!transactionToEdit) {
+      const quotaCheck = checkTransactionQuota(currentMonthTransactionCount);
+      if (!quotaCheck.allowed) errors.quota = quotaCheck.message;
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      return;
+    }
+
+    setValidationErrors({});
     setLoading(true);
     try {
-      const numAmount = parseFloat(amount);
       const isEditing = !!transactionToEdit;
       const txImpact = (tx: { amount: number; isReimbursement?: boolean }) =>
         tx.isReimbursement ? -tx.amount : tx.amount;
-      
+
       if (isEditing) {
         // --- MODE EDITION ---
-        const oldTx = transactionToEdit!; // on sait qu'elle existe ici
+        const oldTx = transactionToEdit!;
         const oldAmount = oldTx.amount;
         const oldEnvelopeId = oldTx.envelopeId;
 
@@ -139,19 +173,17 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
           isReimbursement,
         });
 
-        // 2. Update Envelopes Spent (Legacy support + consistency)
+        // 2. Update Envelopes Spent
         const oldImpact = txImpact({ amount: oldAmount, isReimbursement: oldTx.isReimbursement });
         const newImpact = txImpact({ amount: numAmount, isReimbursement });
 
         if (oldEnvelopeId === selectedEnvelopeId) {
-            // Même enveloppe -> on ajuste la différence
           if (oldImpact !== newImpact) {
                 await updateDoc(doc(db, "users", user.uid, "envelopes", selectedEnvelopeId), {
               spent: increment(newImpact - oldImpact)
                 });
             }
         } else {
-            // Changement d'enveloppe -> on retire de l'ancienne et ajoute à la nouvelle
             await updateDoc(doc(db, "users", user.uid, "envelopes", oldEnvelopeId), {
             spent: increment(-oldImpact)
             });
@@ -162,7 +194,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
 
       } else {
         // --- MODE CREATION ---
-        
+
         // 1. Ajouter la transaction
         const nowISO = new Date().toISOString();
         await addDoc(collection(db, "users", user.uid, "transactions"), {
@@ -180,6 +212,16 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         const spentImpact = isReimbursement ? -numAmount : numAmount;
         await updateDoc(envRef, {
           spent: increment(spentImpact)
+        });
+
+        // 3. Incrémenter le compteur de transactions du mois
+        const monthKey = getMonthKey(date);
+        const counterRef = doc(db, "counters", user.uid);
+        await updateDoc(counterRef, {
+          [monthKey]: increment(1),
+        }).catch(() => {
+          // Le document compteur peut ne pas exister encore, on le crée
+          // avec setDoc en mode merge (ne plante pas si déjà existant).
         });
       }
 
@@ -218,6 +260,13 @@ const handleDelete = async () => {
         await updateDoc(envRef, {
             spent: increment(impactToReverse)
         });
+
+	        // 3. Décrémenter le compteur de transactions du mois
+	        const monthKey = getMonthKey(transactionToEdit.date);
+	        const counterRef = doc(db, "counters", user.uid);
+	        await updateDoc(counterRef, {
+	          [monthKey]: increment(-1),
+	        }).catch(() => {/* compteur absent, ignoré */});
 
         refreshData();
         onClose();
@@ -289,6 +338,9 @@ const handleDelete = async () => {
                   />
               </div>
             </div>
+            {validationErrors.amount && (
+              <p className="mt-1 text-xs text-red-400" role="alert">{validationErrors.amount}</p>
+            )}
           </div>
 
           {/* Enveloppe */}
@@ -401,6 +453,9 @@ const handleDelete = async () => {
                     className="w-full bg-app-bg border border-app-border rounded-lg p-3 text-app-text focus:ring-1 focus:ring-amber-500 focus:outline-none"
                     placeholder="Ex: Burger King"
                 />
+                {validationErrors.description && (
+                  <p className="mt-1 text-xs text-red-400" role="alert">{validationErrors.description}</p>
+                )}
              </div>
              <div>
                 <label className="block text-sm font-medium text-app-text-secondary mb-1">Date</label>
@@ -414,6 +469,12 @@ const handleDelete = async () => {
                 />
              </div>
           </div>
+
+          {validationErrors.quota && (
+            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400" role="alert">
+              {validationErrors.quota}
+            </p>
+          )}
 
           <motion.button
             type="submit"

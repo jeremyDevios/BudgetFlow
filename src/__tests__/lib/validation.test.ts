@@ -7,6 +7,13 @@ import {
   validateEmail,
   validatePassword,
   VALIDATION_CONSTRAINTS,
+  QUOTA_CONSTRAINTS,
+  checkEnvelopeQuota,
+  checkTransactionQuota,
+  validateAmountWithMessage,
+  validateDescriptionWithMessage,
+  validateEnvelopeNameWithMessage,
+  getMonthKey,
 } from '@/lib/validation';
 
 describe('validateAmount', () => {
@@ -174,5 +181,170 @@ describe('validatePassword', () => {
   });
   it('returns true for password exactly 8 chars with all requirements', () => {
     expect(validatePassword('Secure1x')).toBe(true);
+  });
+});
+
+// ── Quota checkers ──
+
+describe('checkEnvelopeQuota', () => {
+  it('allows when count is under limit', () => {
+    expect(checkEnvelopeQuota(0).allowed).toBe(true);
+    expect(checkEnvelopeQuota(10).allowed).toBe(true);
+    expect(checkEnvelopeQuota(49).allowed).toBe(true);
+  });
+  it('blocks when count is at limit', () => {
+    const result = checkEnvelopeQuota(QUOTA_CONSTRAINTS.MAX_ENVELOPES);
+    expect(result.allowed).toBe(false);
+    expect(result.message).toContain('Limite atteinte');
+    expect(result.message).toContain(String(QUOTA_CONSTRAINTS.MAX_ENVELOPES));
+  });
+  it('blocks when count is over limit', () => {
+    const result = checkEnvelopeQuota(QUOTA_CONSTRAINTS.MAX_ENVELOPES + 1);
+    expect(result.allowed).toBe(false);
+  });
+  it('returns empty message when allowed', () => {
+    const result = checkEnvelopeQuota(5);
+    expect(result.allowed).toBe(true);
+    expect(result.message).toBe('');
+  });
+});
+
+describe('checkTransactionQuota', () => {
+  it('allows when count is under limit', () => {
+    expect(checkTransactionQuota(0).allowed).toBe(true);
+    expect(checkTransactionQuota(100).allowed).toBe(true);
+    expect(checkTransactionQuota(499).allowed).toBe(true);
+  });
+  it('blocks when count is at limit', () => {
+    const result = checkTransactionQuota(QUOTA_CONSTRAINTS.MAX_TRANSACTIONS_PER_MONTH);
+    expect(result.allowed).toBe(false);
+    expect(result.message).toContain('Limite atteinte');
+    expect(result.message).toContain(String(QUOTA_CONSTRAINTS.MAX_TRANSACTIONS_PER_MONTH));
+  });
+  it('blocks when count is over limit', () => {
+    const result = checkTransactionQuota(QUOTA_CONSTRAINTS.MAX_TRANSACTIONS_PER_MONTH + 1);
+    expect(result.allowed).toBe(false);
+  });
+  it('returns empty message when allowed', () => {
+    const result = checkTransactionQuota(5);
+    expect(result.allowed).toBe(true);
+    expect(result.message).toBe('');
+  });
+});
+
+// ── Validation with French messages ──
+
+describe('validateAmountWithMessage', () => {
+  it('returns valid for a good amount', () => {
+    const result = validateAmountWithMessage(50);
+    expect(result.valid).toBe(true);
+    expect(result.message).toBe('');
+  });
+  it('rejects NaN with French error', () => {
+    const result = validateAmountWithMessage(NaN);
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('nombre valide');
+  });
+  it('rejects zero with French error', () => {
+    const result = validateAmountWithMessage(0);
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('supérieur à 0');
+  });
+  it('rejects negative with French error', () => {
+    const result = validateAmountWithMessage(-5);
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('supérieur à 0');
+  });
+  it('rejects amount over max', () => {
+    const result = validateAmountWithMessage(VALIDATION_CONSTRAINTS.AMOUNT_MAX + 1);
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('ne peut pas dépasser');
+  });
+  it('rejects string', () => {
+    const result = validateAmountWithMessage('abc');
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('nombre valide');
+  });
+  it('rejects null', () => {
+    const result = validateAmountWithMessage(null);
+    expect(result.valid).toBe(false);
+  });
+  it('accepts amount at max', () => {
+    const result = validateAmountWithMessage(VALIDATION_CONSTRAINTS.AMOUNT_MAX);
+    expect(result.valid).toBe(true);
+  });
+  it('accepts amount just above zero', () => {
+    const result = validateAmountWithMessage(0.01);
+    expect(result.valid).toBe(true);
+  });
+});
+
+describe('validateDescriptionWithMessage', () => {
+  it('accepts a valid description', () => {
+    const result = validateDescriptionWithMessage('Courses');
+    expect(result.valid).toBe(true);
+    expect(result.message).toBe('');
+  });
+  it('rejects empty string with French error', () => {
+    const result = validateDescriptionWithMessage('');
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('ne peut pas être vide');
+  });
+  it('rejects whitespace-only with French error', () => {
+    const result = validateDescriptionWithMessage('   ');
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('ne peut pas être vide');
+  });
+  it('rejects over max length with French error', () => {
+    const result = validateDescriptionWithMessage('a'.repeat(256));
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('ne peut pas dépasser');
+    expect(result.message).toContain('255');
+  });
+  it('accepts at max length', () => {
+    const result = validateDescriptionWithMessage('a'.repeat(255));
+    expect(result.valid).toBe(true);
+  });
+  it('rejects non-string', () => {
+    const result = validateDescriptionWithMessage(42 as unknown as string);
+    expect(result.valid).toBe(false);
+  });
+});
+
+describe('validateEnvelopeNameWithMessage', () => {
+  it('accepts a valid name', () => {
+    const result = validateEnvelopeNameWithMessage('Courses');
+    expect(result.valid).toBe(true);
+    expect(result.message).toBe('');
+  });
+  it('rejects empty with French error', () => {
+    const result = validateEnvelopeNameWithMessage('');
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('ne peut pas être vide');
+  });
+  it('rejects whitespace-only', () => {
+    const result = validateEnvelopeNameWithMessage('  ');
+    expect(result.valid).toBe(false);
+  });
+  it('rejects over max length with French error', () => {
+    const result = validateEnvelopeNameWithMessage('a'.repeat(101));
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('ne peut pas dépasser');
+  });
+  it('accepts at max length', () => {
+    const result = validateEnvelopeNameWithMessage('a'.repeat(100));
+    expect(result.valid).toBe(true);
+  });
+});
+
+describe('getMonthKey', () => {
+  it('extracts YYYY-MM from ISO date and formats as tx_YYYY_MM', () => {
+    expect(getMonthKey('2026-06-15')).toBe('tx_2026_06');
+  });
+  it('works with date-only string', () => {
+    expect(getMonthKey('2025-01-01')).toBe('tx_2025_01');
+  });
+  it('works with datetime string', () => {
+    expect(getMonthKey('2026-12-31T23:59:59')).toBe('tx_2026_12');
   });
 });

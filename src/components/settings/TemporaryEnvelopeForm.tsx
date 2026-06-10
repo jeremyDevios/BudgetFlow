@@ -14,6 +14,7 @@
 import { useState } from "react";
 import { getCurrencySymbol } from "@/types/currency";
 import { useCurrency } from "@/context/CurrencyContext";
+import { validateEnvelopeNameWithMessage } from "@/lib/validation";
 import {
   AlertTriangle,
   Clock,
@@ -126,6 +127,7 @@ export default function TemporaryEnvelopeForm({
   const [color, setColor] = useState(initialValues.color);
   const [isTemporary, setIsTemporary] = useState(initialValues.isTemporary);
   const [activeMonths, setActiveMonths] = useState<string[]>(initialValues.activeMonths);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   const { currency } = useCurrency();
   const symbol = getCurrencySymbol(currency);
@@ -133,9 +135,16 @@ export default function TemporaryEnvelopeForm({
   const currentBudget = parseFloat(budget) || 0;
   const afterAllocation = budgetAvailable - currentBudget;
 
-  // Save is blocked when: name/budget empty, or temporary with no months chosen.
+  const handleNameChange = (value: string) => {
+    setName(value);
+    const check = validateEnvelopeNameWithMessage(value);
+    setNameError(check.valid ? null : check.message);
+  };
+
+  // Save is blocked when: name/budget empty, validation error, or temporary with no months.
   const canSave =
     name.trim().length > 0 &&
+    !nameError &&
     budget.trim().length > 0 &&
     parseFloat(budget) > 0 &&
     (!isTemporary || activeMonths.length > 0);
@@ -174,11 +183,14 @@ export default function TemporaryEnvelopeForm({
         <input
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={(e) => handleNameChange(e.target.value)}
           className="w-full bg-app-bg border border-app-border rounded-lg py-2 px-3 focus:ring-2 focus:ring-amber-500 outline-none"
           placeholder="Ex : Vacances"
           autoFocus
         />
+        {nameError && (
+          <p className="mt-1 text-xs text-red-400" role="alert">{nameError}</p>
+        )}
       </div>
 
       {/* ── Budget ── */}

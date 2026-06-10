@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db } from "@/lib/firebase";
 
-import { collection, query, getDocs, where, doc, getDoc } from "firebase/firestore";
+import { collection, query, getDocs, where, doc, getDoc, limit } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, addMonths, isSameMonth } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -64,11 +64,22 @@ export default function EvolutionPage() {
         const end = endOfMonth(today);
         const start = startOfMonth(subMonths(today, 5));
 
-        // 3. Get Transactions
+        // 3. Get Transactions (date-filtered, last 6 months)
         const txRef = collection(db, "users", user.uid, "transactions");
-        // Note: Simple query, client-side filtering for simplicity and to avoid complex composite indexes
-        // In a real large app, you'd want composite index on [date, type]
-        const q = query(txRef); 
+        const fmt = (d: Date) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          return `${y}-${m}-${day}`;
+        };
+        const startStr = fmt(start);
+        const endStr = `${fmt(end)}T23:59:59`;
+        const q = query(
+          txRef,
+          where("date", ">=", startStr),
+          where("date", "<=", endStr),
+          limit(5000)
+        );
         const querySnapshot = await getDocs(q);
 
         // 4. Aggregate by Month

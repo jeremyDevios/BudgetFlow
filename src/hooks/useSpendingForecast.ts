@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { collection, getDocs, query, where, limit } from "firebase/firestore";
 
 import {
   computeForecast,
@@ -97,7 +97,8 @@ export function useSpendingForecast(
         const q = query(
           txRef,
           where("date", ">=", formatDate(rangeStart)),
-          where("date", "<=", `${formatDate(rangeEnd)}T23:59:59`)
+          where("date", "<=", `${formatDate(rangeEnd)}T23:59:59`),
+          limit(5000)
         );
 
         const snapshot = await getDocs(q);

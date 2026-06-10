@@ -12,6 +12,7 @@ jest.mock("firebase/firestore", () => ({
   collection: jest.fn(() => ({ type: "collection" })),
   query: jest.fn(() => ({ type: "query" })),
   where: jest.fn(() => ({ type: "where" })),
+  limit: jest.fn(() => ({ type: "limit" })),
   getDocs: (...args: unknown[]) => getDocsMock(...args),
 }));
 

@@ -443,4 +443,139 @@ describe("TransactionModal", () => {
     expect(refreshData).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("shows validation error when amount is zero", async () => {
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    // Set amount to 0, fill valid description
+    fireEvent.change(screen.getByLabelText(/Montant de la transaction/i), {
+      target: { value: "0" },
+    });
+    fireEvent.change(screen.getByLabelText(/Description de la transaction/i), {
+      target: { value: "Test" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Ajouter/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/supérieur à 0/)).toBeInTheDocument();
+    });
+
+    // Firestore write should NOT have been called
+    expect(addDocMock).not.toHaveBeenCalled();
+  });
+
+  it("shows validation error when description is empty", async () => {
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/Montant de la transaction/i), {
+      target: { value: "50" },
+    });
+    // Leave description empty
+
+    fireEvent.click(screen.getByRole("button", { name: /Ajouter/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/ne peut pas être vide/)).toBeInTheDocument();
+    });
+
+    expect(addDocMock).not.toHaveBeenCalled();
+  });
+
+  it("shows validation error when description exceeds 255 characters", async () => {
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/Montant de la transaction/i), {
+      target: { value: "50" },
+    });
+    fireEvent.change(screen.getByLabelText(/Description de la transaction/i), {
+      target: { value: "a".repeat(256) },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Ajouter/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/ne peut pas dépasser 255/)).toBeInTheDocument();
+    });
+
+    expect(addDocMock).not.toHaveBeenCalled();
+  });
+
+  it("shows quota error when monthly transaction limit is reached", async () => {
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+        currentMonthTransactionCount={500}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/Montant de la transaction/i), {
+      target: { value: "50" },
+    });
+    fireEvent.change(screen.getByLabelText(/Description de la transaction/i), {
+      target: { value: "Test" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Ajouter/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Limite atteinte/)).toBeInTheDocument();
+    });
+
+    expect(addDocMock).not.toHaveBeenCalled();
+  });
+
+  it("does NOT show quota error when editing an existing transaction", async () => {
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+        transactionToEdit={{
+          id: "tx-1",
+          amount: 18,
+          description: "Plein",
+          envelopeId: "env-2",
+          date: "2026-04-10T12:00:00.000Z",
+        }}
+        currentMonthTransactionCount={500}
+      />
+    );
+
+    // Modify amount — quota does not apply to edits
+    fireEvent.change(screen.getByLabelText(/Montant de la transaction/i), {
+      target: { value: "30" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Modifier/i }));
+
+    await waitFor(() => {
+      expect(updateDocMock).toHaveBeenCalled();
+    });
+  });
 });
