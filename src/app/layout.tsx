@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] });
 const themeInitScript = `(function(){try{var t=localStorage.getItem('theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='light'){document.documentElement.classList.remove('dark')}else{document.documentElement.classList.add('dark')}}catch(e){}})();`;
 
 export const metadata: Metadata = {
-  title: "BudgetFlow",
+  title: "Vizualy Budget",
   description: "Gérez votre budget simplement",
   icons: {
     icon: "/favicon.png",
@@ -26,7 +26,7 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="BudgetFlow" />
+        <meta name="apple-mobile-web-app-title" content="Vizualy Budget" />
       </head>
       <body className={inter.className}>
         <AuthProvider>{children}</AuthProvider>
