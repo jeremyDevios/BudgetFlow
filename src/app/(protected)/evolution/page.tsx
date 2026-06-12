@@ -29,6 +29,7 @@ interface MonthlyData {
   fixedCosts: number;
   savingsObjective: number;
   remaining: number; // calculated: income - fixed - spent
+  transactionCount: number;
 }
 
 export default function EvolutionPage() {
@@ -90,6 +91,7 @@ export default function EvolutionPage() {
             const monthEnd = endOfMonth(month);
             
             let totalSpent = 0;
+            let transactionCount = 0;
 
             querySnapshot.forEach((doc) => {
                 const tx = doc.data();
@@ -104,6 +106,7 @@ export default function EvolutionPage() {
                 if (txDate >= monthStart && txDate <= monthEnd) {
                     const amount = parseFloat(tx.amount);
                     totalSpent += tx.isReimbursement ? -amount : amount;
+                    transactionCount++;
                 }
             });
 
@@ -117,12 +120,15 @@ export default function EvolutionPage() {
                 income,
                 fixedCosts,
                 savingsObjective,
-                remaining
+                remaining,
+                transactionCount,
             };
         });
-        
-        // Filter out months with 0 expenses (likely no data) so we don't show flat lines
-        const filteredData = monthlyData.filter(d => d.totalSpent > 0);
+
+        // Filter out months with no transactions so we don't show flat lines.
+        // Use transactionCount instead of totalSpent > 0 because reimbursements
+        // can make totalSpent negative even when transactions exist.
+        const filteredData = monthlyData.filter(d => d.transactionCount > 0);
         setData(filteredData);
 
       } catch (error) {
