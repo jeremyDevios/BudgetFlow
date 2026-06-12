@@ -42,20 +42,17 @@
 
 <p align="center">
 
-### Mobile
+### iOS
 
-#### iOS SwiftUI
-  <img src="Screenshots/BudgetFow-iOS-Dark.png" width="1000" alt="BudgetFlow Mobile Dark" style="margin: 5px;" />
-  <img src="Screenshots/BudgetFow-iOS-Ligth.png" width="1000" alt="BudgetFlow Mobile Ligth" style="margin: 5px;" />
-
-#### iOS WebApp
-  <img src="Screenshots/BudgetFlow.png" width="1000" alt="BudgetFlow Mobile Web" style="margin: 5px;" />
+  <img src="Screenshots/iOS-App.png" width="600" alt="BudgetFlow iOS App" style="margin: 5px;" />
+  <img src="Screenshots/iOS-Dashboard.png" width="600" alt="Dashboard iOS" style="margin: 5px;" />
+  <img src="Screenshots/iOS-Dasboard-Dark-Light.png" width="600" alt="Dashboard Dark & Light" style="margin: 5px;" />
+  <img src="Screenshots/iOS-Onboarding.png" width="600" alt="Onboarding iOS" style="margin: 5px;" />
+  <img src="Screenshots/iOS-Evolution.png" width="600" alt="Évolution iOS" style="margin: 5px;" />
+  <img src="Screenshots/iOS-Flux.png" width="600" alt="Cash Flow iOS" style="margin: 5px;" />
 
 ### Web
-  <img src="Screenshots/HomePage.png" width="600" alt="Page d'accueil" style="margin: 5px;" />
-  <img src="Screenshots/Dasboard-WebApp-Dark.png" width="600" alt="Dashboard" style="margin: 5px;" />
-  <img src="Screenshots/Dashboard-WepApp-Light.png" width="600" alt="Dashboard" style="margin: 5px;" />
-  <img src="Screenshots/EvolutionView-WebApp.png" width="600" alt="Évolution Économie" style="margin: 5px;" />
+
   <img src="Screenshots/CashFlowView.png" width="600" alt="Cash Flow" style="margin: 5px;" />
   <img src="Screenshots/HistoryView-WebApp.png" width="600" alt="Historique" style="margin: 5px;" />
   <img src="Screenshots/NewExpense-WebApp.png" width="600" alt="Nouvelle Dépense" style="margin: 5px;" />
