@@ -102,7 +102,8 @@ export default function EvolutionPage() {
                 }
 
                 if (txDate >= monthStart && txDate <= monthEnd) {
-                    totalSpent += parseFloat(tx.amount);
+                    const amount = parseFloat(tx.amount);
+                    totalSpent += tx.isReimbursement ? -amount : amount;
                 }
             });
 

@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Bypass E2E : injecte l'utilisateur factice sans Firebase Auth
     const bypassUser = getE2EBypassUser();
     if (bypassUser) {
-      logger.info("AuthContext: bypass E2E activé, uid:", (bypassUser as any).uid);
+      logger.info(`AuthContext: bypass E2E activé, uid: ${(bypassUser as any).uid}`);
       setUser(bypassUser);
       setLoading(false);
       return;
