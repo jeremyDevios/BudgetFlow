@@ -1,0 +1,92 @@
+name: Tests E2E Playwright
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      anchor_date:
+        description: "Date d'ancrage pour les données de test (YYYY-MM-DD)"
+        required: false
+        default: "2026-06-01"
+
+jobs:
+  e2e:
+    name: Playwright E2E (Chromium)
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lire la version Node
+        run: echo "NODE_VERSION=$(cat .nvmrc 2>/dev/null || echo '22')" >> $GITHUB_ENV
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Installer Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Décoder le compte de service Firebase
+        if: env.FIREBASE_SERVICE_ACCOUNT
+        run: |
+          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" | base64 -d > scripts/service-account-dev.json
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Seed des données de test
+        if: env.E2E_TEST_USER_UID
+        run: |
+          node scripts/seed-test-data.js \
+            --user "${{ secrets.E2E_TEST_USER_UID }}" \
+            --confirm \
+            --replace-existing \
+            --today "${{ inputs.anchor_date || '2026-06-01' }}"
+        env:
+          E2E_TEST_USER_UID: ${{ secrets.E2E_TEST_USER_UID }}
+
+      - name: Configurer le fichier d'authentification
+        if: env.E2E_AUTH_FILE_BASE64
+        run: |
+          mkdir -p playwrightTest/auth
+          echo "${{ secrets.E2E_AUTH_FILE_BASE64 }}" | base64 -d > playwrightTest/auth/playwright.auth.json
+        env:
+          E2E_AUTH_FILE_BASE64: ${{ secrets.E2E_AUTH_FILE_BASE64 }}
+
+      - name: Lancer les tests non authentifiés
+        run: |
+          npx playwright test \
+            --config=playwrightTest/playwright.config.ts \
+            --project=unauthenticated
+
+      - name: Lancer les tests authentifiés
+        if: env.E2E_AUTH_FILE_BASE64
+        run: |
+          npx playwright test \
+            --config=playwrightTest/playwright.config.ts \
+            --project=authenticated
+        continue-on-error: true
+
+      - name: Uploader les rapports Playwright
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwrightWorkspace/
+          retention-days: 7
+
+      - name: Uploader les traces Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: playwrightTest/test-results/
+          retention-days: 7

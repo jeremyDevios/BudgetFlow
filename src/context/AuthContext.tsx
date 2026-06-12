@@ -14,11 +14,40 @@ const AuthContext = createContext<AuthContextType>({ user: null, loading: true }
 
 export const useAuth = () => useContext(AuthContext);
 
+/**
+ * Vérifie si le bypass E2E est activé.
+ *
+ * En mode E2E (NEXT_PUBLIC_E2E_AUTH_BYPASS=true), un utilisateur
+ * factice est injecté via localStorage pour éviter la popup Google.
+ * Cette fonction est uniquement appelée côté client.
+ */
+function getE2EBypassUser(): User | null {
+  if (typeof window === "undefined") return null;
+  if (process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS !== "true") return null;
+
+  try {
+    const raw = window.localStorage.getItem("e2e_user");
+    if (!raw) return null;
+    return JSON.parse(raw) as User;
+  } catch {
+    return null;
+  }
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Bypass E2E : injecte l'utilisateur factice sans Firebase Auth
+    const bypassUser = getE2EBypassUser();
+    if (bypassUser) {
+      logger.info("AuthContext: bypass E2E activé, uid:", (bypassUser as any).uid);
+      setUser(bypassUser);
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
@@ -29,6 +58,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     if (!user) return;
+
+    // Désactiver l'auto-logout en mode E2E
+    if (process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === "true") return;
 
     const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
     let inactivityTimer: ReturnType<typeof setTimeout>;

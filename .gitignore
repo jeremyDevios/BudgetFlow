@@ -11,6 +11,12 @@ scripts/node_modules
 /playwright-report
 /test-results
 /blob-report
+/playwrightWorkspace/
+playwrightTest/specs/playwright.auth.json
+playwrightTest/specs/playwright.onboarding.json
+playwrightTest/test-results/
+.e2e-cache/
+skills-lock.json
 
 # next.js
 /.next/

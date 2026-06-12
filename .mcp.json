@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp"],
+      "env": {
+        "PLAYWRIGHT_BASE_URL": "http://localhost:8091",
+        "PLAYWRIGHT_LOCALE": "fr-FR"
+      }
+    },
+    "budgetflow-e2e": {
+      "command": "node",
+      "args": ["playwrightTest/mcp-server.js"]
+    }
+  }
+}

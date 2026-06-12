@@ -41,7 +41,7 @@ npm install
 ### Run Tests
 
 ```bash
-# Run all tests
+# Run all unit tests
 npm test
 
 # Run tests in watch mode (re-runs on file changes)
@@ -49,15 +49,47 @@ npm test -- --watch
 
 # Run with coverage report
 npm run test:coverage
+```
 
-# Install Playwright Chromium browser (first time only)
-npm run test:e2e:install
+### End-to-End Tests (Playwright)
 
-# Run end-to-end smoke tests
-npm run test:e2e
+La suite E2E complète (58 tests, 9 pages) est dans `playwrightTest/`.  
+Configuration et rapport détaillé : [playwrightWorkspace/playwrightReport.md](../playwrightWorkspace/playwrightReport.md).
 
-# Run browser tests with visible UI
-npm run test:e2e:headed
+```bash
+# First-time setup
+npm run test:e2e:install     # Install Chromium browser
+npm run test:e2e:auth        # Generate test session (requires E2E env vars)
+
+# Running tests
+npm run test:e2e:new         # Full E2E suite (58 tests)
+npm run test:e2e:new:headed  # With visible browser
+npm run test:e2e:seed        # Force re-seed test data
+
+# Targeted runs
+npx playwright test --config=playwrightTest/playwright.config.ts --grep="dashboard"
+npx playwright test --config=playwrightTest/playwright.config.ts --project=unauthenticated
+```
+
+**Prérequis** (`.env.local`) :
+
+```bash
+NEXT_PUBLIC_E2E_AUTH_BYPASS=true
+E2E_TEST_USER_UID=<uid_firebase>
+E2E_ANCHOR_DATE=2026-06-01
+```
+
+**Résultats** dans `playwrightWorkspace/` : `reports/`, `test-results/`, `traces/`, `screenshots/`, `videos/`.
+
+**Structure des tests** :
+
+```text
+playwrightTest/
+├── specs/          # 9 suites de test (58 tests)
+├── page-objects/   # 9 Page Objects (design pattern)
+├── playwright.config.ts
+├── global-setup.ts # Seed automatique des données
+└── mcp-server.js   # Outils MCP BudgetFlow
 ```
 
 ### Coverage Report
@@ -149,10 +181,10 @@ tests/e2e/
 | Area | Status |
 |------|--------|
 | `src/lib/firebase.ts`, `src/lib/firebaseAdmin.ts` | not unit tested; requires Firebase runtime/credentials |
-| `src/app/(protected)/evolution/`, `settings/`, `history/`, `envelopes/`, `onboarding/` | not unit tested |
+| `src/app/(protected)/evolution/`, `settings/`, `history/`, `envelopes/`, `onboarding/` | covered by E2E tests (Playwright) |
 | `src/components/settings/TemporaryEnvelopeForm.tsx` | not unit tested |
 | `src/hooks/useNotifications.ts` | no dedicated unit tests |
-| authenticated browser flows (Google login popup, onboarding, dashboard navigation) | not covered by Playwright smoke tests yet |
+| authenticated browser flows (login, onboarding, dashboard, CRUD, analytics) | covered by 58 E2E Playwright tests |
 | visual rendering, responsive layout, and animation behavior | only indirectly covered |
 
 ---

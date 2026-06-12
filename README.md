@@ -138,21 +138,40 @@ L'application sera accessible sur `http://localhost:3000`.
 
 ## Tests
 
+### Tests unitaires (Jest)
+
 Voir [UnitTest.md](UnitTest.md) pour les instructions complètes.
 
 ```bash
-# Lancer les tests Web
-npm test
-
-# Avec rapport de couverture
-npm run test:coverage
-
-# Installer Chromium pour Playwright (une seule fois)
-npm run test:e2e:install
-
-# Lancer les tests end-to-end Playwright
-npm run test:e2e
+npm test                    # Lancer les tests unitaires
+npm run test:coverage       # Avec rapport de couverture
 ```
+
+### Tests E2E (Playwright)
+
+La suite complète couvre **58 tests** répartis sur 9 pages : flux public, onboarding, dashboard, enveloppes, transactions, paramètres, cashflow, évolution et historique.
+
+Voir [playwrightWorkspace/playwrightReport.md](playwrightWorkspace/playwrightReport.md) pour le rapport détaillé.
+
+```bash
+npm run test:e2e:install    # Installer Chromium (une seule fois)
+npm run test:e2e:auth       # Générer la session de test (une seule fois)
+npm run test:e2e:new        # Lancer toute la suite E2E
+npm run test:e2e:new:headed # Avec navigateur visible
+```
+
+Configuration requise dans `.env.local` :
+
+```bash
+NEXT_PUBLIC_E2E_AUTH_BYPASS=true
+E2E_TEST_USER_UID=<uid_firebase>
+E2E_ANCHOR_DATE=2026-06-01
+```
+
+Les résultats sont générés dans `playwrightWorkspace/` :
+- `reports/` — rapport HTML
+- `test-results/` — résultats JSON
+- `traces/` / `screenshots/` / `videos/` — débogage
 
 Pour les tests iOS : ouvrir le projet dans Xcode et appuyer sur **⌘U**.
 

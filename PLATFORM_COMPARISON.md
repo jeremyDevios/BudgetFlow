@@ -1,6 +1,6 @@
 # BudgetFlow — Comparatif Web vs iOS
 
-> Mis à jour le 9 mai 2026 — Parité globale : ~95%
+> Mis à jour le 12 juin 2026 — Parité globale : ~95%
 
 Les deux apps partagent le même workflow de base (enveloppes budgétaires, suivi des dépenses, visualisations). Les différences sont surtout architecturales et sur quelques fonctionnalités périphériques.
 
@@ -29,7 +29,8 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | Tuile unifiée Dashboard (Reste disponible + Heatmap) | ✅ | ✅ |
 | Prévisions dépenses à 90 jours | ✅ | ✅ |
 | Détection dépenses exceptionnelles | ✅ | ✅ |
-| Tests unitaires | ✅ Jest (16 suites · 200 tests) | ✅ XCTest (25 fichiers) |
+| Tests unitaires | ✅ Jest (17 suites · 209 tests) | ✅ XCTest (25 fichiers) |
+| Tests E2E | ✅ Playwright (9 suites · 58 tests) | ❌ Non disponible |
 
 ---
 
@@ -75,7 +76,8 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | **Notifications** | Firebase Cloud Messaging | Notifications locales (UNUserNotificationCenter) |
 | **Offline** | Browser cache + service worker | ✅ Natif (offline-first) |
 | **Synchro multi-plateforme** | ✅ Oui | ✅ Disponible en mode en ligne (`SyncService`) |
-| **Tests** | Jest + @testing-library/react | XCTest |
+| **Tests unitaires** | Jest + @testing-library/react | XCTest |
+| **Tests E2E** | Playwright (Chromium, 58 tests) | Non disponible |
 
 ---
 

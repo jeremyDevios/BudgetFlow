@@ -12,6 +12,7 @@ type Transaction = {
   description: string;
   envelopeId: string;
   date: string;
+  isReimbursement?: boolean;
 };
 
 type Envelope = {
@@ -164,8 +165,8 @@ export default function SearchDropdown({ transactions, envelopes, currentDate }:
                             dans {env?.name ?? "Enveloppe supprimée"}
                           </p>
                         </div>
-                        <span className="text-sm font-bold text-red-400 flex-shrink-0">
-                          -{formatAmount(tx.amount)}
+                        <span className={`text-sm font-bold flex-shrink-0 ${tx.isReimbursement ? "text-emerald-400" : "text-red-400"}`}>
+                          {tx.isReimbursement ? "+" : "-"}{formatAmount(tx.amount)}
                         </span>
                       </button>
                     </motion.li>

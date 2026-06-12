@@ -223,7 +223,9 @@ export default function HistoryPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="font-bold text-red-500 text-lg">-{formatAmount(tx.amount)}</span>
+                    <span className={`font-bold text-lg ${tx.isReimbursement ? "text-emerald-400" : "text-red-500"}`}>
+                      {tx.isReimbursement ? "+" : "-"}{formatAmount(tx.amount)}
+                    </span>
                   </div>
                 </motion.div>
               );

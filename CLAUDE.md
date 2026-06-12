@@ -16,9 +16,13 @@ npm run test:coverage    # Jest with coverage (≥80% line coverage enforced)
 npm test -- --runInBand src/__tests__/lib/forecasting.test.ts   # Single test file
 npm test -- --runInBand --testNamePattern="validateAmount"      # Single test by name
 npm run lint             # ESLint (currently broken on Next 16 — "Invalid project directory" error)
-npm run test:e2e         # Playwright E2E tests
-npm run test:e2e:headed  # Playwright with visible browser
+npm run test:e2e         # Playwright E2E tests (legacy config)
+npm run test:e2e:headed  # Playwright with visible browser (legacy)
 npm run test:e2e:install # Install Chromium for Playwright
+npm run test:e2e:new     # Full E2E suite (58 tests, new config in playwrightTest/)
+npm run test:e2e:new:headed  # Full E2E with visible browser
+npm run test:e2e:auth    # Generate test auth session (run once)
+npm run test:e2e:seed    # Force re-seed test data
 ```
 
 ### iOS
