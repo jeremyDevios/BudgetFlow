@@ -2,7 +2,7 @@
 
 ## Overview
 
-BudgetFlow uses **SwiftData as the single source of truth** on iOS. **Firebase Firestore** is an optional sync mirror — when a user connects a Google account, SwiftData pushes changes to Firestore and pulls remote changes on a configurable interval (default 5 minutes). Users who never connect an account keep all data local and offline-capable.
+BudgetFlow uses **SwiftData as the single source of truth** on iOS. **Firebase Firestore** is an optional sync mirror — when a user connects a Google or Apple account, SwiftData pushes changes to Firestore and pulls remote changes on a configurable interval (default 5 minutes). Users who never connect an account keep all data local and offline-capable.
 
 Sync is orchestrated by `SyncCoordinator.swift`, which wraps `SyncService.swift` and manages:
 - Immediate push on every local mutation (add/edit/delete)
@@ -36,7 +36,7 @@ users/
 
 ## `users/{userId}` — User Profile Document
 
-Populated on sign-in (Google or email). Not synced to SwiftData — read directly from FirebaseAuth on iOS.
+Populated on sign-in (Google, Apple, or email). Not synced to SwiftData — read directly from FirebaseAuth on iOS.
 
 | Field | Type | Description |
 |-------|------|-------------|

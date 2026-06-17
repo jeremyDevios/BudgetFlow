@@ -66,7 +66,7 @@
 - **Langage** : [TypeScript](https://www.typescriptlang.org/) (mode strict)
 - **Styles** : [Tailwind CSS](https://tailwindcss.com/) avec tokens sémantiques adaptatifs (clair/sombre)
 - **Backend as a Service** : [Firebase](https://firebase.google.com/)
-  - **Authentication** : Email/Password & Google Auth
+  - **Authentication** : Email/Password, Google Auth & Sign in with Apple
   - **Firestore** : Base de données NoSQL temps réel
   - **Cloud Messaging** : Notifications push
 - **Icônes** : [Lucide React](https://lucide.dev/)

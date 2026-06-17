@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   GoogleAuthProvider,
+  OAuthProvider,
   getRedirectResult,
   signInWithPopup,
   signInWithRedirect,
@@ -27,26 +28,37 @@ function isFirebaseAuthError(error: unknown): error is { code: string } {
 export default function AuthPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingProvider, setLoadingProvider] = useState<"google" | "apple" | null>(null);
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const syncedUserIdRef = useRef<string | null>(null);
 
   const buildUserProfile = (currentUser: User) => {
-    const email = currentUser.email?.trim();
+    const email = currentUser.email?.trim() || "";
 
-    if (!email) {
-      throw new Error("Google authentication did not return an email address.");
-    }
+    // Apple Sign-In may only provide email/displayName on first sign-in.
+    // Subsequent sign-ins can have email === null, so we fall back to a
+    // provider-scoped identifier. Apple private relay emails use the
+    // @privaterelay.appleid.com domain — the local part is still usable.
+    const fallbackDisplayName = email
+      ? email.split("@")[0]
+      : currentUser.uid.slice(0, 8);
 
-    const fallbackDisplayName = email.split("@")[0] || "Utilisateur";
     const displayName = currentUser.displayName?.trim() || fallbackDisplayName;
 
-    return {
-      email,
+    const profile: Record<string, unknown> = {
       displayName: displayName.slice(0, 100),
       lastLogin: new Date().toISOString(),
       ...(currentUser.photoURL ? { photoURL: currentUser.photoURL } : {}),
     };
+
+    // Email is optional for Apple (only provided on first sign-in).
+    // Always store it when available, but don't require it.
+    if (email) {
+      profile.email = email;
+    }
+
+    return profile;
   };
 
   const syncUserProfile = async (currentUser: User) => {
@@ -64,7 +76,7 @@ export default function AuthPage() {
       try {
         await syncUserProfile(currentUser);
       } catch (err: unknown) {
-        logger.sanitizedError("Google authentication profile sync error", err);
+        logger.sanitizedError("Authentication profile sync error", err);
       }
 
       router.push("/dashboard");
@@ -83,9 +95,9 @@ export default function AuthPage() {
           await finalizeAuthenticatedUser(redirectResult.user);
         }
       } catch (err: unknown) {
-        logger.sanitizedError("Google redirect result error", err);
+        logger.sanitizedError("Redirect result error", err);
         if (!cancelled) {
-          setError("Erreur lors du retour de connexion Google. Veuillez réessayer.");
+          setError("Erreur lors du retour de connexion. Veuillez réessayer.");
         }
       }
     })();
@@ -106,6 +118,7 @@ export default function AuthPage() {
   const handleGoogleAuth = async () => {
     setError("");
     setLoading(true);
+    setLoadingProvider("google");
     const provider = new GoogleAuthProvider();
 
     try {
@@ -127,6 +140,38 @@ export default function AuthPage() {
       setError("Erreur lors de la connexion avec Google. Veuillez réessayer.");
     } finally {
       setLoading(false);
+      setLoadingProvider(null);
+    }
+  };
+
+  const handleAppleAuth = async () => {
+    setError("");
+    setLoading(true);
+    setLoadingProvider("apple");
+    const provider = new OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+
+    try {
+      const userCredential = await signInWithPopup(auth, provider);
+      await finalizeAuthenticatedUser(userCredential.user);
+    } catch (err: unknown) {
+      if (isFirebaseAuthError(err) && err.code === "auth/popup-blocked") {
+        logger.warn("Apple auth popup blocked, falling back to redirect");
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+
+      if (isFirebaseAuthError(err) && err.code === "auth/popup-closed-by-user") {
+        setError("La fenêtre Apple a été fermée avant la fin de la connexion.");
+        return;
+      }
+
+      logger.sanitizedError("Apple authentication error", err);
+      setError("Erreur lors de la connexion avec Apple. Veuillez réessayer.");
+    } finally {
+      setLoading(false);
+      setLoadingProvider(null);
     }
   };
 
@@ -154,8 +199,36 @@ export default function AuthPage() {
           </div>
         )}
 
-        {/* Google Sign-In Button */}
-        <div className="space-y-4">
+        {/* Sign-In Buttons */}
+        <div className="space-y-3">
+          {/* Apple Sign-In Button — follows Apple HIG: black background, white text, rounded */}
+          <button
+            type="button"
+            onClick={handleAppleAuth}
+            disabled={loading}
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-[#000] px-4 py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-app-bg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] dark:bg-white dark:text-black dark:hover:bg-[#e8e8e8] dark:focus:ring-black/50"
+            aria-label="Se connecter avec Apple"
+          >
+            {loading && loadingProvider === "apple" ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                <svg className="h-5 w-5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+                </svg>
+                Continuer avec Apple
+              </>
+            )}
+          </button>
+
+          {/* Separator */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-app-border" />
+            <span className="text-xs text-app-text-secondary">ou</span>
+            <div className="flex-1 h-px bg-app-border" />
+          </div>
+
+          {/* Google Sign-In Button */}
           <button
             type="button"
             onClick={handleGoogleAuth}
@@ -163,7 +236,7 @@ export default function AuthPage() {
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-app-border bg-app-surface px-4 py-3.5 text-sm font-semibold text-app-text transition-all hover:bg-white/5 hover:border-amber-500/40 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-app-bg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
             aria-label="Se connecter avec Google"
           >
-            {loading ? (
+            {loading && loadingProvider === "google" ? (
               <Loader2 className="h-5 w-5 animate-spin" />
             ) : (
               <>

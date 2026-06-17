@@ -4,12 +4,13 @@ service cloud.firestore {
 
     // ── Auth ─────────────────────────────────────────────────────────────────
 
-    // Require a live Google Sign-In session.
+    // Require a live Google or Apple Sign-In session.
     // Explicitly checking the provider prevents any accidentally re-enabled
     // auth method (e.g. email/password) from silently granting access.
-    function isGoogleAuth() {
+    function isAuthenticated() {
       return request.auth != null
-        && request.auth.token.firebase.sign_in_provider == 'google.com';
+        && (request.auth.token.firebase.sign_in_provider == 'google.com'
+            || request.auth.token.firebase.sign_in_provider == 'apple.com');
     }
 
     function isOwner(userId) {
@@ -152,17 +153,17 @@ service cloud.firestore {
     // per-user quotas that Firestore cannot express with collection counts.
 
     match /counters/{userId} {
-      allow read: if isGoogleAuth() && isOwner(userId);
-      allow write: if isGoogleAuth() && isOwner(userId);
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow write: if isAuthenticated() && isOwner(userId);
     }
 
     // ── User document ────────────────────────────────────────────────────────
 
     match /users/{userId} {
-      allow read:   if isGoogleAuth() && isOwner(userId);
-      allow create: if isGoogleAuth() && isOwner(userId)
+      allow read:   if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId)
                        && isValidUserData(request.resource.data);
-      allow update: if isGoogleAuth() && isOwner(userId)
+      allow update: if isAuthenticated() && isOwner(userId)
                        && isValidUserData(request.resource.data);
       // delete intentionally absent — account deletion must be performed
       // server-side via the Admin SDK to atomically remove subcollections
@@ -171,10 +172,10 @@ service cloud.firestore {
       // ── Settings subcollection ─────────────────────────────────────────────
       // Only the single document 'general' is ever written.
       match /settings/{document} {
-        allow read:   if isGoogleAuth() && isOwner(userId);
-        allow create: if isGoogleAuth() && isOwner(userId)
+        allow read:   if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
                          && isValidSettingsData(request.resource.data);
-        allow update: if isGoogleAuth() && isOwner(userId)
+        allow update: if isAuthenticated() && isOwner(userId)
                          && isValidSettingsData(request.resource.data);
         // delete intentionally absent — a missing settings doc breaks the
         // isOnboarded check and crashes app initialization.
@@ -182,8 +183,8 @@ service cloud.firestore {
 
       // ── Envelopes subcollection ────────────────────────────────────────────
       match /envelopes/{envelopeId} {
-        allow read:   if isGoogleAuth() && isOwner(userId);
-        allow create: if isGoogleAuth() && isOwner(userId)
+        allow read:   if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
                          && isValidEnvelopeData(request.resource.data)
                          // Enforce 50-envelope quota via counter document.
                          // getAfter reads the counter document state AFTER the
@@ -192,29 +193,29 @@ service cloud.firestore {
                          && getAfter(
                               /databases/$(database)/documents/counters/$(userId)
                             ).data.envelopeCount <= 50;
-        allow update: if isGoogleAuth() && isOwner(userId)
+        allow update: if isAuthenticated() && isOwner(userId)
                          && isValidEnvelopeData(request.resource.data);
-        allow delete: if isGoogleAuth() && isOwner(userId);
+        allow delete: if isAuthenticated() && isOwner(userId);
       }
 
       // ── Transactions subcollection ─────────────────────────────────────────
       match /transactions/{transactionId} {
-        allow read:   if isGoogleAuth() && isOwner(userId);
-        allow create: if isGoogleAuth() && isOwner(userId)
+        allow read:   if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
                          && isValidTransactionData(request.resource.data);
-        allow update: if isGoogleAuth() && isOwner(userId)
+        allow update: if isAuthenticated() && isOwner(userId)
                          && isValidTransactionData(request.resource.data)
                          // createdAt is immutable — prevent audit-trail backdating.
                          && request.resource.data.createdAt == resource.data.createdAt;
-        allow delete: if isGoogleAuth() && isOwner(userId);
+        allow delete: if isAuthenticated() && isOwner(userId);
       }
 
       // ── Daily activity subcollection ───────────────────────────────────────
       match /dailyActivity/{date} {
-        allow read: if isGoogleAuth() && isOwner(userId);
-        allow create: if isGoogleAuth() && isOwner(userId)
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
                          && isValidDailyActivityData(request.resource.data, date);
-        allow update: if isGoogleAuth() && isOwner(userId)
+        allow update: if isAuthenticated() && isOwner(userId)
                          && isValidDailyActivityData(request.resource.data, date)
                          // date is immutable — prevents history tampering.
                          && request.resource.data.date == resource.data.date;

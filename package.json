@@ -8,6 +8,7 @@
     "notifications:generate-sw": "node scripts/generate-sw.js",
     "restore:firestore": "node scripts/restore-firestore.js",
     "restore:full": "bash scripts/restore-firestore-full.sh",
+    "copy:user-data": "node scripts/copy-user-data.js",
     "seed:test-data": "node scripts/seed-test-data.js",
     "predev": "npm run notifications:generate-sw",
     "dev": "next dev -p 8091 -H 0.0.0.0",

@@ -237,6 +237,72 @@ node scripts/migrate-user-from-backup-to-prod.js --include-profile
 
 ---
 
+### `copy-user-data.js`
+
+Copie **toutes les données** d'un utilisateur Firestore source directement vers un
+utilisateur cible, **sans fichier backup intermédiaire**. Les données existantes du
+compte cible sont supprimées avant la copie pour obtenir un **miroir strict**.
+
+#### Usage
+
+```bash
+# Simuler la copie (sans rien écrire)
+node scripts/copy-user-data.js --source-user <sourceUid> --target-user <targetUid>
+
+# Copie réelle avec suppression préalable de la cible
+node scripts/copy-user-data.js --source-user <sourceUid> --target-user <targetUid> --confirm
+
+# Copier en environnement dev
+node scripts/copy-user-data.js --source-user <sourceUid> --target-user <targetUid> --env dev --confirm
+
+# Copier aussi les champs profil (email, displayName, photoURL...)
+node scripts/copy-user-data.js --source-user <sourceUid> --target-user <targetUid> --include-profile --confirm
+
+# Via npm
+npm run copy:user-data -- --source-user <sourceUid> --target-user <targetUid> --confirm
+```
+
+#### Options
+
+| Option | Description |
+|---|---|
+| `--source-user <uid>` | UID Firebase de l'utilisateur à copier (obligatoire) |
+| `--target-user <uid>` | UID Firebase de l'utilisateur cible (obligatoire) |
+| `--env prod\|dev` | Environnement cible — sélectionne `service-account-{env}.json` (défaut: `prod`) |
+| `--project <projectId>` | Override explicite du projectId Firebase |
+| `--confirm` | Écrit réellement en base (sans ce flag → dry-run) |
+| `--dry-run` | Force le mode simulation |
+| `--include-profile` | Copie aussi les champs identité (email, displayName, photoURL…) depuis la source. Par défaut, ces champs sont préservés depuis la cible. |
+
+#### Comportement
+
+1. **Lecture** du compte source : document `users/{sourceUid}`, `settings/general`, toutes les enveloppes, transactions et dailyActivity.
+2. **Suppression** de toutes les données du compte cible (enveloppes, transactions, dailyActivity, settings).
+3. **Réécriture** des données source dans le compte cible.
+4. **Vérification** post-copie : contrôle que le nombre de documents correspond.
+
+#### Profil utilisateur
+
+Par défaut, les champs d'identité de la cible sont **préservés** :
+
+- `email`, `displayName`, `photoURL`
+- `fcmToken`, `notificationsEnabled`
+- `lastLogin`, `lastTokenUpdate`
+
+Ajoutez `--include-profile` pour écraser ces champs avec ceux de la source.
+
+Si la cible n'existe pas encore, des valeurs par défaut sont générées automatiquement.
+
+#### Sécurités intégrées
+
+- Sans `--confirm` → **aucune écriture**, affichage du récapitulatif uniquement
+- Refuse de copier un utilisateur sur lui-même
+- Vérifie que la source existe avant toute opération
+- Utilise des **batches Firestore** (rotation automatique à 400 ops/batch)
+- Suppression **avant** écriture : la cible est toujours dans un état cohérent
+
+---
+
 ## Procédure de Disaster Recovery
 
 En cas de compromission de la base :

@@ -72,7 +72,7 @@ A display-only privacy feature that masks currency amounts in the web UI. Toggle
 
 - **`@/` alias** maps to `src/` (configured in tsconfig.json paths).
 - **French is the default UI language** — keep copy and route-facing text in French unless a file already uses another language.
-- **Google sign-in only**: Firestore rules require `sign_in_provider == 'google.com'`. Don't add other auth providers without updating both the login flow and `firestore.rules`.
+- **Google and Apple sign-in**: Firestore rules accept `sign_in_provider == 'google.com'` OR `'apple.com'`. When adding a new auth provider, update the login flow, `firestore.rules`, iOS `FirebaseManager`, and documentation together.
 - **String dates everywhere**: Date filtering uses ISO string comparisons (`YYYY-MM-DD`, `YYYY-MM-DDT23:59:59`), not Firestore `Timestamp`s. Daily activity doc IDs are local `YYYY-MM-DD` keys. Preserve this format unless migrating all related queries, rules, and iOS sync code together.
 - **Validation in three layers**: Client helpers in `src/lib/validation.ts`, server checks in `src/app/api/validate/transaction/route.ts`, and Firestore enforcement in `firestore.rules`. Keep constraints aligned across all three when changing data rules.
 - **Use the shared `logger`** from `src/lib/logger.ts` for application errors (especially Firebase/auth flows) — it sanitizes sensitive data in production.
