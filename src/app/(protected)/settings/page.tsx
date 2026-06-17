@@ -677,7 +677,15 @@ export default function SettingsPage() {
     setIsDeletingAccount(true);
     setDeleteAccountError("");
     try {
+      // Récupérer le token AVANT de sign out (le token JWT reste valide 1h)
       const token = await user.getIdToken();
+
+      // Sign out en local d'abord — tant que le compte existe encore côté Auth,
+      // cette opération réussit sans erreur.
+      await signOut(auth);
+
+      // Maintenant que l'état local est nettoyé, supprimer le compte côté serveur.
+      // Le token JWT est encore valide même après le signOut local.
       const response = await fetch("/api/account/delete", {
         method: "POST",
         headers: {
@@ -689,14 +697,9 @@ export default function SettingsPage() {
       if (!response.ok) {
         throw new Error(data.error || "Échec de la suppression du compte.");
       }
-      // Sign out (best-effort) and redirect to home.
-      // signOut may fail with "user-not-found" since the Auth account was
-      // already deleted server-side — that's expected and non-fatal.
-      try {
-        await signOut(auth);
-      } catch {
-        // Ignore signOut errors: the account is already deleted.
-      }
+
+      // Rediriger vers l'accueil — le ProtectedLayout verra user=null
+      // et redirigera automatiquement vers /login.
       router.push("/");
     } catch (error) {
       setDeleteAccountError(
