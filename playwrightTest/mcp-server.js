@@ -152,11 +152,11 @@ function handleToolCall(name, args) {
     case "get-auth-status": {
       const authFile = path.resolve(
         PROJECT_ROOT,
-        "playwrightTest/auth/playwright.auth.json"
+        "playwrightTest/specs/playwright.auth.json"
       );
       const onboardingFile = path.resolve(
         PROJECT_ROOT,
-        "playwrightTest/auth/playwright.onboarding.json"
+        "playwrightTest/specs/playwright.onboarding.json"
       );
 
       const authExists = fs.existsSync(authFile);

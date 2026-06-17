@@ -6,6 +6,74 @@ import dotenv from "dotenv";
 dotenv.config({ path: path.resolve(__dirname, "../../.env.local") });
 
 const AUTH_FILE = path.resolve(__dirname, "playwright.auth.json");
+const ONBOARDING_AUTH_FILE = path.resolve(
+  __dirname,
+  "playwright.onboarding.json"
+);
+
+/**
+ * Crée un utilisateur factice pour le bypass E2E.
+ */
+function makeFakeUser(uid: string, email: string) {
+  return {
+    uid,
+    email,
+    displayName: "E2E Test User",
+    photoURL: null,
+    emailVerified: true,
+    isAnonymous: false,
+    providerData: [
+      {
+        providerId: "google.com",
+        uid,
+        email,
+        displayName: "E2E Test User",
+      },
+    ],
+    // Méthodes vides — Firebase User en a, mais l'app ne les appelle pas
+    delete: null,
+    getIdToken: null,
+    getIdTokenResult: null,
+    reload: null,
+    toJSON: null,
+  };
+}
+
+/**
+ * Injecte l'utilisateur bypass dans localStorage et navigue vers /dashboard.
+ * Retourne l'URL finale après redirection éventuelle.
+ */
+async function injectAndNavigate(
+  page: import("@playwright/test").Page,
+  uid: string,
+  email: string
+): Promise<string> {
+  const fakeUser = makeFakeUser(uid, email);
+
+  const userPayload = {
+    uid: fakeUser.uid,
+    email: fakeUser.email,
+    displayName: fakeUser.displayName,
+    photoURL: fakeUser.photoURL,
+    emailVerified: fakeUser.emailVerified,
+    isAnonymous: fakeUser.isAnonymous,
+    providerData: fakeUser.providerData,
+  };
+
+  await page.goto("/login");
+  await page.waitForTimeout(1500);
+
+  await page.evaluate((u) => {
+    window.localStorage.setItem("e2e_user", JSON.stringify(u));
+  }, userPayload);
+
+  console.log(`💉 Utilisateur bypass injecté: ${uid}`);
+
+  await page.goto("/dashboard");
+  await page.waitForTimeout(2_000);
+
+  return page.url();
+}
 
 /**
  * Setup d'authentification pour les tests E2E.
@@ -13,9 +81,13 @@ const AUTH_FILE = path.resolve(__dirname, "playwright.auth.json");
  * Utilise le bypass E2E : injecte un utilisateur factice dans localStorage
  * au lieu de passer par la popup Google (bloquée par Google dans Chromium).
  *
+ * Génère deux fichiers d'état :
+ * - playwright.auth.json : utilisateur onboardé (dashboard)
+ * - playwright.onboarding.json : utilisateur NON onboardé (onboarding)
+ *
  * PRÉREQUIS dans .env.local :
  * - NEXT_PUBLIC_E2E_AUTH_BYPASS=true
- * - E2E_TEST_USER_UID=<uid Firebase>
+ * - E2E_TEST_USER_UID=<uid Firebase>  (utilisateur déjà onboardé via seed)
  */
 setup("authenticate", async ({ page }) => {
   setup.setTimeout(30_000);
@@ -31,70 +103,16 @@ setup("authenticate", async ({ page }) => {
 
   console.log(`🔐 Setup auth E2E (bypass) — uid: ${testUid}`);
 
-  // Utilisateur minimal — uniquement des données sérialisables,
-  // sans fonctions Firebase (problème de transfert via page.evaluate)
-  const fakeUser = {
-    uid: testUid,
-    email: testEmail,
-    displayName: "E2E Test User",
-    photoURL: null,
-    emailVerified: true,
-    isAnonymous: false,
-    providerData: [
-      {
-        providerId: "google.com",
-        uid: testUid,
-        email: testEmail,
-        displayName: "E2E Test User",
-      },
-    ],
-    // Méthodes vides — Firebase User en a, mais l'app ne les appelle pas
-    // dans les chemins de code qu'on teste. On les mappe à des no-ops.
-    delete: null,
-    getIdToken: null,
-    getIdTokenResult: null,
-    reload: null,
-    toJSON: null,
-  };
+  // ─── 1. Auth pour utilisateur onboardé ───────────────────────────
+  const dashboardUrl = await injectAndNavigate(page, testUid, testEmail);
 
-  // Aller sur la page de login
-  await page.goto("/login");
-  await page.waitForTimeout(1500);
-
-  // Injecter l'utilisateur bypass dans localStorage
-  // On ne passe que les champs data (pas de fonctions Firebase)
-  const userPayload = {
-    uid: fakeUser.uid,
-    email: fakeUser.email,
-    displayName: fakeUser.displayName,
-    photoURL: fakeUser.photoURL,
-    emailVerified: fakeUser.emailVerified,
-    isAnonymous: fakeUser.isAnonymous,
-    providerData: fakeUser.providerData,
-  };
-
-  await page.evaluate((u) => {
-    window.localStorage.setItem("e2e_user", JSON.stringify(u));
-  }, userPayload);
-
-  console.log("💉 Utilisateur bypass injecté dans localStorage.");
-
-  // Naviguer vers le dashboard — AuthContext détectera le bypass
-  await page.goto("/dashboard");
-  // Ne pas attendre networkidle : Firestore peut continuer à faire
-  // des requêtes en arrière-plan (permissions, settings, etc.)
-  await page.waitForTimeout(2_000);
-
-  // Attendre que le dashboard se charge
-  const currentUrl = page.url();
-
-  if (currentUrl.includes("/onboarding")) {
+  if (dashboardUrl.includes("/onboarding")) {
     console.log("⚠️  Utilisateur NON onboardé — redirigé vers /onboarding");
     console.log(
       "   Lance le seed avec --user " + testUid + " pour créer ses données,"
     );
     console.log("   ou complète l'onboarding manuellement dans le navigateur.");
-  } else if (currentUrl.includes("/dashboard")) {
+  } else if (dashboardUrl.includes("/dashboard")) {
     await expect(page.getByText("Mes Enveloppes")).toBeVisible({
       timeout: 15_000,
     });
@@ -104,4 +122,29 @@ setup("authenticate", async ({ page }) => {
   // Sauvegarder l'état (inclut localStorage avec e2e_user)
   await page.context().storageState({ path: AUTH_FILE });
   console.log(`✅ Auth state sauvegardé: ${AUTH_FILE}`);
+
+  // ─── 2. Auth pour utilisateur NON onboardé ───────────────────────
+  // UID unique par run (timestamp) pour éviter qu'un test qui termine
+  // l'onboarding ne contamine les runs suivants via isOnboarded: true.
+  const onboardingUid = `e2e-onboarding-${Date.now()}`;
+  const onboardingEmail = `onboarding-${Date.now()}@budgetflow.test`;
+
+  console.log(`🔐 Setup auth E2E onboarding — uid: ${onboardingUid}`);
+
+  const onboardingUrl = await injectAndNavigate(
+    page,
+    onboardingUid,
+    onboardingEmail
+  );
+
+  if (onboardingUrl.includes("/onboarding")) {
+    console.log("✅ Redirigé vers /onboarding !");
+  } else {
+    console.warn(
+      `⚠️  Attendu /onboarding mais reçu: ${onboardingUrl}`
+    );
+  }
+
+  await page.context().storageState({ path: ONBOARDING_AUTH_FILE });
+  console.log(`✅ Onboarding auth state sauvegardé: ${ONBOARDING_AUTH_FILE}`);
 });

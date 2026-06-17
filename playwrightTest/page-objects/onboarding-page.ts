@@ -3,15 +3,19 @@ import { expect } from "@playwright/test";
 
 /**
  * Page d'onboarding (/onboarding) — wizard en 2 étapes.
+ *
+ * Les inputs n'ont pas d'attribut id/htmlFor, donc on ne peut pas utiliser
+ * getByLabel(). On cible les spinbutton par leur position dans le DOM.
  */
 export class OnboardingPage extends BasePage {
-  // Step 1
+  // Step 1 — les 3 premiers spinbutton de la page
+  readonly incomeInput = this.page.getByRole("spinbutton").first();
+  readonly fixedCostsInput = this.page.getByRole("spinbutton").nth(1);
+  readonly savingsInput = this.page.getByRole("spinbutton").nth(2);
+
   readonly step1Heading = this.page.getByRole("heading", {
     name: "Commençons par les bases",
   });
-  readonly incomeInput = this.page.getByLabel("Salaire Mensuel Net");
-  readonly fixedCostsInput = this.page.getByLabel("Charges Incompressibles");
-  readonly savingsInput = this.page.getByLabel("Objectif d'Épargne Mensuelle");
   readonly continueButton = this.page.getByRole("button", {
     name: "Continuer",
   });
@@ -25,8 +29,12 @@ export class OnboardingPage extends BasePage {
     name: "Créer une enveloppe",
   });
 
-  // Compteur de budget disponible
-  readonly availableCounter = this.page.locator("text=Disponible pour").first();
+  // Compteur de budget disponible.
+  // Étape 1 : "Capacité pour vos enveloppes :"
+  // Étape 2 : "Reste à attribuer :""
+  readonly availableCounter = this.page
+    .locator("text=vos enveloppes")
+    .first();
 
   async goto(): Promise<void> {
     await this.page.goto("/onboarding");
@@ -85,9 +93,15 @@ export class OnboardingPage extends BasePage {
    * Vérifie que les 3 enveloppes par défaut sont visibles à l'étape 2.
    */
   async expectDefaultEnvelopes(): Promise<void> {
-    await expect(this.page.getByText("Courses")).toBeVisible();
-    await expect(this.page.getByText("Essence")).toBeVisible();
-    await expect(this.page.getByText("Loisirs")).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: "Courses" })
+    ).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: "Essence" })
+    ).toBeVisible();
+    await expect(
+      this.page.getByRole("heading", { name: "Loisirs" })
+    ).toBeVisible();
   }
 
   /**
@@ -98,7 +112,7 @@ export class OnboardingPage extends BasePage {
       .locator("div")
       .filter({ hasText: name })
       .first();
-    const input = envelopeRow.getByRole("textbox");
+    const input = envelopeRow.getByRole("spinbutton");
     await input.fill(budget);
   }
 }

@@ -9,8 +9,8 @@ import { DashboardPage } from "../page-objects/dashboard-page";
  * L'utilisateur doit avoir un compte Google connecté mais
  * `isOnboarded !== true` dans Firestore settings/general.
  *
- * Le fichier auth/playwright.onboarding.json doit être généré
- * avec un utilisateur dans cet état.
+ * Le fichier playwright.onboarding.json est généré automatiquement
+ * par auth.setup.ts avec un utilisateur non onboardé.
  */
 test.describe("Parcours d'onboarding", () => {
   test("l'étape 1 affiche les champs obligatoires", async ({ page }) => {
