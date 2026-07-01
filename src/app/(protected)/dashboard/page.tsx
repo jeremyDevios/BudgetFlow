@@ -51,6 +51,7 @@ import {
   Clock,
 } from "lucide-react";
 import { isEnvelopeActiveForMonth } from "@/types/envelope";
+import { type Transaction } from "@/types/transaction";
 import TransactionModal from "@/components/dashboard/TransactionModal";
 import { logger } from "@/lib/logger";
 import { maskAmount } from "@/lib/maskAmount";
@@ -145,15 +146,6 @@ function getBentoPresetConfig(preset: BentoPreset) {
         fallbackWideRatio: 0.34,
       };
   }
-}
-
-interface Transaction {
-  id: string;
-  amount: number;
-  description: string;
-  envelopeId: string;
-  date: string;
-  isReimbursement?: boolean;
 }
 
 function getTransactionImpact(tx: { amount: number; isReimbursement?: boolean }) {

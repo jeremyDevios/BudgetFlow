@@ -12,7 +12,6 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  deleteDoc,
   addDoc,
   writeBatch,
   increment,
@@ -28,6 +27,13 @@ import {
   computeDetailedTotal,
   createEmptyBudgetSubItem,
 } from "@/lib/settingsService";
+import {
+  fetchLinkedTransactions,
+  migrateTransactionsToExisting,
+  createEnvelopeAndMigrate,
+  deleteEnvelopeAndTransactions,
+} from "@/lib/envelopeService";
+import { type Transaction } from "@/types/transaction";
 import { UserSettings, DEFAULT_USER_SETTINGS, BudgetSubItem } from "@/types/settings";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -74,6 +80,7 @@ import TemporaryEnvelopeForm, {
   COLORS,
   EnvelopeFormValues,
 } from "@/components/settings/TemporaryEnvelopeForm";
+import DeleteEnvelopeModal from "@/components/settings/DeleteEnvelopeModal";
 
 // ---------------------------------------------------------------------------
 // Types  (imported from @/types/settings)
@@ -324,6 +331,12 @@ export default function SettingsPage() {
   // Modal state — individual form fields are managed inside TemporaryEnvelopeForm.
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEnvelope, setEditingEnvelope] = useState<Envelope | null>(null);
+
+  // Delete-envelope modal state
+  const [showDeleteEnvelopeModal, setShowDeleteEnvelopeModal] = useState(false);
+  const [deletingEnvelope, setDeletingEnvelope] = useState<Envelope | null>(null);
+  const [linkedTransactions, setLinkedTransactions] = useState<Transaction[]>([]);
+  const [isLoadingLinkedTx, setIsLoadingLinkedTx] = useState(false);
 
   // DnD sensors
   const sensors = useSensors(
@@ -654,22 +667,67 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteEnvelope = async (id: string, name: string) => {
-    if (!confirm(`Êtes-vous sûr de vouloir supprimer l'enveloppe "${name}" ?\nCette action est irréversible.`)) return;
+  const handleDeleteEnvelope = async (id: string, _name: string) => {
     if (!user) return;
+    const env = envelopes.find((e) => e.id === id);
+    if (!env) return;
+
+    setDeletingEnvelope(env);
+    setIsLoadingLinkedTx(true);
+    setShowDeleteEnvelopeModal(true);
+
     try {
-      await deleteDoc(doc(db, "users", user.uid, "envelopes", id));
-
-      // Décrémenter le compteur d'enveloppes
-      const counterRef = doc(db, "counters", user.uid);
-      await updateDoc(counterRef, {
-        envelopeCount: increment(-1),
-      }).catch(() => {/* compteur absent, ignoré */});
-
-      setEnvelopes((prev) => prev.filter((e) => e.id !== id));
+      const txs = await fetchLinkedTransactions(user.uid, id);
+      setLinkedTransactions(txs);
     } catch (error) {
-      logger.sanitizedError("Erreur suppression", error);
+      logger.sanitizedError("Erreur chargement transactions", error);
+      setLinkedTransactions([]);
+    } finally {
+      setIsLoadingLinkedTx(false);
     }
+  };
+
+  const handleMigrateToExisting = async (targetEnvelopeId: string) => {
+    if (!user || !deletingEnvelope) return;
+    await migrateTransactionsToExisting(user.uid, deletingEnvelope.id, targetEnvelopeId);
+    setEnvelopes((prev) => prev.filter((e) => e.id !== deletingEnvelope.id));
+    setShowDeleteEnvelopeModal(false);
+    setDeletingEnvelope(null);
+  };
+
+  const handleCreateAndMigrate = async (name: string, budget: number) => {
+    if (!user || !deletingEnvelope) return;
+    const newId = await createEnvelopeAndMigrate(user.uid, deletingEnvelope.id, {
+      name,
+      budget,
+      icon: deletingEnvelope.icon,
+      color: deletingEnvelope.color,
+    });
+    // Add the new envelope to local state
+    setEnvelopes((prev) => {
+      const filtered = prev.filter((e) => e.id !== deletingEnvelope.id);
+      return [
+        ...filtered,
+        {
+          id: newId,
+          name,
+          budget,
+          icon: deletingEnvelope.icon,
+          color: deletingEnvelope.color,
+          order: Date.now(),
+        } as Envelope,
+      ];
+    });
+    setShowDeleteEnvelopeModal(false);
+    setDeletingEnvelope(null);
+  };
+
+  const handleDeleteAllTransactions = async () => {
+    if (!user || !deletingEnvelope) return;
+    await deleteEnvelopeAndTransactions(user.uid, deletingEnvelope.id, linkedTransactions);
+    setEnvelopes((prev) => prev.filter((e) => e.id !== deletingEnvelope.id));
+    setShowDeleteEnvelopeModal(false);
+    setDeletingEnvelope(null);
   };
 
   const handleDeleteAccount = async () => {
@@ -1370,6 +1428,23 @@ export default function SettingsPage() {
             />
           </div>
         </div>
+      )}
+
+      {/* ── Modal: delete envelope ── */}
+      {deletingEnvelope && (
+        <DeleteEnvelopeModal
+          isOpen={showDeleteEnvelopeModal}
+          onClose={() => {
+            setShowDeleteEnvelopeModal(false);
+            setDeletingEnvelope(null);
+          }}
+          envelope={deletingEnvelope}
+          envelopes={envelopes}
+          linkedTransactions={isLoadingLinkedTx ? [] : linkedTransactions}
+          onMigrateToExisting={handleMigrateToExisting}
+          onCreateAndMigrate={handleCreateAndMigrate}
+          onDeleteAll={handleDeleteAllTransactions}
+        />
       )}
     </div>
   );

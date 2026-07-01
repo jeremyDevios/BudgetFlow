@@ -12,6 +12,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
 import { type Envelope, isEnvelopeActiveForMonth } from "@/types/envelope";
+import { type Transaction } from "@/types/transaction";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import {
   validateAmountWithMessage,
@@ -32,15 +33,6 @@ function formatMonthFr(yyyyMm: string): string {
   const label = FRENCH_MONTHS[parseInt(month, 10)] ?? month;
   return `${label} ${year}`;
 }
-
-type Transaction = {
-  id: string;
-  amount: number;
-  description: string;
-  envelopeId: string;
-  date: string;
-  isReimbursement?: boolean;
-};
 
 interface TransactionModalProps {
   isOpen: boolean;

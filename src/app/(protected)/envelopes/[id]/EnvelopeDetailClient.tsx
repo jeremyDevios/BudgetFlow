@@ -18,6 +18,8 @@ import { maskAmount } from "@/lib/maskAmount";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCurrencySymbol, getCurrencyLocale } from "@/types/currency";
+import { type Envelope } from "@/types/envelope";
+import { type Transaction } from "@/types/transaction";
 
 function maskCurrencyText(text: string, currency: string) {
   const symbol = getCurrencySymbol(currency as import("@/types/currency").CurrencyCode);
@@ -52,14 +54,14 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
   const searchParams = useSearchParams();
   const { id } = use(params);
 
-  const [envelope, setEnvelope] = useState<any>(null);
-  const [allEnvelopes, setAllEnvelopes] = useState<any[]>([]);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [envelope, setEnvelope] = useState<Envelope | null>(null);
+  const [allEnvelopes, setAllEnvelopes] = useState<Envelope[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Edit State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [transactionToEdit, setTransactionToEdit] = useState<any>(null);
+  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
 
   const txImpact = (tx: { amount: number; isReimbursement?: boolean }) =>
     tx.isReimbursement ? -tx.amount : tx.amount;
@@ -75,7 +77,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       const envRef = doc(db, "users", user.uid, "envelopes", id);
       const envSnap = await getDoc(envRef);
       if (envSnap.exists()) {
-        setEnvelope({ id: envSnap.id, ...envSnap.data() });
+        setEnvelope({ id: envSnap.id, ...envSnap.data() } as Envelope);
       } else {
         router.push("/dashboard"); // Enveloppe introuvable
         return;
@@ -84,9 +86,9 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       // 1b. Charger TOUTES les enveloppes (pour la modale d'édition)
       const allEnvRef = collection(db, "users", user.uid, "envelopes");
       const allEnvSnap = await getDocs(allEnvRef);
-      const allEnvList: any[] = [];
+      const allEnvList: Envelope[] = [];
       allEnvSnap.forEach(doc => {
-        allEnvList.push({ id: doc.id, ...doc.data() });
+        allEnvList.push({ id: doc.id, ...doc.data() } as Envelope);
       });
 
       // Aligner la modale avec le dashboard: le "spent" affiché doit être mensuel.

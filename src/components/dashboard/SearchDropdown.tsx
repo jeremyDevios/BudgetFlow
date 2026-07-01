@@ -5,15 +5,7 @@ import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
-
-type Transaction = {
-  id: string;
-  amount: number;
-  description: string;
-  envelopeId: string;
-  date: string;
-  isReimbursement?: boolean;
-};
+import { type Transaction } from "@/types/transaction";
 
 type Envelope = {
   id: string;
