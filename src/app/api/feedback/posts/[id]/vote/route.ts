@@ -52,8 +52,9 @@ export async function POST(
       );
     }
 
-    const data = await res.json();
-    return NextResponse.json(data);
+    const json = await res.json();
+    // Quackback wrappe dans { data: ... }, on unwrap
+    return NextResponse.json(json.data ?? json);
   } catch (error) {
     logger.error("[feedback] POST /posts/[id]/vote unexpected error", error);
     return NextResponse.json(

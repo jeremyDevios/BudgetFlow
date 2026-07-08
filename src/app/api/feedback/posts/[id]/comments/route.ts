@@ -128,9 +128,11 @@ export async function POST(
       );
     }
 
-    const data = await res.json();
+    const json = await res.json();
+    // Quackback wrappe dans { data: ... }, on unwrap
+    const comment = json.data ?? json;
     logger.info(`[feedback] Comment added by ${uid} on post ${id}`);
-    return NextResponse.json(data, { status: 201 });
+    return NextResponse.json(comment, { status: 201 });
   } catch (error) {
     logger.error(
       "[feedback] POST /posts/[id]/comments unexpected error",

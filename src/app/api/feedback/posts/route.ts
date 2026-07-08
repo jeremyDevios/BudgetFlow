@@ -129,9 +129,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const data = await res.json();
-    logger.info(`[feedback] Post created by ${uid}: ${data.id}`);
-    return NextResponse.json(data, { status: 201 });
+    const json = await res.json();
+    // Quackback wrappe dans { data: ... }, on unwrap
+    const post = json.data ?? json;
+    logger.info(`[feedback] Post created by ${uid}: ${post.id}`);
+    return NextResponse.json(post, { status: 201 });
   } catch (error) {
     logger.error("[feedback] POST /posts unexpected error", error);
     return NextResponse.json(
