@@ -54,6 +54,13 @@ export interface UserSettings {
   monthlyIncome: number;
 
   /**
+   * Whether the user has a fixed monthly income (true) or variable (false).
+   * When false, the dashboard shows a per-month income update button.
+   * Defaults to true for backward compatibility.
+   */
+  isFixedIncome: boolean;
+
+  /**
    * Aggregate fixed costs.
    * Source of truth when `fixedCostsDetailedEnabled` is false.
    */
@@ -121,6 +128,7 @@ export interface UserSettings {
  */
 export const DEFAULT_USER_SETTINGS: UserSettings = {
   monthlyIncome: 0,
+  isFixedIncome: true,
   fixedCosts: 0,
   monthlySavings: 0,
   bentoPreset: "balanced",

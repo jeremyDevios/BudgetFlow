@@ -1,0 +1,51 @@
+import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
+
+export const dynamic = "force-dynamic";
+
+const QUACKBACK_BASE_URL =
+  process.env.QUACKBACK_BASE_URL || "https://feedback.vizualy.app/api/v1";
+const QUACKBACK_API_KEY = process.env.QUACKBACK_API_KEY || "";
+
+/**
+ * GET /api/feedback/posts/[id]
+ *
+ * Returns a single feedback post with its details.
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+
+    const res = await fetch(`${QUACKBACK_BASE_URL}/posts/${id}`, {
+      headers: {
+        Authorization: `Bearer ${QUACKBACK_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!res.ok) {
+      if (res.status === 404) {
+        return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      }
+      logger.error(
+        `[feedback] GET /posts/${id} failed: ${res.status} ${res.statusText}`
+      );
+      return NextResponse.json(
+        { error: "Failed to fetch post" },
+        { status: 502 }
+      );
+    }
+
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    logger.error("[feedback] GET /posts/[id] unexpected error", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

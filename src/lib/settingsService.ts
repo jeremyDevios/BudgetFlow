@@ -145,6 +145,7 @@ function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSet
 
   return {
     monthlyIncome: Number(raw.monthlyIncome ?? DEFAULT_USER_SETTINGS.monthlyIncome),
+    isFixedIncome: raw.isFixedIncome !== false, // default true for backward compat
     fixedCosts: Number(raw.fixedCosts ?? DEFAULT_USER_SETTINGS.fixedCosts),
     monthlySavings: Number(raw.monthlySavings ?? DEFAULT_USER_SETTINGS.monthlySavings),
     bentoPreset: resolveBentoPreset(raw.bentoPreset),

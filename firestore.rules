@@ -220,7 +220,7 @@ service cloud.firestore {
                          // date is immutable — prevents history tampering.
                          && request.resource.data.date == resource.data.date;
       }
-    }
+}
 
     // Deny all unmatched paths by default
     match /{document=**} {
