@@ -196,6 +196,7 @@ export async function loadSettings(uid: string): Promise<UserSettings> {
 
   const stored = sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>);
   return {
+    isFixedIncome: stored.isFixedIncome,
     monthlyIncome: stored.monthlyIncome,
     fixedCosts: stored.fixedCosts,
     monthlySavings: stored.monthlySavings,
