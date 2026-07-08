@@ -60,37 +60,30 @@ export async function GET(request: Request) {
  * POST /api/feedback/posts
  *
  * Creates a new feedback post on Quackback.
- * Requires Firebase authentication.
+ * Firebase authentication is optional — anonymous users can submit too.
  * Body: { title, content, boardId }
  */
 export async function POST(request: Request) {
   try {
-    // Authenticate
+    // Authenticate (optional — anonymous users can submit)
     const authHeader = request.headers.get("authorization");
     const authToken = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
       : null;
 
-    if (!authToken) {
-      return NextResponse.json(
-        { error: "Unauthorized — missing token" },
-        { status: 401 }
-      );
-    }
-
-    let uid: string;
+    let uid = "anonymous";
     let userEmail: string | undefined;
     let userName: string | undefined;
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(authToken);
-      uid = decodedToken.uid;
-      userEmail = decodedToken.email;
-      userName = decodedToken.name;
-    } catch {
-      return NextResponse.json(
-        { error: "Unauthorized — invalid or expired token" },
-        { status: 401 }
-      );
+
+    if (authToken) {
+      try {
+        const decodedToken = await adminAuth.verifyIdToken(authToken);
+        uid = decodedToken.uid;
+        userEmail = decodedToken.email;
+        userName = decodedToken.name;
+      } catch {
+        // Token invalide → on continue en anonyme
+      }
     }
 
     const body = await request.json();
@@ -105,9 +98,11 @@ export async function POST(request: Request) {
 
     // Prepend user attribution to content since Quackback REST API
     // creates posts on behalf of the API key holder.
-    const attribution = userName
-      ? `Soumis par : ${userName} (${userEmail || uid})`
-      : `Soumis par : ${userEmail || uid}`;
+    const attribution = authToken
+      ? (userName
+          ? `Soumis par : ${userName} (${userEmail || uid})`
+          : `Soumis par : ${userEmail || uid}`)
+      : "Soumis par : Anonyme (mode local)";
     const attributedContent = `${attribution}\n\n---\n\n${content}`;
 
     const res = await fetch(`${QUACKBACK_BASE_URL}/posts`, {

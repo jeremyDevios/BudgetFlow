@@ -11,33 +11,25 @@ const QUACKBACK_API_KEY = process.env.QUACKBACK_API_KEY || "";
 /**
  * POST /api/feedback/posts/[id]/vote
  *
- * Toggles a vote on a post. Requires Firebase authentication.
+ * Toggles a vote on a post. Firebase authentication is optional.
  */
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authenticate
+    // Authenticate (optional)
     const authHeader = request.headers.get("authorization");
     const authToken = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
       : null;
 
-    if (!authToken) {
-      return NextResponse.json(
-        { error: "Unauthorized — missing token" },
-        { status: 401 }
-      );
-    }
-
-    try {
-      await adminAuth.verifyIdToken(authToken);
-    } catch {
-      return NextResponse.json(
-        { error: "Unauthorized — invalid or expired token" },
-        { status: 401 }
-      );
+    if (authToken) {
+      try {
+        await adminAuth.verifyIdToken(authToken);
+      } catch {
+        // Token invalide → on continue sans auth
+      }
     }
 
     const { id } = await params;

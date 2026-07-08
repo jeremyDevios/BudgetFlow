@@ -54,7 +54,7 @@ export async function GET(
 /**
  * POST /api/feedback/posts/[id]/comments
  *
- * Adds a comment to a post. Requires Firebase authentication.
+ * Adds a comment to a post. Firebase authentication is optional.
  * Body: { content }
  */
 export async function POST(
@@ -62,32 +62,25 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authenticate
+    // Authenticate (optional — anonymous users can comment)
     const authHeader = request.headers.get("authorization");
     const authToken = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
       : null;
 
-    if (!authToken) {
-      return NextResponse.json(
-        { error: "Unauthorized — missing token" },
-        { status: 401 }
-      );
-    }
-
-    let uid: string;
+    let uid = "anonymous";
     let userEmail: string | undefined;
     let userName: string | undefined;
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(authToken);
-      uid = decodedToken.uid;
-      userEmail = decodedToken.email;
-      userName = decodedToken.name;
-    } catch {
-      return NextResponse.json(
-        { error: "Unauthorized — invalid or expired token" },
-        { status: 401 }
-      );
+
+    if (authToken) {
+      try {
+        const decodedToken = await adminAuth.verifyIdToken(authToken);
+        uid = decodedToken.uid;
+        userEmail = decodedToken.email;
+        userName = decodedToken.name;
+      } catch {
+        // Token invalide → on continue en anonyme
+      }
     }
 
     const body = await request.json();
@@ -101,11 +94,13 @@ export async function POST(
     }
 
     // Prepend user attribution
-    const attribution = userName
-      ? `[${userName}] `
-      : userEmail
-        ? `[${userEmail}] `
-        : "";
+    const attribution = authToken
+      ? (userName
+          ? `[${userName}] `
+          : userEmail
+            ? `[${userEmail}] `
+            : "")
+      : "[Anonyme] ";
     const attributedContent = `${attribution}${content.trim()}`;
 
     const { id } = await params;
