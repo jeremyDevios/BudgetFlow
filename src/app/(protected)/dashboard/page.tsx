@@ -10,6 +10,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
+import { resolveMonthlyIncome } from "@/lib/settingsService";
+import { getMonthlyIncomes, saveMonthlyIncome } from "@/lib/monthlyIncomeService";
 import {
   LogOut, 
   Settings, 
@@ -94,6 +96,7 @@ interface UserSettings {
   fixedCosts: number;
   monthlySavings: number;
   bentoPreset?: BentoPreset;
+  isFixedIncome?: boolean;
 }
 
 interface Envelope {
@@ -391,7 +394,13 @@ export default function DashboardPage() {
     const [showMoreMenu, setShowMoreMenu] = useState(false);
     const moreMenuRef = useRef<HTMLDivElement>(null);
   const [resizingEnvelopeId, setResizingEnvelopeId] = useState<string | null>(null);
-  
+
+  // Per-month income overrides (only used when isFixedIncome === false)
+  const [monthlyIncomes, setMonthlyIncomes] = useState<Record<string, number>>({});
+  const [isEditingIncome, setIsEditingIncome] = useState(false);
+  const [editingIncomeValue, setEditingIncomeValue] = useState("");
+  const [isSavingIncome, setIsSavingIncome] = useState(false);
+
   // Gestion de la date sélectionnée (Mois)
   const [currentDate, setCurrentDate] = useState(new Date());
     const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -517,11 +526,22 @@ export default function DashboardPage() {
     .filter((env) => env.isTemporary)
     .reduce((acc, env) => acc + env.budget, 0);
 
+  // Resolve the effective income for the currently selected month.
+  // When isFixedIncome is false, the resolution order is:
+  //   1. Explicit entry for selectedMonth
+  //   2. Most recent past month with an entry
+  //   3. Global monthlyIncome fallback
+  const resolvedIncome = useMemo(() => {
+    if (!settings) return 0;
+    if (settings.isFixedIncome !== false) return settings.monthlyIncome;
+    return resolveMonthlyIncome(selectedMonth, monthlyIncomes, settings.monthlyIncome);
+  }, [settings, selectedMonth, monthlyIncomes]);
+
   // Reste à vivre réel (ce qu'il reste dans les enveloppes + surplus non alloué)
   // Logic: (Income - Fixed - Savings) + active-temporary-envelope budgets = Total Available for Month
   // Current Balance = Total Available - Total Spent
   const monthlyTotalAvailable = settings
-    ? settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings + temporaryEnvelopesBudget
+    ? resolvedIncome - settings.fixedCosts - settings.monthlySavings + temporaryEnvelopesBudget
     : 0;
   const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes;
   
@@ -628,7 +648,17 @@ export default function DashboardPage() {
           const settingsRef = doc(db, "users", user.uid, "settings", "general");
           const settingsSnap = await getDoc(settingsRef);
           if (settingsSnap.exists()) {
-              setSettings(settingsSnap.data() as UserSettings);
+              const data = settingsSnap.data() as UserSettings;
+              setSettings(data);
+              // 1b. If variable income, also fetch per-month income overrides.
+              if (data.isFixedIncome === false) {
+                try {
+                  const incomes = await getMonthlyIncomes(user.uid);
+                  setMonthlyIncomes(incomes);
+                } catch (e) {
+                  logger.warn("Monthly incomes read failed");
+                }
+              }
           }
       } catch(e) { logger.warn("Settings read failed"); }
 
@@ -780,9 +810,43 @@ export default function DashboardPage() {
     }, []);
 
   const changeMonth = (offset: number) => {
+    // Close any inline income edit on month change.
+    setIsEditingIncome(false);
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + offset);
     setCurrentDate(newDate);
+  };
+
+  const handleStartEditIncome = () => {
+    setEditingIncomeValue(String(resolvedIncome));
+    setIsEditingIncome(true);
+  };
+
+  const handleCancelEditIncome = () => {
+    setIsEditingIncome(false);
+    setEditingIncomeValue("");
+  };
+
+  const handleSaveIncome = async () => {
+    if (!user || isSavingIncome) return;
+    const amount = parseFloat(editingIncomeValue);
+    if (isNaN(amount) || amount < 0) return;
+
+    setIsSavingIncome(true);
+    // Optimistic update
+    const previous = { ...monthlyIncomes };
+    setMonthlyIncomes((prev) => ({ ...prev, [selectedMonth]: amount }));
+    setIsEditingIncome(false);
+
+    try {
+      await saveMonthlyIncome(user.uid, selectedMonth, amount);
+    } catch (error) {
+      // Rollback on failure
+      setMonthlyIncomes(previous);
+      logger.sanitizedError("Erreur sauvegarde revenu mensuel", error);
+    } finally {
+      setIsSavingIncome(false);
+    }
   };
 
     const showToast = (message: string) => {
@@ -947,6 +1011,53 @@ export default function DashboardPage() {
                 <h2 className={`text-4xl font-extrabold tracking-tighter ${currentMonthBalance < 0 ? 'text-red-500' : 'text-app-text'}`}>
                     {formatAmountWithoutCurrency(currentMonthBalance)} <span className="text-2xl text-app-text-secondary">{symbol}</span>
                 </h2>
+                {/* Variable income: show editable income line */}
+                {settings?.isFixedIncome === false && (
+                  <div className="text-xs text-app-text-secondary mt-1">
+                    {isEditingIncome ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>Revenu :</span>
+                        <input
+                          type="number"
+                          inputMode="decimal"
+                          value={editingIncomeValue}
+                          onChange={(e) => setEditingIncomeValue(e.target.value)}
+                          className="no-spinner w-20 bg-app-bg border border-app-border rounded px-1.5 py-0.5 text-xs focus:ring-1 focus:ring-amber-500 outline-none text-app-text"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void handleSaveIncome();
+                            if (e.key === "Escape") handleCancelEditIncome();
+                          }}
+                        />
+                        <span>{symbol}</span>
+                        <button
+                          onClick={() => void handleSaveIncome()}
+                          disabled={isSavingIncome}
+                          className="p-0.5 rounded hover:bg-green-500/20 text-green-500 transition-colors"
+                          title="Enregistrer"
+                        >
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </button>
+                        <button
+                          onClick={handleCancelEditIncome}
+                          className="p-0.5 rounded hover:bg-red-500/20 text-red-500 transition-colors"
+                          title="Annuler"
+                        >
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={handleStartEditIncome}
+                        className="inline-flex items-center gap-1 hover:text-amber-500 transition-colors"
+                        title="Modifier le revenu du mois"
+                      >
+                        <span>Revenu : {formatAmountWithoutCurrency(resolvedIncome, 0)} {symbol}</span>
+                        <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div className="text-xs text-app-text-secondary">
                     Sur {formatAmountWithoutCurrency(monthlyTotalAvailable, 0)} {symbol} prévus
                 </div>

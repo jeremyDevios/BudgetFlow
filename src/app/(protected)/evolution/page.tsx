@@ -13,6 +13,8 @@ import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { motion, AnimatePresence } from "framer-motion";
+import { resolveMonthlyIncome } from "@/lib/settingsService";
+import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
 
 const MASK_WITH_DECIMALS = "****,**";
 
@@ -20,6 +22,7 @@ interface UserSettings {
   monthlyIncome: number;
   fixedCosts: number;
   monthlySavings: number;
+  isFixedIncome?: boolean;
 }
 
 interface MonthlyData {
@@ -50,6 +53,8 @@ export default function EvolutionPage() {
         let income = 0;
         let fixedCosts = 0;
         let savingsObjective = 0;
+        let isFixedIncome = true;
+        let monthlyIncomes: Record<string, number> = {};
 
         const settingsRef = doc(db, "users", user.uid, "settings", "general");
         const settingsSnap = await getDoc(settingsRef);
@@ -58,6 +63,12 @@ export default function EvolutionPage() {
             income = s.monthlyIncome || 0;
             fixedCosts = s.fixedCosts || 0;
             savingsObjective = s.monthlySavings || 0;
+            isFixedIncome = s.isFixedIncome !== false;
+        }
+
+        // 1b. If variable income, fetch per-month overrides.
+        if (!isFixedIncome) {
+          monthlyIncomes = await getMonthlyIncomes(user.uid);
         }
 
         // 2. Determine Date Range (Last 6 months)
@@ -85,11 +96,11 @@ export default function EvolutionPage() {
 
         // 4. Aggregate by Month
         const months = eachMonthOfInterval({ start, end });
-        
+
         const monthlyData = months.map(month => {
             const monthStart = startOfMonth(month);
             const monthEnd = endOfMonth(month);
-            
+
             let totalSpent = 0;
             let transactionCount = 0;
 
@@ -110,14 +121,20 @@ export default function EvolutionPage() {
                 }
             });
 
+            // Resolve the effective income for this specific month.
+            const monthStr = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
+            const resolvedIncome = isFixedIncome
+              ? income
+              : resolveMonthlyIncome(monthStr, monthlyIncomes, income);
+
             // Logic: Remaining = (Income - FixedCosts - Savings) - Spent
             // Correspond au "Reste disponible" du Dashboard
-            const remaining = (income - fixedCosts - savingsObjective) - totalSpent;
+            const remaining = (resolvedIncome - fixedCosts - savingsObjective) - totalSpent;
 
             return {
                 date: month,
                 totalSpent,
-                income,
+                income: resolvedIncome,
                 fixedCosts,
                 savingsObjective,
                 remaining,

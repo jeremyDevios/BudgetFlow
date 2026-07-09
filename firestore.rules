@@ -55,7 +55,8 @@ service cloud.firestore {
             'monthlyIncome', 'fixedCosts', 'monthlySavings',
            'currency', 'bentoPreset', 'anonymousMode', 'isOnboarded', 'createdAt', 'updatedAt',
            'fixedCostsDetailedEnabled', 'fixedCostsItems',
-           'savingsDetailedEnabled', 'savingsItems'
+           'savingsDetailedEnabled', 'savingsItems',
+           'isFixedIncome'
           ])
         && data.monthlyIncome  is number && data.monthlyIncome  >= 0 && data.monthlyIncome  <= 100000000
         && data.fixedCosts     is number && data.fixedCosts     >= 0 && data.fixedCosts     <= 100000000
@@ -70,6 +71,7 @@ service cloud.firestore {
         && (!('savingsDetailedEnabled' in data) || data.savingsDetailedEnabled is bool)
         && (!('fixedCostsItems' in data) || isValidBudgetSubItems(data.fixedCostsItems))
         && (!('savingsItems' in data) || isValidBudgetSubItems(data.savingsItems))
+        && (!('isFixedIncome' in data) || data.isFixedIncome is bool)
         && (data.fixedCostsDetailedEnabled != true || (('fixedCostsItems' in data) && data.fixedCostsItems.size() > 0))
         && (data.savingsDetailedEnabled != true || (('savingsItems' in data) && data.savingsItems.size() > 0));
     }
@@ -132,6 +134,15 @@ service cloud.firestore {
         && (!('isReimbursement' in data) || data.isReimbursement is bool);
     }
 
+    // Monthly income override: /users/{userId}/monthlyIncomes/{YYYY-MM}
+    // Required: amount (number, ≥ 0, ≤ 100000000)
+    function isValidMonthlyIncomeData(data) {
+      return data.keys().hasOnly(['amount'])
+        && data.amount is number
+        && data.amount >= 0
+        && data.amount <= 100000000;
+    }
+
     // Daily activity: /users/{userId}/dailyActivity/{date}
     // Required: loggedIn, date
     function isValidDailyActivityData(data, dateId) {
@@ -179,6 +190,16 @@ service cloud.firestore {
                          && isValidSettingsData(request.resource.data);
         // delete intentionally absent — a missing settings doc breaks the
         // isOnboarded check and crashes app initialization.
+      }
+
+      // ── Monthly incomes subcollection ──────────────────────────────────────
+      match /monthlyIncomes/{month} {
+        allow read:   if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
+                         && isValidMonthlyIncomeData(request.resource.data);
+        allow update: if isAuthenticated() && isOwner(userId)
+                         && isValidMonthlyIncomeData(request.resource.data);
+        allow delete: if isAuthenticated() && isOwner(userId);
       }
 
       // ── Envelopes subcollection ────────────────────────────────────────────

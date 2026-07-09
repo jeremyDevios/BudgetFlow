@@ -64,6 +64,45 @@ export function computeDetailedTotal(items: BudgetSubItem[]): number {
   return items.reduce((sum, item) => sum + item.amount, 0);
 }
 
+/**
+ * Resolves the effective monthly income for a given month.
+ *
+ * Resolution order:
+ * 1. Explicit entry for the requested month (if it exists).
+ * 2. Most recent past month with an entry (if any).
+ * 3. Global `fallbackIncome` (the `monthlyIncome` field from settings).
+ *
+ * Month keys are `"YYYY-MM"` strings, so lexicographic ordering matches
+ * chronological ordering (e.g. `"2025-12" < "2026-01"`).
+ *
+ * @param month          - The month to resolve, in `YYYY-MM` format.
+ * @param monthlyIncomes - Map of month → amount (from Firestore subcollection).
+ * @param fallbackIncome - Global fallback when no entry exists.
+ * @returns The effective income for the given month.
+ */
+export function resolveMonthlyIncome(
+  month: string,
+  monthlyIncomes: Record<string, number>,
+  fallbackIncome: number,
+): number {
+  // 1. Exact match for the requested month.
+  if (monthlyIncomes[month] !== undefined) {
+    return monthlyIncomes[month];
+  }
+
+  // 2. Most recent past month with an entry.
+  const pastKeys = Object.keys(monthlyIncomes)
+    .filter((k) => k < month)
+    .sort();
+
+  if (pastKeys.length > 0) {
+    return monthlyIncomes[pastKeys[pastKeys.length - 1]];
+  }
+
+  // 3. Global fallback.
+  return fallbackIncome;
+}
+
 /** Creates a new empty detailed-budget line with a stable client-side id. */
 export function createEmptyBudgetSubItem(): BudgetSubItem {
   const supportsRandomUuid =

@@ -19,6 +19,7 @@ import {
   computeDetailedTotal,
   resolveDetailedEnabled,
   normalizeSettingsPayload,
+  resolveMonthlyIncome,
 } from "@/lib/settingsService";
 import { BudgetSubItem } from "@/types/settings";
 
@@ -330,5 +331,68 @@ describe("normalizeSettingsPayload", () => {
     });
     expect(result.fixedCostsDetailedEnabled).toBe(false);
     expect(result.savingsDetailedEnabled).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveMonthlyIncome
+// ---------------------------------------------------------------------------
+
+describe("resolveMonthlyIncome", () => {
+  const incomes: Record<string, number> = {
+    "2026-03": 2000,
+    "2026-05": 2100,
+    "2026-07": 2200,
+  };
+  const fallback = 2500;
+
+  it("returns the explicit entry for the requested month", () => {
+    expect(resolveMonthlyIncome("2026-05", incomes, fallback)).toBe(2100);
+    expect(resolveMonthlyIncome("2026-07", incomes, fallback)).toBe(2200);
+  });
+
+  it("falls back to the most recent past month when the requested month has no entry", () => {
+    // June 2026 has no entry → most recent past is May 2026 (2100)
+    expect(resolveMonthlyIncome("2026-06", incomes, fallback)).toBe(2100);
+    // April 2026 has no entry → most recent past is March 2026 (2000)
+    expect(resolveMonthlyIncome("2026-04", incomes, fallback)).toBe(2000);
+  });
+
+  it("falls back to the global fallback when no past entries exist", () => {
+    // January 2026 has no entry and no earlier months
+    expect(resolveMonthlyIncome("2026-01", incomes, fallback)).toBe(2500);
+  });
+
+  it("handles empty monthlyIncomes by always returning the fallback", () => {
+    expect(resolveMonthlyIncome("2026-07", {}, fallback)).toBe(2500);
+    expect(resolveMonthlyIncome("2025-01", {}, fallback)).toBe(2500);
+  });
+
+  it("correctly handles year boundaries (lexicographic ordering)", () => {
+    const crossYear: Record<string, number> = {
+      "2025-12": 1800,
+      "2026-01": 2000,
+    };
+    // "2026-02" has no entry → most recent past is "2026-01" (2000), not "2025-12"
+    expect(resolveMonthlyIncome("2026-02", crossYear, 3000)).toBe(2000);
+    // "2026-01" has an explicit entry
+    expect(resolveMonthlyIncome("2026-01", crossYear, 3000)).toBe(2000);
+    // "2025-12" has an explicit entry
+    expect(resolveMonthlyIncome("2025-12", crossYear, 3000)).toBe(1800);
+  });
+
+  it("returns the explicit entry for the earliest month (edge case: month equals first entry)", () => {
+    const single: Record<string, number> = { "2026-01": 1500 };
+    expect(resolveMonthlyIncome("2026-01", single, 3000)).toBe(1500);
+  });
+
+  it("future months with no entry fall back to most recent past", () => {
+    // September 2026 has no entry → most recent past is July 2026 (2200)
+    expect(resolveMonthlyIncome("2026-09", incomes, fallback)).toBe(2200);
+  });
+
+  it("returns fallback when monthlyIncomes has no keys before the target month", () => {
+    // All entries are AFTER the requested month
+    expect(resolveMonthlyIncome("2025-06", incomes, fallback)).toBe(2500);
   });
 });

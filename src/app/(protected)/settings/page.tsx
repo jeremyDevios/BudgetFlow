@@ -462,6 +462,31 @@ export default function SettingsPage() {
     }
   };
 
+  const handleToggleFixedIncome = async () => {
+    if (!user) return;
+
+    const nextValue = !settings.isFixedIncome;
+
+    if (!nextValue) {
+      // Switching from variable to fixed: warn that per-month entries are preserved but ignored.
+      const confirmed = window.confirm(
+        "En passant en salaire fixe, vos revenus mois par mois seront conservés mais ignorés. " +
+        "Le montant global ci-dessous sera utilisé pour tous les mois. Continuer ?",
+      );
+      if (!confirmed) return;
+    }
+
+    setSettings((s) => ({ ...s, isFixedIncome: nextValue }));
+
+    try {
+      await saveSettings(user.uid, { isFixedIncome: nextValue });
+      logger.info(`settings.handleToggleFixedIncome: isFixedIncome → ${nextValue}`);
+    } catch (error) {
+      setSettings((s) => ({ ...s, isFixedIncome: !nextValue }));
+      logger.sanitizedError("Erreur mise à jour type de revenu", error);
+    }
+  };
+
   const handleCurrencyChange = async (newCode: CurrencyCode) => {
     if (!user) return;
     setCurrency(newCode);
@@ -1095,6 +1120,41 @@ export default function SettingsPage() {
             Budget Global
           </h2>
           <div className="space-y-4">
+
+            {/* Type de revenu : Fixe ou Variable */}
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h3 className="font-medium text-app-text">Type de revenu</h3>
+                <p className="text-sm text-app-text-secondary">
+                  {settings.isFixedIncome
+                    ? "Ce montant sera utilisé pour tous les mois."
+                    : "Ce montant sert de valeur par défaut. Ajustez le revenu mois par mois depuis le tableau de bord."}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-sm text-app-text-secondary">
+                  {settings.isFixedIncome ? "Fixe" : "Variable"}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="Type de revenu"
+                  aria-checked={!settings.isFixedIncome}
+                  onClick={() => {
+                    void handleToggleFixedIncome();
+                  }}
+                  className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors cursor-pointer ${
+                    !settings.isFixedIncome ? "bg-amber-500" : "bg-zinc-700"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-5 w-5 rounded-full bg-white transition-transform ${
+                      !settings.isFixedIncome ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
 
             {/* Revenus mensuels — inchangé */}
             <div>

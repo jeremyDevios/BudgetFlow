@@ -24,6 +24,8 @@ users/
     (document fields)
     settings/
       general        ← single document
+    monthlyIncomes/
+      {YYYY-MM}      ← one doc per month with income override
     envelopes/
       {envelopeId}   ← one doc per envelope
     transactions/
@@ -57,6 +59,7 @@ Single document with fixed ID `general`.
 | Field | Type | iOS Model | Default |
 |-------|------|-----------|---------|
 | `monthlyIncome` | number | `UserSettings.monthlyIncome` | `0` |
+| `isFixedIncome` | boolean | `UserSettings.isFixedIncome` | `true` |
 | `fixedCosts` | number | `UserSettings.fixedCosts` | `0` |
 | `monthlySavings` | number | `UserSettings.monthlySavings` | `0` |
 | `currency` | string | `UserSettings.currency` | `"EUR"` |
@@ -84,6 +87,33 @@ Both `fixedCostsItems` and `savingsItems` store an array of objects with the fol
 - When `savingsDetailedEnabled` is `true`, the sum of `savingsItems[].amount` is used as the effective savings total; the global `monthlySavings` field is ignored.
 - **Disabling** detailed mode does **not** delete the items — they are preserved so that re-enabling the mode restores the previous breakdown without data loss.
 - If `fixedCostsItems` (resp. `savingsItems`) is empty, the corresponding `*DetailedEnabled` flag **must** be `false`; the global manual amount is then used instead.
+
+### `isFixedIncome` behaviour
+
+- When `true` (default), the global `monthlyIncome` is used for every month.
+- When `false`, the user can set a per-month income override via the `monthlyIncomes` subcollection.
+- For any given month, the effective income is resolved by `resolveMonthlyIncome()` in `src/lib/settingsService.ts`:
+  1. Explicit entry for that month in `monthlyIncomes` (if exists).
+  2. Most recent past month with an entry (if any).
+  3. Global `monthlyIncome` fallback.
+- Switching from variable back to fixed does **not** delete the per-month entries — they are preserved but ignored until the user switches back.
+
+---
+
+## `users/{userId}/monthlyIncomes/{YYYY-MM}` — Per-Month Income Overrides
+
+One document per month where the user has set a specific income override. Document ID is `YYYY-MM` format (e.g. `"2026-07"`). This subcollection is **only** used when `isFixedIncome === false`.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `amount` | number | Income amount for this specific month (≥ 0, ≤ 100000000) |
+
+### Business rules
+
+- Each document represents an explicit override for that month.
+- Documents are created/updated from the dashboard when the user edits their income for a given month.
+- Deleting a document reverts that month to the resolution fallback (most recent past entry or global `monthlyIncome`).
+- The resolution is handled client-side by `resolveMonthlyIncome()` — Firestore does not perform fallback logic.
 
 ---
 

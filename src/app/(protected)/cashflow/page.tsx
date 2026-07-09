@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
@@ -10,11 +10,14 @@ import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { ChevronLeft, Workflow, Loader2 } from "lucide-react";
 import { Sankey, Tooltip, ResponsiveContainer, Layer } from 'recharts';
 import { logger } from "@/lib/logger";
+import { resolveMonthlyIncome } from "@/lib/settingsService";
+import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
 
 interface UserSettings {
   monthlyIncome: number;
   fixedCosts: number;
   monthlySavings: number;
+  isFixedIncome?: boolean;
 }
 
 interface Envelope {
@@ -68,6 +71,7 @@ export default function CashFlowPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
+  const [monthlyIncomes, setMonthlyIncomes] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -77,7 +81,13 @@ export default function CashFlowPage() {
         const settingsRef = doc(db, "users", user.uid, "settings", "general");
         const settingsSnap = await getDoc(settingsRef);
         if (settingsSnap.exists()) {
-          setSettings(settingsSnap.data() as UserSettings);
+          const data = settingsSnap.data() as UserSettings;
+          setSettings(data);
+          // If variable income, fetch per-month overrides for current month resolution.
+          if (data.isFixedIncome === false) {
+            const incomes = await getMonthlyIncomes(user.uid);
+            setMonthlyIncomes(incomes);
+          }
         }
 
         // Fetch Envelopes
@@ -111,20 +121,29 @@ export default function CashFlowPage() {
       )
   }
 
+  // Resolve the effective income for the current month.
+  const resolvedIncome = useMemo(() => {
+    if (!settings) return 0;
+    if (settings.isFixedIncome !== false) return settings.monthlyIncome;
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return resolveMonthlyIncome(currentMonth, monthlyIncomes, settings.monthlyIncome);
+  }, [settings, monthlyIncomes]);
+
   // --- Sankey Data Construction ---
   // Nodes: 0=Revenu, 1=Epargne, 2=Frais Fixes, 3...=Enveloppes
   const nodes = [
       { name: "Revenu", color: "#10b981" }, // Emerald 500
       { name: "Épargne", color: "#3b82f6" }, // Blue 500
       { name: "Frais Fixes", color: "#ef4444" }, // Red 500
-      ...envelopes.map(e => ({ 
-          name: e.name, 
+      ...envelopes.map(e => ({
+          name: e.name,
         color: resolveColor(e.color)
       }))
   ];
 
   const links = [];
-  
+
   // Link: Revenu -> Epargne
   if (settings.monthlySavings > 0) {
       links.push({ source: 0, target: 1, value: settings.monthlySavings });
@@ -145,7 +164,7 @@ export default function CashFlowPage() {
 
   // Calculate Unallocated
   const totalAllocated = (settings.monthlySavings || 0) + (settings.fixedCosts || 0) + envelopes.reduce((acc, curr) => acc + curr.budget, 0);
-  const unallocated = settings.monthlyIncome - totalAllocated;
+  const unallocated = resolvedIncome - totalAllocated;
 
   if (unallocated > 0) {
       nodes.push({ name: "Reste", color: "#71717a" }); // Zinc 500
@@ -260,7 +279,7 @@ export default function CashFlowPage() {
       </header>
       
       <div className="bg-app-surface/40 border border-app-border rounded-3xl p-2 sm:p-6 h-[75vh] w-full overflow-hidden flex flex-col">
-         {settings.monthlyIncome > 0 ? (
+         {resolvedIncome > 0 ? (
              <ResponsiveContainer width="100%" height="100%">
                 <Sankey
                     data={data}
@@ -312,7 +331,7 @@ export default function CashFlowPage() {
                }}
              >
                  <span className="block text-app-text-secondary text-xs uppercase mb-1">Revenu Total</span>
-                 <span className="text-2xl font-bold text-emerald-400">{formatAmount(settings.monthlyIncome)}</span>
+                 <span className="text-2xl font-bold text-emerald-400">{formatAmount(resolvedIncome)}</span>
              </motion.div>
              <motion.div
                className="bg-app-surface/50 p-4 rounded-2xl border border-app-border"

@@ -96,6 +96,7 @@ export default function OnboardingPage() {
 
   // Étape 1 : Revenus et Charges Fixes
   const [income, setIncome] = useState("");
+  const [isFixedIncome, setIsFixedIncome] = useState(true);
   const [fixedCosts, setFixedCosts] = useState("");
   const [savings, setSavings] = useState("");
 
@@ -198,6 +199,7 @@ export default function OnboardingPage() {
       const settingsPayload = normalizeSettingsPayload({
         ...DEFAULT_USER_SETTINGS,
         monthlyIncome: parseFloat(income) || 0,
+        isFixedIncome,
         fixedCosts: fixedCostsDetailedEnabled
           ? computeDetailedTotal(fixedCostsItems)
           : (parseFloat(fixedCosts) || 0),
@@ -215,6 +217,14 @@ export default function OnboardingPage() {
         isOnboarded: true,
         createdAt: new Date().toISOString()
       });
+
+      // 1b. If variable income, seed the first monthlyIncomes doc for the current month.
+      if (!isFixedIncome) {
+        const now = new Date();
+        const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const monthlyIncomeRef = doc(db, "users", user.uid, "monthlyIncomes", currentMonth);
+        batch.set(monthlyIncomeRef, { amount: parseFloat(income) || 0 });
+      }
 
       // 2. Créer les enveloppes
       normalizedEnvelopes.forEach((env) => {
@@ -315,11 +325,49 @@ export default function OnboardingPage() {
             </div>
 
             <div className="space-y-6">
+              {/* Type de salaire : Fixe ou Variable */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm font-medium text-app-text">
+                  <Briefcase className="h-4 w-4 text-amber-500" />
+                  Type de revenu
+                </label>
+                <div className="flex rounded-xl bg-app-surface border border-app-border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setIsFixedIncome(true)}
+                    className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                      isFixedIncome
+                        ? "bg-amber-500 text-white"
+                        : "text-app-text-secondary hover:text-app-text"
+                    }`}
+                  >
+                    Salaire fixe
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsFixedIncome(false)}
+                    className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                      !isFixedIncome
+                        ? "bg-amber-500 text-white"
+                        : "text-app-text-secondary hover:text-app-text"
+                    }`}
+                  >
+                    Salaire variable
+                  </button>
+                </div>
+                {!isFixedIncome && (
+                  <p className="text-xs text-app-text-secondary">
+                    Le montant saisi sera pour le mois en cours. Vous pourrez ajuster votre revenu
+                    mois par mois depuis le tableau de bord.
+                  </p>
+                )}
+              </div>
+
               {/* Le Salaire */}
               <div className="space-y-2">
                 <label className="flex items-center gap-2 text-sm font-medium text-app-text">
                   <Wallet className="h-4 w-4 text-green-500" />
-                  Salaire Mensuel Net
+                  {isFixedIncome ? "Salaire Mensuel Net" : "Salaire Net du mois"}
                 </label>
                 <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-secondary">{symbol}</span>

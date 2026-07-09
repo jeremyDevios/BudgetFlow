@@ -120,6 +120,7 @@ describe("settingsService Firestore persistence", () => {
 
     await expect(loadSettings("user-1")).resolves.toEqual({
       monthlyIncome: 3200,
+      isFixedIncome: true,
       fixedCosts: 900,
       monthlySavings: 400,
       currency: "EUR",
