@@ -296,6 +296,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
 
         <button
           onClick={handleOpenCreateModal}
+          aria-label="Nouvelle Dépense"
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-black font-bold py-3 px-5 rounded-xl transition-transform active:scale-95 animate-fab-pulse shadow-lg shadow-amber-900/20"
         >
           <Plus className="h-5 w-5" />

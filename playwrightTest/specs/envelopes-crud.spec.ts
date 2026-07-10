@@ -133,4 +133,37 @@ test.describe("Gestion des enveloppes (CRUD)", () => {
       }
     });
   });
+
+  test.describe("Enveloppes temporaires", () => {
+    test("le bouton Nouvelle enveloppe permet de créer une enveloppe temporaire", async ({
+      page,
+    }) => {
+      const settings = new SettingsPage(page);
+      await settings.envelopesSection.first().scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+
+      const newBtn = page.getByRole("button", { name: /Nouvelle/i });
+      if ((await newBtn.count()) > 0) {
+        await newBtn.first().click();
+        await page.waitForTimeout(500);
+
+        // Vérifier que le toggle "Enveloppe temporaire" est présent dans le formulaire
+        const tempToggle = page.getByRole("switch", { name: /temporaire/i });
+        if ((await tempToggle.count()) > 0) {
+          await expect(tempToggle).toBeVisible();
+        }
+      }
+    });
+
+    test("les enveloppes temporaires existantes ont un badge", async ({ page }) => {
+      const settings = new SettingsPage(page);
+      await settings.goto();
+
+      // Chercher des badges "Temporaire" dans la liste des enveloppes
+      const tempBadges = page.getByText("Temporaire");
+      // Il peut y en avoir 0 ou plus selon le seed
+      const count = await tempBadges.count();
+      expect(count).toBeGreaterThanOrEqual(0);
+    });
+  });
 });

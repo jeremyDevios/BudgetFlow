@@ -24,19 +24,11 @@ export class DashboardPage extends BasePage {
   readonly heatmap = this.page.locator(".calendar-heatmap, [class*='heatmap']").first();
 
   // Navigation du header
-  readonly settingsButton = this.page.getByRole("link", { name: /Paramètres|Settings/i }).or(
-    this.page.getByRole("button", { name: /Paramètres|Settings/i })
-  );
-  readonly historyButton = this.page.getByRole("link", { name: /Historique/i }).or(
-    this.page.getByRole("button", { name: /Historique/i })
-  );
-  readonly cashflowButton = this.page.getByRole("link", { name: /Cash Flow|Cashflow/i }).or(
-    this.page.getByRole("button", { name: /Cash Flow|Cashflow/i })
-  );
-  readonly evolutionButton = this.page.getByRole("link", { name: /Évolution|Evolution/i }).or(
-    this.page.getByRole("button", { name: /Évolution|Evolution/i })
-  );
-  readonly logoutButton = this.page.getByRole("button", { name: /Se déconnecter|Déconnexion/i });
+  readonly settingsButton = this.page.getByRole("button", { name: "Paramètres" });
+  readonly historyButton = this.page.getByRole("button", { name: "Historique" });
+  readonly cashflowButton = this.page.getByRole("button", { name: "Cash Flow" });
+  readonly evolutionButton = this.page.getByRole("button", { name: "Évolution" });
+  readonly logoutButton = this.page.getByRole("button", { name: "Se déconnecter" });
 
   // Enveloppes
   readonly envelopeTiles = this.page.locator("[class*='bento'], [class*='envelope-card'], [class*='tile']").filter({ has: this.page.locator("h3, h4") });

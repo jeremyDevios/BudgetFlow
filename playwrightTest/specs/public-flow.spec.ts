@@ -58,4 +58,11 @@ test.describe("Parcours public (non authentifié)", () => {
     await page.goto("/login");
     await expect(page).toHaveTitle(/BudgetFlow|Budget|Flow/i);
   });
+
+  test("la page /login affiche le bouton Apple", async ({ page }) => {
+    const login = new LoginPage(page);
+    await login.goto();
+    await expect(login.appleButton).toBeVisible();
+    await expect(login.appleButton).toBeEnabled();
+  });
 });

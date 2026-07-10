@@ -922,6 +922,7 @@ export default function DashboardPage() {
                         onClick={() => router.push('/evolution')}
                         className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-amber-500 transition-colors active:scale-90"
                         title="Évolution des dépenses"
+                        aria-label="Évolution"
                     >
                         <TrendingUp className="h-5 w-5" />
                     </button>
@@ -929,6 +930,7 @@ export default function DashboardPage() {
                         onClick={() => router.push('/history')}
                         className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors active:scale-90"
                         title="Historique Global"
+                        aria-label="Historique"
                     >
                         <List className="h-5 w-5" />
                     </button>
@@ -936,6 +938,7 @@ export default function DashboardPage() {
                         onClick={() => router.push('/cashflow')}
                         className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-emerald-500 transition-colors active:scale-90"
                         title="Cash Flow"
+                        aria-label="Cash Flow"
                     >
                         <Workflow className="h-5 w-5" />
                     </button>
@@ -943,6 +946,7 @@ export default function DashboardPage() {
                         onClick={() => router.push('/settings')}
                         className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors active:scale-90"
                         title="Paramètres"
+                        aria-label="Paramètres"
                     >
                         <Settings className="h-5 w-5" />
                     </button>

@@ -302,6 +302,7 @@ export default function TemporaryEnvelopeForm({
             type="button"
             role="switch"
             aria-checked={isTemporary}
+            aria-label="Enveloppe temporaire"
             onClick={handleToggleTemporary}
             className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-app-surface ${
               isTemporary ? "bg-amber-500" : "bg-app-border"

@@ -17,11 +17,19 @@ export class SettingsPage extends BasePage {
   readonly notificationsSection = this.page.getByText(/Notifications/i);
 
   // Budget Global
-  readonly incomeInput = this.page.getByLabel(/Revenus|Salaire|income/i);
-  readonly fixedCostsInput = this.page.getByLabel(/Frais Fixes|Charges/i);
-  readonly savingsInput = this.page.getByLabel(/Épargne|Savings/i);
+  readonly incomeInput = this.page.getByLabel("Revenus (Salaire)");
+  readonly fixedCostsInput = this.page.getByLabel("Frais Fixes");
+  readonly savingsInput = this.page.getByLabel("Épargne Souhaitée");
   readonly currencySelect = this.page.getByRole("combobox").first();
   readonly balanceIndicator = this.page.getByText(/Disponible pour les enveloppes/i);
+
+  // Type de revenu
+  readonly incomeTypeToggle = this.page.getByRole("switch", { name: "Type de revenu" });
+  readonly incomeTypeValue = this.page.getByText(/Fixe|Variable/).first();
+
+  // Budget détaillé
+  readonly fixedCostsDetailButton = this.page.getByRole("button", { name: "Détails des frais fixes" });
+  readonly savingsDetailButton = this.page.getByRole("button", { name: "Détails de l'épargne souhaitée" });
 
   // Confidentialité
   readonly anonymousToggle = this.page.locator('[role="switch"]').first();
@@ -83,6 +91,37 @@ export class SettingsPage extends BasePage {
 
   async clickNewEnvelope(): Promise<void> {
     await this.newEnvelopeButton.click();
+  }
+
+  async toggleIncomeType(): Promise<void> {
+    await this.incomeTypeToggle.click();
+    await this.page.waitForTimeout(500);
+  }
+
+  async getIncomeTypeText(): Promise<string> {
+    return (await this.incomeTypeValue.textContent()) || "";
+  }
+
+  async toggleDetailedBudget(category: "fixedCosts" | "savings"): Promise<void> {
+    const btn = category === "fixedCosts" ? this.fixedCostsDetailButton : this.savingsDetailButton;
+    await btn.click();
+    await this.page.waitForTimeout(500);
+  }
+
+  async updateFixedCosts(value: string): Promise<void> {
+    if ((await this.fixedCostsInput.count()) > 0) {
+      await this.fixedCostsInput.fill(value);
+      await this.fixedCostsInput.press("Tab");
+      await this.page.waitForTimeout(500);
+    }
+  }
+
+  async updateSavings(value: string): Promise<void> {
+    if ((await this.savingsInput.count()) > 0) {
+      await this.savingsInput.fill(value);
+      await this.savingsInput.press("Tab");
+      await this.page.waitForTimeout(500);
+    }
   }
 
   async expectUserEmailVisible(): Promise<void> {

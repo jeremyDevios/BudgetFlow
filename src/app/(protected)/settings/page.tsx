@@ -1158,11 +1158,12 @@ export default function SettingsPage() {
 
             {/* Revenus mensuels — inchangé */}
             <div>
-              <label className="block text-sm text-app-text-secondary mb-1">
+              <label htmlFor="settings-monthly-income" className="block text-sm text-app-text-secondary mb-1">
                 Revenus (Salaire)
               </label>
               <div className="relative">
                 <input
+                  id="settings-monthly-income"
                   type="number"
                   inputMode="decimal"
                   value={settings.monthlyIncome}
@@ -1175,10 +1176,11 @@ export default function SettingsPage() {
 
             {/* Frais Fixes — montant global + mode détaillé */}
             <div>
-              <label className="block text-sm text-app-text-secondary mb-1">Frais Fixes</label>
+              <label htmlFor="settings-fixed-costs" className="block text-sm text-app-text-secondary mb-1">Frais Fixes</label>
               <div className="flex items-stretch gap-3">
                 <div className="relative flex-1">
                   <input
+                    id="settings-fixed-costs"
                     type="number"
                     inputMode="decimal"
                     value={effectiveFixedCosts}
@@ -1229,12 +1231,13 @@ export default function SettingsPage() {
 
             {/* Épargne Souhaitée — montant global + mode détaillé */}
             <div>
-              <label className="block text-sm text-app-text-secondary mb-1">
+              <label htmlFor="settings-savings" className="block text-sm text-app-text-secondary mb-1">
                 Épargne Souhaitée
               </label>
               <div className="flex items-stretch gap-3">
                 <div className="relative flex-1">
                   <input
+                    id="settings-savings"
                     type="number"
                     inputMode="decimal"
                     value={effectiveSavings}
