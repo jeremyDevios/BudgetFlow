@@ -48,13 +48,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setUser(user);
-      setLoading(false);
-    });
+    let unsubscribe: (() => void) | undefined;
 
-    return () => unsubscribe();
+    try {
+      unsubscribe = onAuthStateChanged(auth, (user) => {
+        setUser(user);
+        setLoading(false);
+      });
+    } catch (err) {
+      // Firebase Auth indisponible (ex: pas de config en CI).
+      // Dégradation gracieuse : on traite comme non-authentifié.
+      logger.warn('AuthContext: onAuthStateChanged a échoué, auth indisponible');
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
+
+  // Sécurité : empêche un état "loading" infini si Firebase ne répond pas
+  useEffect(() => {
+    if (!loading) return;
+    const SAFETY_TIMEOUT_MS = 10_000;
+    const timer = setTimeout(() => {
+      logger.warn('AuthContext: timeout de sécurité, force loading=false');
+      setLoading(false);
+    }, SAFETY_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [loading]);
 
   useEffect(() => {
     if (!user) return;

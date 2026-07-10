@@ -15,8 +15,9 @@ export class LoginPage extends BasePage {
   readonly appNameText = this.page.getByText("Vizualy Budget");
 
   async goto(): Promise<void> {
-    await this.page.goto("/login");
-    await this.page.waitForTimeout(1500);
+    await this.page.goto("/login", { waitUntil: "networkidle" });
+    // Attendre que le nom de l'app soit visible = la page a fini de render
+    await this.appNameText.waitFor({ state: "visible", timeout: 10_000 });
   }
 
   async expectLoginVisible(): Promise<void> {

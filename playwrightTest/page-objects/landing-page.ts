@@ -10,8 +10,9 @@ export class LandingPage extends BasePage {
   readonly subheading = this.page.locator("h2").first();
 
   async goto(): Promise<void> {
-    await this.page.goto("/");
-    await this.page.waitForTimeout(1500);
+    await this.page.goto("/", { waitUntil: "networkidle" });
+    // Attendre que le lien "Commencer" soit visible = la page a fini de render
+    await this.commencerLink.waitFor({ state: "visible", timeout: 15_000 });
   }
 
   async expectLandingVisible(): Promise<void> {
