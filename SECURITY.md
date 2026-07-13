@@ -29,9 +29,9 @@
 - Validation côté client dans les composants
 - Contraintes strictes : `AMOUNT_MIN: 0.01`, `AMOUNT_MAX: 1000000`, etc.
 
-### 5. **TypeScript non-strict** ✅
+### 5. **TypeScript non-strict** ⚠️
 **Problème** : `strict: false` permet les erreurs de type  
-**Solution** : Activation de `strict: true` dans [tsconfig.json](tsconfig.json)
+**Solution** : ~~Activation de `strict: true` dans [tsconfig.json](tsconfig.json)~~ — **Régression** : `tsconfig.json` a actuellement `strict: false`. À rétablir en `true`.
 
 ### 6. **Pas de Headers de Sécurité HTTP** ✅
 **Problème** : Pas de protection contre XSS, clickjacking, etc.  
@@ -56,7 +56,9 @@ Strict-Transport-Security: max-age=31536000
 | [firestore.rules](firestore.rules) | Règles de sécurité Firestore |
 | [src/lib/validation.ts](src/lib/validation.ts) | Validateurs réutilisables |
 | [src/lib/logger.ts](src/lib/logger.ts) | Logger sanitisé |
+| [src/lib/maskAmount.ts](src/lib/maskAmount.ts) | Floutage des montants (mode anonyme) |
 | [src/app/api/validate/transaction/route.ts](src/app/api/validate/transaction/route.ts) | Validation serveur |
+| [src/app/api/account/delete/route.ts](src/app/api/account/delete/route.ts) | Suppression de compte (Admin SDK + recursiveDelete) |
 
 ### Fichiers Modifiés
 
@@ -65,9 +67,12 @@ Strict-Transport-Security: max-age=31536000
 | tsconfig.json | `strict: true` |
 | next.config.ts | Headers de sécurité HTTP |
 | src/app/(auth)/login/page.tsx | Validation entrées, logs sanitisés |
-| src/app/api/notifications/trigger/route.ts | Logs sanitisés |
+| src/app/api/notifications/trigger/route.ts | Logs sanitisés, validation CRON_SECRET |
+| src/app/api/account/delete/route.ts | Auth Firebase + suppression récursive Firestore + Auth |
 | src/components/dashboard/TransactionModal.tsx | Validation contraintes |
-| src/context/AuthContext.tsx | Logs sanitisés |
+| src/components/settings/DeleteEnvelopeModal.tsx | Confirmation avant suppression |
+| src/context/AuthContext.tsx | Logs sanitisés, déconnexion auto 30 min |
+| src/context/AnonymousModeContext.tsx | Floutage visuel sans altération des données |
 
 ---
 
@@ -103,6 +108,22 @@ Strict-Transport-Security: max-age=31536000
 - ✅ Le calcul des streaks est réalisé côté client pour une réactivité temps réel (UI heatmap et badges)
 - ✅ Les dates utilisées (`transactionDates`, `loginDates`) doivent rester validées côté règles Firestore et côté serveur quand applicable
 - ✅ En cas d'incohérence de fuseau horaire, normaliser les clés de date (`YYYY-MM-DD`) avant calcul
+
+### 7. Suppression de compte (RGPD)
+- ✅ L'API `POST /api/account/delete` vérifie le token Firebase Auth avant toute action
+- ✅ `adminDb.recursiveDelete()` sur `users/{uid}` supprime toutes les données Firestore
+- ✅ `adminAuth.deleteUser(uid)` supprime le compte Firebase Authentication
+- ✅ Les données sont irrémédiablement effacées — aucune conservation post-suppression
+
+### 8. Mode Anonyme
+- ✅ Le floutage est purement visuel — aucune donnée n'est modifiée
+- ✅ `src/lib/maskAmount.ts` applique un masquage cohérent (montants remplacés par `***`) dans toute l'UI
+- ✅ Le toggle ne nécessite aucune permission Firestore supplémentaire
+
+### 9. API Feedback
+- ✅ Les routes feedback vérifient l'authentification Firebase
+- ✅ Les votes sont limités à un par utilisateur par post
+- ✅ Les auteurs ne peuvent modifier que leurs propres posts et commentaires
 
 ---
 

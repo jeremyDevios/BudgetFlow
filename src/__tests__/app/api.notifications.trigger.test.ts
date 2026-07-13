@@ -147,7 +147,7 @@ describe("notifications trigger route", () => {
     mockSend.mockResolvedValue("message-id");
 
     const response = await GET(
-      createMockRequest("http://localhost/api/notifications/trigger?key=test-secret")
+      createMockRequest("http://localhost/api/notifications/trigger", "test-secret")
     );
     const payload = await response.json();
 

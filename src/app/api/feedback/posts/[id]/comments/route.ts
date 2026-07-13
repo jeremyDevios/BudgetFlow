@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { logger } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rateLimiter";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +63,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authenticate (optional — anonymous users can comment)
+    // ── Authenticate (optional — anonymous users can comment) ─────
     const authHeader = request.headers.get("authorization");
     const authToken = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
@@ -71,6 +72,7 @@ export async function POST(
     let uid = "anonymous";
     let userEmail: string | undefined;
     let userName: string | undefined;
+    let isAuthenticated = false;
 
     if (authToken) {
       try {
@@ -78,9 +80,25 @@ export async function POST(
         uid = decodedToken.uid;
         userEmail = decodedToken.email;
         userName = decodedToken.name;
+        isAuthenticated = true;
       } catch {
         // Token invalide → on continue en anonyme
       }
+    }
+
+    // ── Rate limiting ─────────────────────────────────────────────
+    const rateLimit = checkRateLimit(request, "feedback:comment", isAuthenticated);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: rateLimit.message },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
+      );
     }
 
     const body = await request.json();
@@ -93,13 +111,11 @@ export async function POST(
       );
     }
 
-    // Prepend user attribution
-    const attribution = authToken
-      ? (userName
-          ? `[${userName}] `
-          : userEmail
-            ? `[${userEmail}] `
-            : "")
+    // ── Build attributed content ──────────────────────────────────
+    // Note : l'email n'est plus inclus, seulement le displayName
+    // ou "Anonyme" (cf. SEC-17).
+    const attribution = isAuthenticated
+      ? (userName ? `[${userName}] ` : "")
       : "[Anonyme] ";
     const attributedContent = `${attribution}${content.trim()}`;
 
@@ -132,7 +148,13 @@ export async function POST(
     // Quackback wrappe dans { data: ... }, on unwrap
     const comment = json.data ?? json;
     logger.info(`[feedback] Comment added by ${uid} on post ${id}`);
-    return NextResponse.json(comment, { status: 201 });
+    return NextResponse.json(comment, {
+      status: 201,
+      headers: {
+        "X-RateLimit-Remaining": String(rateLimit.remaining),
+        "X-RateLimit-Reset": String(rateLimit.resetAt),
+      },
+    });
   } catch (error) {
     logger.error(
       "[feedback] POST /posts/[id]/comments unexpected error",

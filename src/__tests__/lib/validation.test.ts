@@ -113,11 +113,24 @@ describe('validateEnvelopeId', () => {
 });
 
 describe('validateDate', () => {
-  it('returns true for a valid ISO date string', () => {
+  it('returns true for a valid ISO date string (YYYY-MM-DD)', () => {
     expect(validateDate('2026-03-13')).toBe(true);
   });
-  it('returns true for a valid ISO datetime string', () => {
-    expect(validateDate('2026-03-13T10:00:00.000Z')).toBe(true);
+  it('returns true for today', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    expect(validateDate(today)).toBe(true);
+  });
+  it('returns false for a datetime string (only YYYY-MM-DD accepted)', () => {
+    expect(validateDate('2026-03-13T10:00:00.000Z')).toBe(false);
+  });
+  it('returns false for invalid month (13)', () => {
+    expect(validateDate('2026-13-01')).toBe(false);
+  });
+  it('returns false for invalid day (Feb 30)', () => {
+    expect(validateDate('2026-02-30')).toBe(false);
+  });
+  it('returns false for non-ISO format (DD/MM/YYYY)', () => {
+    expect(validateDate('01/01/2026')).toBe(false);
   });
   it('returns false for an impossible date string', () => {
     expect(validateDate('not-a-date')).toBe(false);

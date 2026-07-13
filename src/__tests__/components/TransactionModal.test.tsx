@@ -62,9 +62,9 @@ jest.mock("framer-motion", () => {
         >(({ children, ...props }, ref) => {
           const domProps = Object.fromEntries(
             Object.entries(props).filter(([key]) => !motionProps.has(key))
-          );
+          ) as Record<string, unknown>;
 
-          return React.createElement(tag, { ...domProps, ref }, children);
+          return (React.createElement as any)(tag, { ...domProps, ref }, children);
         });
 
         MockMotionComponent.displayName = `MockMotion(${tag})`;

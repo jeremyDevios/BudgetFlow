@@ -2,11 +2,11 @@ import { renderHook, waitFor } from "@testing-library/react";
 
 import { useCalendarHeatmap } from "@/hooks/useCalendarHeatmap";
 
-const collectionMock = jest.fn(() => ({ type: "collection" }));
+const collectionMock = jest.fn<unknown, any[]>(() => ({ type: "collection" }));
 const documentIdMock = jest.fn(() => "__name__");
 const onSnapshotMock = jest.fn();
-const queryMock = jest.fn(() => ({ type: "query" }));
-const whereMock = jest.fn((...args: unknown[]) => ({ type: "where", args }));
+const queryMock = jest.fn<unknown, any[]>(() => ({ type: "query" }));
+const whereMock = jest.fn<unknown, any[]>((...args: unknown[]) => ({ type: "where", args }));
 
 jest.mock("@/lib/firebase", () => ({
   db: {},
@@ -19,11 +19,11 @@ jest.mock("@/lib/logger", () => ({
 }));
 
 jest.mock("firebase/firestore", () => ({
-  collection: (...args: unknown[]) => collectionMock(...args),
+  collection: (...args: any[]) => collectionMock(...args),
   documentId: () => documentIdMock(),
-  onSnapshot: (...args: unknown[]) => onSnapshotMock(...args),
-  query: (...args: unknown[]) => queryMock(...args),
-  where: (...args: unknown[]) => whereMock(...args),
+  onSnapshot: (...args: any[]) => onSnapshotMock(...args),
+  query: (...args: any[]) => queryMock(...args),
+  where: (...args: any[]) => whereMock(...args),
 }));
 
 // Helper to drive onSnapshot synchronously in tests.

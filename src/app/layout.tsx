@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
@@ -16,13 +17,23 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Récupérer le nonce CSP injecté par le middleware.
+  // En dev (sans middleware qui tourne) ou sur les pages statiques,
+  // on utilise 'unsafe-inline' comme fallback via next.config.mjs.
+  const headersList = await headers();
+  const nonce = headersList.get("x-csp-nonce");
+
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {nonce ? (
+          <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        ) : (
+          <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        )}
         <link rel="icon" href="/favicon.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -302,7 +302,7 @@ describe('Scenario C: temporary envelope exists but inactive for selected month 
 describe('Scenario D: settings absent — monthlyTotalAvailable is 0', () => {
   it('returns 0 when settings are undefined (component ternary guard)', () => {
     // Replicate: const monthlyTotalAvailable = settings ? ... : 0;
-    const settings: Settings | undefined = undefined;
+    const settings = undefined as Settings | undefined;
     const monthlyTotalAvailable = settings
       ? settings.monthlyIncome - settings.fixedCosts - settings.monthlySavings
       : 0;

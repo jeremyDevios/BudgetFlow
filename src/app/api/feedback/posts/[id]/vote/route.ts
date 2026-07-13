@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { logger } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rateLimiter";
 
 export const dynamic = "force-dynamic";
 
@@ -18,18 +19,36 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authenticate (optional)
+    // ── Authenticate (optional) ───────────────────────────────────
     const authHeader = request.headers.get("authorization");
     const authToken = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
       : null;
 
+    let isAuthenticated = false;
+
     if (authToken) {
       try {
         await adminAuth.verifyIdToken(authToken);
+        isAuthenticated = true;
       } catch {
         // Token invalide → on continue sans auth
       }
+    }
+
+    // ── Rate limiting ─────────────────────────────────────────────
+    const rateLimit = checkRateLimit(request, "feedback:vote", isAuthenticated);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: rateLimit.message },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
+      );
     }
 
     const { id } = await params;
@@ -54,7 +73,12 @@ export async function POST(
 
     const json = await res.json();
     // Quackback wrappe dans { data: ... }, on unwrap
-    return NextResponse.json(json.data ?? json);
+    return NextResponse.json(json.data ?? json, {
+      headers: {
+        "X-RateLimit-Remaining": String(rateLimit.remaining),
+        "X-RateLimit-Reset": String(rateLimit.resetAt),
+      },
+    });
   } catch (error) {
     logger.error("[feedback] POST /posts/[id]/vote unexpected error", error);
     return NextResponse.json(

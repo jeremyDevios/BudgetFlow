@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { logger } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rateLimiter";
 
 // Force dynamic — this route uses Firebase Admin SDK which requires
 // runtime environment variables (not available during build).
@@ -39,6 +40,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Unauthorized — invalid or expired token" },
         { status: 401 }
+      );
+    }
+
+    // ── Rate limiting (3 tentatives/min max) ──────────────────────
+    const rateLimit = checkRateLimit(request, "account:delete", true);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: rateLimit.message },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
       );
     }
 

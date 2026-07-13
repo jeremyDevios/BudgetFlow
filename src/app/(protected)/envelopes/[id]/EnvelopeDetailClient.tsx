@@ -186,7 +186,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
     0
   );
   const currentMonthPercentOfBudget =
-    envelope?.budget > 0 ? (currentMonthSpent / envelope.budget) * 100 : 0;
+    (envelope?.budget ?? 0) > 0 ? (currentMonthSpent / envelope!.budget) * 100 : 0;
   const currentMonthRemaining = (envelope?.budget || 0) - currentMonthSpent;
 
   const forecastTransactions: ForecastTransaction[] = currentMonthOnlyTransactions.map(tx => ({

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { adminDb, adminMessaging } from "@/lib/firebaseAdmin";
+import { logger } from "@/lib/logger";
 
 type TriggerStats = {
   date: string;
@@ -26,14 +28,14 @@ function getDayBounds(now: Date) {
   };
 }
 
+/**
+ * Extrait le CRON_SECRET depuis l'en-tête HTTP uniquement.
+ * L'acceptation via query param ?key= a été retirée (SEC-03) —
+ * les secrets dans l'URL sont exposés dans les logs serveur,
+ * les referers HTTP et l'historique du navigateur.
+ */
 function getCronSecretFromRequest(request: Request): string | null {
-  const headerSecret = request.headers.get("x-cron-secret");
-  if (headerSecret) {
-    return headerSecret;
-  }
-
-  const url = new URL(request.url);
-  return url.searchParams.get("key");
+  return request.headers.get("x-cron-secret");
 }
 
 function getUnauthorizedResponse(request: Request) {
@@ -46,7 +48,18 @@ function getUnauthorizedResponse(request: Request) {
   }
 
   const requestSecret = getCronSecretFromRequest(request);
-  if (!requestSecret || requestSecret !== configuredSecret) {
+  if (!requestSecret) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  // Comparaison timing-safe pour empêcher les attaques par canal
+  // latéral temporel (SEC-03).
+  const reqBuf = Buffer.from(requestSecret);
+  const cfgBuf = Buffer.from(configuredSecret);
+  if (reqBuf.length !== cfgBuf.length || !timingSafeEqual(reqBuf, cfgBuf)) {
     return NextResponse.json(
       { error: "Unauthorized" },
       { status: 401 }
@@ -78,8 +91,8 @@ async function runNotificationTrigger(now = new Date()): Promise<TriggerStats> {
   };
   const notifications: Promise<void>[] = [];
 
-  console.log(`[notifications] Starting daily trigger for ${dayKey}`);
-  console.log(`[notifications] Found ${usersSnap.size} users.`);
+  logger.info(`[notifications] Starting daily trigger for ${dayKey}`);
+  logger.info(`[notifications] Found ${usersSnap.size} users.`);
 
   for (const userDoc of usersSnap.docs) {
     const userData = userDoc.data();
@@ -165,17 +178,25 @@ async function runNotificationTrigger(now = new Date()): Promise<TriggerStats> {
         }).then(() => {
           stats.sent += 1;
         }).catch(async (error) => {
-          console.error(`[notifications] Failed for user ${userDoc.id}`, error);
+          logger.error(`[notifications] Failed for user ${userDoc.id}`, error);
 
           if (getMessagingErrorCode(error) === "messaging/registration-token-not-registered") {
-            await adminDb.collection("users").doc(userDoc.id).update({
-              fcmToken: null,
-            });
+            try {
+              await adminDb.collection("users").doc(userDoc.id).update({
+                fcmToken: null,
+              });
+              logger.info(`[notifications] Cleaned up invalid FCM token for user ${userDoc.id}`);
+            } catch (cleanupError) {
+              logger.error(
+                `[notifications] Failed to clean up FCM token for user ${userDoc.id}`,
+                cleanupError
+              );
+            }
           }
         })
       );
     } catch (error) {
-      console.error(`[notifications] Failed while preparing user ${userDoc.id}`, error);
+      logger.error(`[notifications] Failed while preparing user ${userDoc.id}`, error);
     }
   }
 
@@ -196,7 +217,7 @@ async function handleTriggerRequest(request: Request) {
       ...stats,
     });
   } catch (error: unknown) {
-    console.error("[notifications] Cron trigger failed", error);
+    logger.error("[notifications] Cron trigger failed", error);
 
     const message = error instanceof Error
       ? error.message

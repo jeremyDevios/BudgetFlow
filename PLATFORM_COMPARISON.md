@@ -1,6 +1,6 @@
 # BudgetFlow — Comparatif Web vs iOS
 
-> Mis à jour le 12 juin 2026 — Parité globale : ~95%
+> Mis à jour le 13 juillet 2026 — Parité globale : ~97%
 
 Les deux apps partagent le même workflow de base (enveloppes budgétaires, suivi des dépenses, visualisations). Les différences sont surtout architecturales et sur quelques fonctionnalités périphériques.
 
@@ -18,10 +18,13 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | Diagramme Cash Flow (Sankey) | ✅ | ✅ |
 | Gestion des enveloppes (CRUD + réordonnancement) | ✅ | ✅ |
 | Enveloppes temporaires (`isTemporary` + `activeMonths`) | ✅ | ✅ |
-| Sélection icône + couleur | ✅ 20 icônes | ✅ 15 icônes |
+| Sélection icône + couleur | ✅ 20+ icônes | ✅ 15+ icônes |
 | Onboarding | ✅ 2 étapes | ✅ 3 étapes |
 | Détail enveloppe | ✅ | ✅ |
 | Paramètres (revenus, charges fixes, épargne) | ✅ | ✅ |
+| Revenu variable par mois (`isFixedIncome` + `monthlyIncomes`) | ✅ | ✅ |
+| Décomposition détaillée charges fixes / épargne | ✅ | ✅ |
+| Support multi-devises (EUR, USD, CHF, GBP, BTC) | ✅ | ✅ |
 | Thème sombre / clair (adaptatif) | ✅ | ✅ |
 | Bordures colorées sur les enveloppes | ✅ | ✅ |
 | Solde restant dans la modal transaction | ✅ | ✅ |
@@ -29,7 +32,12 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | Tuile unifiée Dashboard (Reste disponible + Heatmap) | ✅ | ✅ |
 | Prévisions dépenses à 90 jours | ✅ | ✅ |
 | Détection dépenses exceptionnelles | ✅ | ✅ |
-| Tests unitaires | ✅ Jest (17 suites · 209 tests) | ✅ XCTest (25 fichiers) |
+| Carousel de notifications intelligentes | ✅ | ✅ |
+| Mode Anonyme (floutage des montants) | ✅ Toggle navbar | ✅ Shake-to-toggle + Settings |
+| Système de Feedback (feature requests, bugs) | ✅ API + UI | ✅ `FeedbackService` + vues |
+| Bento Grid layout configurable | ✅ `tileSize` + `bentoPreset` | ✅ `BentoLayoutEngine` |
+| Suppression de compte avec effacement Firebase | ✅ | ✅ |
+| Tests unitaires | ✅ Jest (27 suites) | ✅ XCTest (49 fichiers) |
 | Tests E2E | ✅ Playwright (9 suites · 58 tests) | ❌ Non disponible |
 
 ---
@@ -41,7 +49,8 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | **Push notifications FCM** | Firebase Cloud Messaging, déclenchement cron automatique |
 | **Validation serveur** | Endpoint API `/api/validate/transaction` |
 | **PWA** | Service worker pour une expérience app-like dans le navigateur |
-| **Bento Grid configurable** | `tileSize` par enveloppe (`small` / `wide`) avec présets |
+| **Recherche globale** | Barre de recherche dans la navbar (top 6 résultats, accent-insensible) |
+| **Tests E2E Playwright** | 58 tests automatisés sur 9 pages |
 
 ---
 
@@ -51,7 +60,7 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 |---|---|
 | **Offline-first** | SwiftData local, fonctionne sans réseau |
 | **12 mois d'historique** | Évolution sur 12 mois vs 6 sur le web |
-| **Gestures natives** | Swipe-to-delete, drag-and-drop |
+| **Gestures natives** | Swipe-to-delete, drag-and-drop natifs |
 | **Retours haptiques** | `HapticsManager.swift` — vibrations à la confirmation et en cas d'alerte |
 | **Barre de progression** | Affichée sur le détail d'enveloppe |
 | **Warnings budgétaires** | Mise en rouge en temps réel si le budget est dépassé |
@@ -59,7 +68,11 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 | **Widget WidgetKit** | Solde disponible + enveloppe la plus dépensée sur l'écran d'accueil |
 | **App compagnon Apple Watch** | Consultation rapide + quick-add relay via `WatchConnectivityManager` |
 | **Localisation FR/EN** | `Localization.swift` — sélection de langue dans les paramètres |
-| **Accessibilité** | Labels VoiceOver sur les éléments interactifs |
+| **Accessibilité** | Labels VoiceOver, Dynamic Type, reduceMotion sur tous les éléments interactifs |
+| **Export PDF** | `PDFExportService.swift` — rapport mensuel des transactions et enveloppes |
+| **Demande d'avis in-app** | `StoreKitManager` + `AppReviewManager` — déclenché après 3 transactions |
+| **Toasts natifs** | `ToastManager` + `DynamicIslandToastView` |
+| **FAB animé** | Bouton flottant avec animation pulse pour saisie rapide |
 
 ---
 
@@ -69,14 +82,17 @@ Les deux apps partagent le même workflow de base (enveloppes budgétaires, suiv
 |---|---|---|
 | **Framework** | Next.js 16 (React) | SwiftUI |
 | **Stockage** | Firestore (cloud) | SwiftData (local, offline-first) |
-| **Auth** | Firebase Auth (Google + email) | ✅ Firebase Auth via `FirebaseManager` + `AuthView` |
-| **Charts** | Recharts | Apple Charts |
+| **Auth** | Firebase Auth (Google + Apple + email) | ✅ Firebase Auth via `FirebaseManager` + `AuthView` |
+| **Charts** | Recharts | Swift Charts (natif) |
 | **Icônes** | Lucide React | SF Symbols |
 | **Styling** | Tailwind CSS (tokens adaptatifs) | DesignSystem.swift (UIColor adaptatif) |
+| **Bento Layout** | CSS Grid + `tileSize` + `bentoPreset` | `BentoLayoutEngine.swift` |
 | **Notifications** | Firebase Cloud Messaging | Notifications locales (UNUserNotificationCenter) |
+| **Export** | — | PDFKit natif |
+| **Avis in-app** | — | StoreKit (`SKStoreReviewController`) |
 | **Offline** | Browser cache + service worker | ✅ Natif (offline-first) |
 | **Synchro multi-plateforme** | ✅ Oui | ✅ Disponible en mode en ligne (`SyncService`) |
-| **Tests unitaires** | Jest + @testing-library/react | XCTest |
+| **Tests unitaires** | Jest + @testing-library/react (27 suites) | XCTest (49 fichiers) |
 | **Tests E2E** | Playwright (Chromium, 58 tests) | Non disponible |
 
 ---

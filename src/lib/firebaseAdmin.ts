@@ -50,7 +50,6 @@ const _messaging = {
     return admin.messaging();
   },
   get send() { return this._get().send.bind(this._get()); },
-  get sendMulticast() { return this._get().sendMulticast.bind(this._get()); },
 };
 
 export const adminDb = _db as unknown as admin.firestore.Firestore;

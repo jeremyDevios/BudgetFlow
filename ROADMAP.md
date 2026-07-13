@@ -8,9 +8,11 @@
 
 ### Authentification & Session
 - ✅ **Web + iOS** — Connexion Google (OAuth via Firebase)
+- ✅ **Web + iOS** — Connexion Apple (Sign in with Apple)
 - ✅ **Web** — Déconnexion automatique après 30 minutes d'inactivité
 - ✅ **Web** — Persistance de session via localStorage
 - ✅ **iOS** — Mode hors-ligne avec SwiftData (sync bidirectionnel au retour en ligne)
+- ✅ **Web + iOS** — Suppression de compte avec effacement complet des données Firebase
 
 ### Dashboard & Vue principale
 - ✅ **Web + iOS** — Solde mensuel disponible, total dépensé, revenu vs. dépenses
@@ -20,6 +22,7 @@
 - ✅ **Web + iOS** — Badges jalons (7 j, 14 j, mois complet) avec anneau SVG animé
 - ✅ **Web** — Détection de dépenses exceptionnelles (transaction > 100 % du budget enveloppe)
 - ✅ **Web** — Recherche globale dans la navbar (top 6 résultats avec correspondance accent-insensible)
+- ✅ **Web + iOS** — Carousel de notifications intelligentes (RotatingSmartInsight / SmartInsightsCarouselView)
 
 ### Gestion des enveloppes (CRUD)
 - ✅ **Web + iOS** — Création avec nom, budget, icône (20–30+ options), couleur (10–14 options)
@@ -53,7 +56,11 @@
 
 ### Paramètres & Profil
 - ✅ **Web + iOS** — Configuration du budget global (revenus, charges fixes, épargne)
-- ✅ **Web + iOS** — Affichage du profil Google et déconnexion
+- ✅ **Web + iOS** — Revenu variable par mois (`isFixedIncome` + `monthlyIncomes`)
+- ✅ **Web + iOS** — Décomposition détaillée charges fixes (ex: Loyer, Électricité, Internet)
+- ✅ **Web + iOS** — Décomposition détaillée épargne (ex: Livret A, PEA, Assurance-vie)
+- ✅ **Web + iOS** — Affichage du profil Google/Apple et déconnexion
+- ✅ **Web + iOS** — Support multi-devises (EUR, USD, CHF, GBP, BTC) — affichage seulement
 - ✅ **Web** — Activation/désactivation des notifications push et enregistrement token FCM
 - ✅ **iOS** — Indicateur de mode en ligne/hors-ligne et déclenchement manuel de la sync
 
@@ -68,6 +75,17 @@
 - ✅ **iOS** — Retours haptiques via `HapticsManager.swift`
 - ✅ **iOS** — Localisation FR/EN via `Localization.swift`
 - ✅ **iOS** — App compagnon Apple Watch avec quick-add relayé vers l'iPhone (`WatchConnectivityManager`)
+- ✅ **iOS** — Export PDF mensuel (`PDFExportService.swift`)
+- ✅ **iOS** — Demande d'avis in-app (`StoreKitManager` + `AppReviewManager`)
+
+### Mode Anonyme & Confidentialité
+- ✅ **Web** — Toggle dans la navbar, floutage visuel via `maskAmount.ts` et `AnonymousModeContext.tsx`
+- ✅ **iOS** — Shake-to-toggle + toggle dans Settings, `AnonymousModeManager.swift`
+- ✅ **Web + iOS** — Aucune donnée modifiée, purement visuel
+
+### Feedback & Communauté
+- ✅ **Web** — API REST feedback (boards, posts, comments, votes) sous `src/app/api/feedback/`
+- ✅ **iOS** — `FeedbackService.swift` + vues `FeedbackListView`, `FeedbackDetailView`, `FeedbackCreateView`
 
 ### Onboarding
 - ✅ **Web + iOS** — Flux d'onboarding multi-étapes (configuration budget + création des premières enveloppes)
@@ -77,12 +95,12 @@
 ## Phases roadmap
 
 ### Phase 1 — Design "Premium Dark" & Bento Layout 🔄
-- 🔄 **Tableau de bord Bento Grid** : le champ `tileSize` (`"small"` / `"wide"` / `null`) est présent dans le modèle d'enveloppe et utilisé pour le layout ; présets Bento implémentés (`bentoPreset` dans `UserSettings`)
+- ✅ **Tableau de bord Bento Grid** : le champ `tileSize` (`"small"` / `"wide"` / `null`) est présent dans le modèle d'enveloppe et utilisé pour le layout ; présets Bento implémentés (`bentoPreset` dans `UserSettings`, `BentoLayoutEngine.swift` sur iOS)
 - ❌ **Glassmorphism** : effets de transparence et bordures subtiles
 - ❌ **Nouvelle palette** : dégradés "Ebony & Deep Blue" plus luxueux
 
 ### Phase 2 — Saisie "Zéro Friction" 🔄
-- 🔄 **iOS** FAB rapide implémenté, mais sans auto-complétion basée sur l'historique
+- ✅ **iOS** FAB rapide implémenté, mais sans auto-complétion basée sur l'historique
 - ✅ **Retour haptique iOS** : `HapticsManager.swift` implémenté — vibrations à la confirmation et en cas d'alerte
 - ❌ **Suggestions intelligentes** : proposer le libellé/montant selon l'historique local lors de la frappe
 - ❌ **Calculatrice intégrée** : évaluation d'expression dans le champ montant (ex: `10+5`)
@@ -93,16 +111,17 @@
 - ❌ **Alerte de rythme** : avertissement si la cadence de dépense est trop rapide pour le jour du mois
 
 ### Phase 4 — Recherche & Analyse Avancée 🔄
-- 🔄 Recherche basique implémentée sur Web et iOS
+- ✅ Recherche basique implémentée sur Web et iOS
 - ❌ **Barre "Spotlight"** : recherche globale unifiée par nom, montant ou date
 - ❌ **Filtres multicritères** : ex. toutes les dépenses > 50 €
 - ❌ **Statistiques flash** : total cumulé d'une recherche (ex. "Total chez Carrefour : 150 €")
 
 ### Phase 5 — Fonctionnalités "Power User" 🔄
 - ✅ **Web + iOS** — Réorganisation d'enveloppes par glisser-déposer
+- ✅ **Web + iOS** — Mode Anonyme : floutage rapide des montants pour consultation en public
+- ✅ **iOS** — Export PDF : génération de rapports mensuels (`PDFExportService.swift`)
 - ❌ **Transferts** : déplacer le solde restant d'une enveloppe vers une autre
-- ❌ **Mode Anonyme** : floutage rapide des montants pour consultation en public
-- ❌ **Export** : génération de rapports PDF/CSV
+- ❌ **Export CSV** : export des transactions au format CSV (Web)
 
 ---
 
@@ -110,8 +129,7 @@
 
 ### A. Transactions récurrentes ⭐
 
-> 💡 **Note — Features B (Widget iOS) et E (résumé mensuel) réalisées** : le Widget WidgetKit est implémenté dans `BudgetFlowWidgets/`. Les notifications push Web et les rappels locaux iOS sont en production.
-
+> 💡 **Note — Features B (Widget iOS), D (Mode Anonyme) et E (résumé mensuel) réalisées** : le Widget WidgetKit est implémenté dans `BudgetFlowWidgets/`. Le Mode Anonyme est disponible sur Web et iOS. Les notifications push Web et les rappels locaux iOS sont en production.
 
 Marquer une transaction comme récurrente (mensuelle, hebdomadaire…) pour qu'elle se rejoue automatiquement à la date prévue sans ressaisie. Utile pour les abonnements, le loyer, les remboursements fixes. Simple à modéliser : un champ `recurrence` sur le document transaction et un déclenchement serveur (Web) ou local (iOS, via `UNNotificationCenter`).
 

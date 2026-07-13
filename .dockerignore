@@ -11,5 +11,7 @@ backups
 # Secrets — must never be included in Docker images
 .env.local
 .env.local.dev
+.env.local.prod
+.env*.local*
 scripts/service-account*.json
 scripts/*.service-account*.json

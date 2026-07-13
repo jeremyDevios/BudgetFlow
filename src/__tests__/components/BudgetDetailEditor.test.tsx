@@ -100,8 +100,8 @@ function renderControlled(
   overrides: Partial<BudgetDetailEditorProps> = {},
   spies: { onEnabledChange?: jest.Mock; onItemsChange?: jest.Mock } = {}
 ) {
-  const onEnabledChange = spies.onEnabledChange ?? jest.fn();
-  const onItemsChange = spies.onItemsChange ?? jest.fn();
+  const onEnabledChange = (spies.onEnabledChange ?? jest.fn()) as unknown as jest.Mock;
+  const onItemsChange = (spies.onItemsChange ?? jest.fn()) as unknown as jest.Mock;
 
   render(
     <ControlledEditor
@@ -110,8 +110,8 @@ function renderControlled(
       enabled={false}
       items={[]}
       aggregateAmount={1200}
-      onEnabledChange={onEnabledChange}
-      onItemsChange={onItemsChange}
+      onEnabledChange={onEnabledChange as any}
+      onItemsChange={onItemsChange as any}
       {...overrides}
     />
   );

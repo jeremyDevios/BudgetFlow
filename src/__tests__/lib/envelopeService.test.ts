@@ -11,30 +11,30 @@ import { Transaction } from "@/types/transaction";
 // ── Mock Firestore ───────────────────────────────────────────────────
 
 const getDocsMock = jest.fn();
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const writeBatchMock = {
-  update: jest.fn().mockReturnThis(),
-  delete: jest.fn().mockReturnThis(),
-  commit: jest.fn().mockResolvedValue(undefined),
+  update: (jest.fn() as any).mockReturnThis(),
+  delete: (jest.fn() as any).mockReturnThis(),
+  commit: (jest.fn() as any).mockResolvedValue(undefined),
 };
-const writeBatchFnMock = jest.fn(() => writeBatchMock);
-const docMock = jest.fn((...args: unknown[]) => `doc(${JSON.stringify(args)})`);
-const collectionMock = jest.fn((...args: unknown[]) =>
-  `collection(${JSON.stringify(args)})`,
-);
-const queryMock = jest.fn((...args: unknown[]) => args);
-const whereMock = jest.fn((...args: unknown[]) => `where(${JSON.stringify(args)})`);
+const writeBatchFnMock = jest.fn(() => writeBatchMock) as any;
+const docMock = jest.fn() as any;
+const collectionMock = jest.fn() as any;
+const queryMock = jest.fn() as any;
+const whereMock = jest.fn() as any;
 const incrementMock = jest.fn((n: number) => `incr(${n})`);
-const addDocMock = jest.fn();
+const addDocMock = jest.fn() as any;
 const serverTimestampMock = jest.fn(() => "server-timestamp");
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 jest.mock("firebase/firestore", () => ({
-  collection: (...args: unknown[]) => collectionMock(...args),
-  doc: (...args: unknown[]) => docMock(...args),
-  getDocs: (...args: unknown[]) => getDocsMock(...args),
-  addDoc: (...args: unknown[]) => addDocMock(...args),
-  writeBatch: (...args: unknown[]) => writeBatchFnMock(...args),
-  query: (...args: unknown[]) => queryMock(...args),
-  where: (...args: unknown[]) => whereMock(...args),
+  collection: (...args: any[]) => collectionMock(...args),
+  doc: (...args: any[]) => docMock(...args),
+  getDocs: (...args: any[]) => getDocsMock(...args),
+  addDoc: (...args: any[]) => addDocMock(...args),
+  writeBatch: (...args: any[]) => writeBatchFnMock(...args),
+  query: (...args: any[]) => queryMock(...args),
+  where: (...args: any[]) => whereMock(...args),
   increment: (n: number) => incrementMock(n),
   serverTimestamp: () => serverTimestampMock(),
 }));

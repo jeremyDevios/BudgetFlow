@@ -22,10 +22,15 @@ La philosophie est volontairement **conservative** : quand des données histor
 - `envelopes/{id}`
   - `budget`
   - `name`
+  - `isTemporary`, `activeMonths` (filtrage des enveloppes actives)
 - `settings/general`
-  - `monthlyIncome`
-  - `fixedCosts`
-  - `monthlySavings`
+  - `monthlyIncome` (utilisé si `isFixedIncome: true`)
+  - `fixedCosts` (utilisé si `fixedCostsDetailedEnabled: false`)
+  - `monthlySavings` (utilisé si `savingsDetailedEnabled: false`)
+  - `isFixedIncome` — si `false`, le revenu est résolu via `monthlyIncomes`
+  - `fixedCostsDetailedEnabled` / `savingsDetailedEnabled` — si activé, la somme des sous-items remplace le champ global
+- `monthlyIncomes/{YYYY-MM}` (quand `isFixedIncome: false`)
+  - `amount` — revenu spécifique au mois
 
 ### Fenêtre d’historique
 
@@ -140,6 +145,8 @@ Si le total projeté monte à **1325€** pour le même budget disponible (**120
 
 - **Logique cœur**: `src/lib/forecasting.ts`
   - Fonctions pures, sans effets de bord.
+- **Résolution du revenu**: `src/lib/settingsService.ts` → `resolveMonthlyIncome()`
+  - Chaîne de fallback : entrée explicite du mois → mois antérieur le plus récent → `monthlyIncome` global.
 - **Hook React**: `src/hooks/useSpendingForecast.ts`
   - Récupération Firestore + gestion d’état UI.
 - **Requête Firestore**:
@@ -148,3 +155,6 @@ Si le total projeté monte à **1325€** pour le même budget disponible (**120
 - **Affichage**:
   - Tuile principale du Dashboard (global),
   - Vue détail enveloppe (par enveloppe).
+- **Implémentation iOS**: `SpendingForecastEngine.swift`
+  - Parité algorithmique complète avec le Web.
+  - Consomme les données SwiftData locales (mode hors-ligne) ou Firestore (mode en ligne).

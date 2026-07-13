@@ -37,10 +37,38 @@ export function validateEnvelopeId(id: unknown): id is string {
   return typeof id === "string" && id.length > 0;
 }
 
+/**
+ * Valide qu'une date est au format ISO YYYY-MM-DD, que les composants
+ * sont valides (mois 01-12, jour correct pour le mois), et qu'elle est
+ * dans une plage raisonnable (±5 ans par rapport à aujourd'hui).
+ *
+ * Rejette les formats permissifs comme "2024-02-30" (propagation au 1er mars),
+ * "2024-13-01" (mois 13 → janvier 2025), "tomorrow", "01/01/2024", timestamps.
+ */
 export function validateDate(date: unknown): boolean {
   if (typeof date !== "string") return false;
-  const parsed = new Date(date);
-  return !isNaN(parsed.getTime());
+
+  // Format YYYY-MM-DD strict — rejette tout ce qui n'est pas exactement
+  // 10 caractères avec des traits d'union aux bonnes positions.
+  const isoRegex = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+  if (!isoRegex.test(date)) return false;
+
+  // Vérifier que le jour est valide pour le mois (ex: 31 février → invalide).
+  const [yearStr, monthStr, dayStr] = date.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+  const daysInMonth = new Date(year, month, 0).getDate(); // month 0-based → jour 0 = dernier jour du mois précédent
+  if (day > daysInMonth) return false;
+
+  // Borne temporelle : ±5 ans par rapport à aujourd'hui.
+  const now = new Date();
+  const parsed = new Date(date + "T00:00:00"); // forcer l'interprétation en heure locale
+  const fiveYearsMs = 5 * 365.25 * 24 * 60 * 60 * 1000;
+  const minDate = new Date(now.getTime() - fiveYearsMs);
+  const maxDate = new Date(now.getTime() + fiveYearsMs);
+
+  return parsed >= minDate && parsed <= maxDate;
 }
 
 export function validateEmail(email: unknown): email is string {

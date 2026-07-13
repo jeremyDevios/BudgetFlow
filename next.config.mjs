@@ -25,7 +25,10 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://apis.google.com https://*.firebaseapp.com https://*.googleapis.com https://accounts.google.com https://www.google.com https://www.gstatic.com https://*.gstatic.com`,
+      // 'unsafe-inline' est retiré en production — le middleware injecte
+      // un nonce CSP pour le script inline du thème. En développement,
+      // 'unsafe-eval' reste nécessaire pour le Hot Module Replacement.
+      `script-src 'self'${isDev ? " 'unsafe-inline' 'unsafe-eval'" : ""} https://apis.google.com https://*.firebaseapp.com https://*.googleapis.com https://accounts.google.com https://www.google.com https://www.gstatic.com https://*.gstatic.com`,
       "style-src 'self' 'unsafe-inline'",
       "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://fcm.googleapis.com",
       "frame-src https://*.firebaseapp.com https://accounts.google.com https://*.google.com https://*.gstatic.com",

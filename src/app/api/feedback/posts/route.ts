@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { logger } from "@/lib/logger";
+import { checkRateLimit } from "@/lib/rateLimiter";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +66,7 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
-    // Authenticate (optional — anonymous users can submit)
+    // ── Authenticate (optional — anonymous users can submit) ──────
     const authHeader = request.headers.get("authorization");
     const authToken = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
@@ -74,6 +75,7 @@ export async function POST(request: Request) {
     let uid = "anonymous";
     let userEmail: string | undefined;
     let userName: string | undefined;
+    let isAuthenticated = false;
 
     if (authToken) {
       try {
@@ -81,9 +83,25 @@ export async function POST(request: Request) {
         uid = decodedToken.uid;
         userEmail = decodedToken.email;
         userName = decodedToken.name;
+        isAuthenticated = true;
       } catch {
         // Token invalide → on continue en anonyme
       }
+    }
+
+    // ── Rate limiting ─────────────────────────────────────────────
+    const rateLimit = checkRateLimit(request, "feedback:post", isAuthenticated);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: rateLimit.message },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
+      );
     }
 
     const body = await request.json();
@@ -96,13 +114,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Prepend user attribution to content since Quackback REST API
-    // creates posts on behalf of the API key holder.
-    const attribution = authToken
+    // ── Build attributed content ──────────────────────────────────
+    // Note : l'email n'est plus inclus, seulement le displayName
+    // ou "Anonyme" (cf. SEC-17).
+    const attribution = isAuthenticated
       ? (userName
-          ? `Soumis par : ${userName} (${userEmail || uid})`
-          : `Soumis par : ${userEmail || uid}`)
-      : "Soumis par : Anonyme (mode local)";
+          ? `Soumis par : ${userName}`
+          : `Soumis par : utilisateur connecté`)
+      : "Soumis par : Anonyme";
     const attributedContent = `${attribution}\n\n---\n\n${content}`;
 
     const res = await fetch(`${QUACKBACK_BASE_URL}/posts`, {
@@ -133,7 +152,13 @@ export async function POST(request: Request) {
     // Quackback wrappe dans { data: ... }, on unwrap
     const post = json.data ?? json;
     logger.info(`[feedback] Post created by ${uid}: ${post.id}`);
-    return NextResponse.json(post, { status: 201 });
+    return NextResponse.json(post, {
+      status: 201,
+      headers: {
+        "X-RateLimit-Remaining": String(rateLimit.remaining),
+        "X-RateLimit-Reset": String(rateLimit.resetAt),
+      },
+    });
   } catch (error) {
     logger.error("[feedback] POST /posts unexpected error", error);
     return NextResponse.json(

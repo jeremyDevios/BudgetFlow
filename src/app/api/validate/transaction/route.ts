@@ -1,57 +1,49 @@
-// Validate transaction data on the server
+/**
+ * API de validation côté serveur pour les transactions.
+ *
+ * Cette route fournit une validation pré-vol (pre-flight) côté serveur
+ * avec vérification du token Firebase. Elle permet au client d'obtenir
+ * un retour immédiat sur la validité des données avant l'écriture Firestore.
+ *
+ * La véritable enforcement se fait dans les Firestore Security Rules —
+ * cette route est un complément UX, pas la couche de sécurité unique.
+ *
+ * Rate limiting : 30 requêtes par IP+Device-ID par minute (fenêtre glissante).
+ */
 import { NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebaseAdmin";
 import { logger } from "@/lib/logger";
-
-// Validation constraints
-const CONSTRAINTS = {
-  AMOUNT_MIN: 0.01,
-  AMOUNT_MAX: 1000000,
-  DESCRIPTION_MAX_LENGTH: 255,
-  ENVELOPE_NAME_MAX_LENGTH: 100,
-  ENVELOPE_BUDGET_MAX: 1000000,
-};
-
-interface ValidateTransactionRequest {
-  amount: number;
-  description: string;
-  envelopeId: string;
-  date: string;
-  transactionId?: string;
-}
-
-function validateAmount(amount: unknown): amount is number {
-  return (
-    typeof amount === "number" &&
-    amount > CONSTRAINTS.AMOUNT_MIN &&
-    amount <= CONSTRAINTS.AMOUNT_MAX &&
-    !isNaN(amount)
-  );
-}
-
-function validateDescription(desc: unknown): desc is string {
-  return (
-    typeof desc === "string" &&
-    desc.length > 0 &&
-    desc.length <= CONSTRAINTS.DESCRIPTION_MAX_LENGTH
-  );
-}
-
-function validateDate(date: unknown): boolean {
-  return (
-    typeof date === "string" &&
-    !isNaN(new Date(date).getTime())
-  );
-}
-
-function validateEnvelopeId(id: unknown): id is string {
-  return typeof id === "string" && id.length > 0;
-}
+import { checkRateLimit } from "@/lib/rateLimiter";
+import {
+  VALIDATION_CONSTRAINTS,
+  validateAmount,
+  validateDescription,
+  validateDate,
+  validateEnvelopeId,
+} from "@/lib/validation";
 
 export async function POST(request: Request) {
   try {
-    // Get user from Firebase auth header
-    const authToken = request.headers.get("authorization")?.split(" ")[1];
+    // ── Rate limiting ─────────────────────────────────────────────
+    const rateLimit = checkRateLimit(request, "validate:transaction", false);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: rateLimit.message },
+        {
+          status: 429,
+          headers: {
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": String(rateLimit.resetAt),
+          },
+        }
+      );
+    }
+
+    // ── Authenticate ──────────────────────────────────────────────
+    const authHeader = request.headers.get("authorization");
+    const authToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : authHeader?.split(" ")[1] ?? null;
     if (!authToken) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -59,16 +51,15 @@ export async function POST(request: Request) {
       );
     }
 
-    let decodedToken;
     try {
-      decodedToken = await adminAuth.verifyIdToken(authToken);
+      await adminAuth.verifyIdToken(authToken);
     } catch {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
+    // ── Validate payload ──────────────────────────────────────────
     const data: unknown = await request.json();
 
-    // Type guard for the request payload
     if (
       typeof data !== "object" ||
       data === null ||
@@ -85,17 +76,16 @@ export async function POST(request: Request) {
 
     const payload = data as Record<string, unknown>;
 
-    // Validate each field
     if (!validateAmount(payload.amount)) {
       return NextResponse.json(
-        { error: `Amount must be between ${CONSTRAINTS.AMOUNT_MIN} and ${CONSTRAINTS.AMOUNT_MAX}` },
+        { error: `Amount must be between ${VALIDATION_CONSTRAINTS.AMOUNT_MIN} and ${VALIDATION_CONSTRAINTS.AMOUNT_MAX}` },
         { status: 400 }
       );
     }
 
     if (!validateDescription(payload.description)) {
       return NextResponse.json(
-        { error: `Description must be 1-${CONSTRAINTS.DESCRIPTION_MAX_LENGTH} characters` },
+        { error: `Description must be 1-${VALIDATION_CONSTRAINTS.DESCRIPTION_MAX_LENGTH} characters` },
         { status: 400 }
       );
     }
@@ -109,18 +99,18 @@ export async function POST(request: Request) {
 
     if (!validateDate(payload.date)) {
       return NextResponse.json(
-        { error: "Invalid date format" },
+        { error: "Invalid date format (expected YYYY-MM-DD, ±5 years)" },
         { status: 400 }
       );
     }
 
-    // Success - return constraints for client-side validation
+    // Success — return constraints for client-side UX.
+    // The real enforcement is in Firestore Security Rules.
     return NextResponse.json({
       valid: true,
-      constraints: CONSTRAINTS,
+      constraints: VALIDATION_CONSTRAINTS,
     });
   } catch (error) {
-    // Don't expose error details in production
     logger.error("Server validation error", error);
     return NextResponse.json(
       { error: "Internal server error" },

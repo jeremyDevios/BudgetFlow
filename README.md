@@ -13,6 +13,7 @@
   - Barres de progression par enveloppe avec indicateur de dépassement.
   - Solde restant affiché en temps réel lors de la saisie d'une dépense.
   - Mise en page Bento Grid avec tailles de tuiles configurables (`small` / `wide`).
+  - Présets de densité : `compact`, `balanced`, `airy`.
 - **Thème clair / sombre** : Bascule adaptative sur Web et iOS, respectant les préférences système.
 - **Mobile First** : Interface pensée pour l'usage quotidien sur smartphone.
 - **Companion Apple Watch** :
@@ -24,11 +25,17 @@
   - Graphique d'évolution de l'épargne (avec cumul salaire).
   - Diagramme Cash Flow (Sankey).
 - **Configuration complète** :
-  - Revenus, charges fixes, épargne cible.
+  - Revenus (fixes ou variables par mois), charges fixes, épargne cible.
+  - Décomposition détaillée des charges fixes (ex: Loyer, Électricité, Internet).
+  - Décomposition détaillée de l'épargne (ex: Livret A, PEA, Assurance-vie).
   - Indicateurs d'équilibre budgétaire.
+- **Revenu variable** : Désactivez le revenu fixe et définissez un revenu différent chaque mois — les calculs de capacité budgétaire suivent automatiquement.
+- **Support multi-devises** : EUR, USD, CHF, GBP et BTC — affichage seulement, pas de conversion. Disponible sur **Web et iOS**.
+- **Mode Anonyme** : Floutage des montants pour consulter son budget en public. Un toggle rapide dans la navbar (Web) ou secouez le téléphone (iOS). Données intactes, purement visuel.
 - **Prévisions & Insights** :
   - Projection à 90 jours par enveloppe (score de confiance, alertes de dépassement prévisible).
   - Détection de dépenses exceptionnelles.
+  - Carousel de notifications intelligentes (`RotatingSmartInsight` / `SmartInsightsCarouselView`).
   - Disponible sur **Web et iOS** (`SpendingForecastEngine.swift`).
 - **Parcours Fidélité (Gamification)** :
   - Grille heatmap d'activité mensuelle avec code couleur par intensité de dépense.
@@ -36,7 +43,10 @@
   - Tuile dashboard unifiée avec la carte "Reste disponible" (responsive, dégradés clair/sombre).
 - **Widget iOS (WidgetKit)** : Solde disponible et enveloppe la plus dépensée sur l'écran d'accueil.
 - **Retours haptiques iOS** : Vibrations distinctes à la confirmation et en cas d'alerte budgétaire.
-- **Tests unitaires** : 16 suites · 200 tests · 94 % de couverture sur la logique métier Web (Jest) ; 25 fichiers XCTest sur iOS.
+- **Export PDF (iOS)** : Générez un rapport PDF mensuel de vos transactions et enveloppes via `PDFExportService.swift`.
+- **Système de Feedback** : Roadmap publique et votes sur les suggestions (API REST + interface Web et iOS).
+- **Demande d'avis in-app (iOS)** : `SKStoreReviewController` intégré, déclenché après 3 transactions.
+- **Tests unitaires** : 27 suites · ~485 tests · 94 %+ de couverture sur la logique métier Web (Jest) ; 49 fichiers XCTest sur iOS.
 
 ## Aperçu de l'interface
 
@@ -84,6 +94,8 @@
 - **Icônes** : SF Symbols
 - **Notifications** : UNUserNotificationCenter (notifications locales)
 - **Companion watchOS** : app compagnon via WatchConnectivity
+- **Export** : PDFKit natif
+- **Avis in-app** : StoreKit (`SKStoreReviewController`)
 - **Tests** : XCTest
 
 ## Installation & Démarrage (Web)
@@ -131,7 +143,7 @@ NEXT_PUBLIC_FIREBASE_APP_ID=votre_app_id
 npm run dev
 ```
 
-L'application sera accessible sur `http://localhost:3000`.
+L'application sera accessible sur `http://0.0.0.0:8091`.
 
 ## Tests
 
@@ -236,6 +248,8 @@ src/
 │   │   ├── envelopes/[id]/   # Détail d'une enveloppe
 │   │   └── onboarding/       # Configuration initiale
 │   ├── api/
+│   │   ├── account/delete/   # Suppression de compte (Admin SDK)
+│   │   ├── feedback/         # API REST feedback (boards, posts, comments, votes)
 │   │   ├── notifications/trigger/  # Endpoint cron notifications
 │   │   └── validate/transaction/   # Validation serveur
 │   └── layout.tsx
@@ -243,71 +257,84 @@ src/
 │   ├── ThemeToggle.tsx
 │   ├── dashboard/
 │   │   ├── CalendarHeatmap.tsx
+│   │   ├── RotatingSmartInsight.tsx
 │   │   ├── SearchDropdown.tsx
 │   │   └── TransactionModal.tsx
 │   └── settings/
+│       ├── BudgetDetailEditor.tsx
+│       ├── DeleteEnvelopeModal.tsx
 │       └── TemporaryEnvelopeForm.tsx
 ├── context/
-│   └── AuthContext.tsx
+│   ├── AnonymousModeContext.tsx
+│   ├── AuthContext.tsx
+│   └── CurrencyContext.tsx
 ├── hooks/
 │   ├── useCalendarHeatmap.ts
+│   ├── useCurrencyFormatting.ts
 │   ├── useNotifications.ts
+│   ├── useSmartSpendingInsights.ts
 │   └── useSpendingForecast.ts
 ├── lib/
 │   ├── firebase.ts           # Configuration Firebase Client
 │   ├── firebaseAdmin.ts      # Configuration Firebase Admin (SSR)
 │   ├── forecasting.ts        # Algorithme de projection 90 jours
 │   ├── spendingInsights.ts   # Détection de dépenses exceptionnelles
+│   ├── calendarSeverity.ts   # Calcul de couleur des cellules du calendrier
 │   ├── validation.ts         # Validateurs réutilisables
+│   ├── maskAmount.ts         # Floutage des montants (mode anonyme)
+│   ├── envelopeService.ts    # Service CRUD enveloppes (temporaires, dépenses)
+│   ├── settingsService.ts    # Service CRUD paramètres (detailed mode, revenu variable)
+│   ├── monthlyIncomeService.ts # Résolution du revenu mensuel effectif
 │   ├── logger.ts             # Logger sanitisé (prod/dev)
 │   └── dateUtils.ts          # Utilitaires de dates
 ├── types/
-│   └── envelope.ts           # Type Envelope + isEnvelopeActiveForMonth
+│   ├── currency.ts           # Codes devises supportés (EUR, USD, CHF, GBP, BTC)
+│   ├── envelope.ts           # Type Envelope + isEnvelopeActiveForMonth
+│   ├── settings.ts           # Type UserSettings + BudgetSubItem + BentoPreset
+│   └── transaction.ts        # Type Transaction
 └── __tests__/
-    ├── app/                  # Tests API, dashboard, cashflow, login
-    ├── components/           # Tests TransactionModal
-    ├── hooks/                # Tests useSpendingForecast, useCalendarHeatmap
-    ├── lib/                  # Tests validation, dateUtils, logger, forecasting…
+    ├── app/                  # Tests API, dashboard, cashflow, login, settings, envelopeDetail
+    ├── components/           # Tests TransactionModal, RotatingSmartInsight, BudgetDetailEditor, DeleteEnvelopeModal
+    ├── hooks/                # Tests useSpendingForecast, useCalendarHeatmap, useSmartSpendingInsights
+    ├── lib/                  # Tests validation, dateUtils, logger, forecasting, spendingInsights, calendarSeverity, maskAmount, envelopeService, settingsService, loadEnvScript
     └── types/                # Tests isEnvelopeActiveForMonth
 
 iOS/BudgetFlowIOS/
-├── BudgetFlow/               # Code source Swift
-│   ├── SpendingForecastEngine.swift   # Prévisions 90 jours (parité Web)
-│   ├── SpendingInsightsEngine.swift   # Dépenses exceptionnelles
-│   ├── HapticsManager.swift           # Retours haptiques
-│   ├── WatchConnectivityManager.swift # Quick-add Apple Watch
-│   ├── Localization.swift             # i18n FR/EN
-│   ├── DesignSystem.swift    # Tokens de design adaptatifs (clair/sombre)
-│   ├── Extensions.swift      # Extensions Color, Calendar
-│   ├── NotificationService.swift
-│   └── SyncService.swift     # Synchronisation Firestore
+├── BudgetFlow/               # Code source Swift (80+ fichiers)
+│   ├── Models/               # Envelope, Transaction, UserSettings, DailyActivity, BudgetSubItem, MonthlyIncome, PendingSyncOperation
+│   ├── Views/                # Toutes les vues SwiftUI
+│   ├── Services/
+│   │   ├── SyncService.swift           # Synchronisation Firestore
+│   │   ├── SyncCoordinator.swift       # Orchestrateur de synchronisation
+│   │   ├── SpendingForecastEngine.swift   # Prévisions 90 jours (parité Web)
+│   │   ├── SpendingInsightsEngine.swift   # Dépenses exceptionnelles
+│   │   ├── CalendarDaySeverity.swift      # Couleur heatmap (parité Web)
+│   │   ├── CalendarStreakCalculator.swift # Calcul des streaks
+│   │   ├── NotificationService.swift      # Notifications locales
+│   │   ├── HapticsManager.swift           # Retours haptiques
+│   │   ├── WatchConnectivityManager.swift # Quick-add Apple Watch
+│   │   ├── PDFExportService.swift         # Export PDF mensuel
+│   │   ├── FeedbackService.swift          # API feedback
+│   │   ├── AppReviewManager.swift         # Demande d'avis StoreKit
+│   │   ├── StoreKitManager.swift          # Gestion StoreKit
+│   │   ├── ToastManager.swift             # Toasts natifs
+│   │   ├── AnonymousModeManager.swift     # Mode anonyme (shake-to-toggle)
+│   │   └── WidgetSnapshotStore.swift      # Persistance widget
+│   ├── FirebaseManager.swift        # Authentification Firebase
+│   ├── DesignSystem.swift           # Tokens de design adaptatifs (clair/sombre)
+│   ├── Localization.swift           # i18n FR/EN
+│   ├── Extensions.swift             # Extensions Color, Calendar
+│   ├── BentoLayoutEngine.swift      # Moteur de layout Bento Grid
+│   ├── BudgetCalculations.swift     # Arithmétique budgétaire
+│   ├── EvolutionCalculator.swift    # Calculs d'évolution 12 mois
+│   ├── EnvelopeMutationService.swift   # CRUD enveloppes (offline/online)
+│   ├── TransactionMutationService.swift # CRUD transactions (offline/online)
+│   └── CalendarDateFormatting.swift    # Formatage localisé des dates
 ├── BudgetFlowWidgets/        # Widget WidgetKit
 ├── BudgetFlowAppleWatch Watch App/  # Companion watchOS
-└── BudgetFlowTests/          # 25 fichiers XCTest
-├── hooks/
-│   └── useNotifications.ts
-├── lib/
-│   ├── firebase.ts           # Configuration Firebase Client
-│   ├── firebaseAdmin.ts      # Configuration Firebase Admin (SSR)
-│   ├── validation.ts         # Validateurs réutilisables
-│   ├── logger.ts             # Logger sanitisé (prod/dev)
-│   └── dateUtils.ts          # Utilitaires de dates
-└── __tests__/
-    └── lib/
-        ├── validation.test.ts
-        ├── dateUtils.test.ts
-        └── logger.test.ts
-
-iOS/BudgetFlow/
-├── BudgetFlow/               # Code source Swift
-│   ├── Models/               # Envelope, Transaction, UserSettings
-│   ├── Views/                # Toutes les vues SwiftUI
-│   ├── DesignSystem.swift    # Tokens de design adaptatifs (clair/sombre)
-│   ├── Extensions.swift      # Extensions Color, Calendar
-│   ├── NotificationService.swift
-│   └── SyncService.swift     # Synchronisation Firestore
-└── BudgetFlowTests/
-    └── BudgetFlowTests.swift # Tests XCTest
+├── BudgetFlowTests/          # 49 fichiers XCTest
+├── BudgetFlowUITests/        # Tests UI
+└── BudgetFlowWatchApp Watch AppTests/  # Tests watchOS
 ```
 
 ## iOS App
@@ -320,6 +347,7 @@ L'application iOS native est **fonctionnelle** et disponible via le dossier `iOS
 - ✅ Enveloppes temporaires avec filtrage automatique par mois
 - ✅ Prévisions à 90 jours (`SpendingForecastEngine.swift`) — parité algorithmique avec le Web
 - ✅ Détection de dépenses exceptionnelles (`SpendingInsightsEngine.swift`)
+- ✅ Carousel de notifications intelligentes (`SmartInsightsCarouselView`)
 - ✅ Mode hors-ligne (SwiftData, aucune connexion requise)
 - ✅ Mode en ligne avec synchronisation Firestore
 - ✅ Authentification Firebase (`FirebaseManager` + `AuthView`)
@@ -330,7 +358,17 @@ L'application iOS native est **fonctionnelle** et disponible via le dossier `iOS
 - ✅ Widget WidgetKit (écran d'accueil iOS)
 - ✅ Companion Apple Watch avec quick-add relay
 - ✅ Localisation FR/EN (`Localization.swift`)
-- ✅ Accessibilité VoiceOver
+- ✅ Accessibilité VoiceOver, Dynamic Type, reduceMotion
+- ✅ Support multi-devises (EUR, USD, CHF, GBP, BTC)
+- ✅ Mode Anonyme (shake-to-toggle, `AnonymousModeManager`)
+- ✅ Revenu variable par mois (`MonthlyIncome`)
+- ✅ Décomposition détaillée charges fixes / épargne (`BudgetSubItem`)
+- ✅ Bento Grid layout engine (`BentoLayoutEngine.swift`)
+- ✅ Export PDF mensuel (`PDFExportService.swift`)
+- ✅ Système de feedback & feature requests (`FeedbackService.swift`)
+- ✅ Demande d'avis in-app (`AppReviewManager` + `StoreKitManager`)
+- ✅ Toasts natifs (`ToastManager` + `DynamicIslandToastView`)
+- ✅ Suppression de compte avec effacement Firebase (`FirebaseAccountHelpers.swift`)
 
 ## Sécurité
 
