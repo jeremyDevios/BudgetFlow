@@ -29,11 +29,11 @@ export default async function RootLayout({
   return (
     <html lang="fr" suppressHydrationWarning>
       <head>
-        {nonce ? (
-          <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        ) : (
-          <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
-        )}
+        <script
+          nonce={nonce || undefined}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: themeInitScript }}
+        />
         <link rel="icon" href="/favicon.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

@@ -38,8 +38,9 @@ test.describe("Paramètres", () => {
     // Vérifier que le champ revenu existe
     if ((await settings.incomeInput.count()) > 0) {
       const currentValue = await settings.incomeInput.inputValue();
-      // Modifier le revenu
-      await settings.updateIncome("4500");
+      // Utiliser une valeur différente de l'actuelle pour garantir le changement
+      const testValue = currentValue === "4500" ? "5000" : "4500";
+      await settings.updateIncome(testValue);
       // Vérifier que la valeur a changé
       const newValue = await settings.incomeInput.inputValue();
       expect(newValue).not.toBe(currentValue);

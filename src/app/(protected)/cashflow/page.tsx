@@ -108,6 +108,17 @@ export default function CashFlowPage() {
     fetchData();
   }, [user]);
 
+  // Resolve the effective income for the current month.
+  // IMPORTANT: all hooks must be called before any conditional return
+  // (Rules of Hooks). This useMemo safely handles settings === null.
+  const resolvedIncome = useMemo(() => {
+    if (!settings) return 0;
+    if (settings.isFixedIncome !== false) return settings.monthlyIncome;
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return resolveMonthlyIncome(currentMonth, monthlyIncomes, settings.monthlyIncome);
+  }, [settings, monthlyIncomes]);
+
   if (loading) {
     return <div className="min-h-screen bg-app-bg flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
   }
@@ -120,15 +131,6 @@ export default function CashFlowPage() {
           </div>
       )
   }
-
-  // Resolve the effective income for the current month.
-  const resolvedIncome = useMemo(() => {
-    if (!settings) return 0;
-    if (settings.isFixedIncome !== false) return settings.monthlyIncome;
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    return resolveMonthlyIncome(currentMonth, monthlyIncomes, settings.monthlyIncome);
-  }, [settings, monthlyIncomes]);
 
   // --- Sankey Data Construction ---
   // Nodes: 0=Revenu, 1=Epargne, 2=Frais Fixes, 3...=Enveloppes

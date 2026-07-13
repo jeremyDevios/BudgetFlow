@@ -99,38 +99,25 @@ test.describe("Gestion des enveloppes (CRUD)", () => {
       const dashboard = new DashboardPage(page);
       await dashboard.goto();
 
-      // Cliquer sur la première tuile d'enveloppe
-      const firstTile = page
-        .locator("[class*='bento'], [class*='envelope-card'], [class*='tile']")
-        .first();
+      // Utiliser clickEnvelope qui cible précisément une tuile par son nom
+      // plutôt qu'un sélecteur CSS trop large ([class*='tile'] etc.)
+      await dashboard.clickEnvelope("Courses");
 
-      if ((await firstTile.count()) > 0) {
-        await firstTile.click({ force: true });
-        await page.waitForURL(/\/envelopes\//, { timeout: 10_000 });
-
-        // Vérifier que la page détail s'affiche
-        await expect(page.locator("h1")).toBeVisible({ timeout: 5_000 });
-      }
+      // Vérifier que la page détail s'affiche
+      await expect(page.locator("h1")).toBeVisible({ timeout: 5_000 });
     });
 
     test("la page détail a un bouton Nouvelle Dépense", async ({ page }) => {
       const dashboard = new DashboardPage(page);
       await dashboard.goto();
 
-      const firstTile = page
-        .locator("[class*='bento'], [class*='envelope-card'], [class*='tile']")
-        .first();
+      await dashboard.clickEnvelope("Courses");
 
-      if ((await firstTile.count()) > 0) {
-        await firstTile.click({ force: true });
-        await page.waitForURL(/\/envelopes\//, { timeout: 10_000 });
-
-        // Chercher le bouton Nouvelle Dépense
-        const newTxButton = page.getByRole("button", {
-          name: /Nouvelle Dépense|Ajouter/i,
-        });
-        await expect(newTxButton.first()).toBeVisible({ timeout: 5_000 });
-      }
+      // Chercher le bouton Nouvelle Dépense
+      const newTxButton = page.getByRole("button", {
+        name: /Nouvelle Dépense|Ajouter/i,
+      });
+      await expect(newTxButton.first()).toBeVisible({ timeout: 5_000 });
     });
   });
 

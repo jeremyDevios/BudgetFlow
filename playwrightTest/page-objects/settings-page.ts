@@ -94,11 +94,23 @@ export class SettingsPage extends BasePage {
   }
 
   async toggleIncomeType(): Promise<void> {
+    // Une boîte de dialogue de confirmation peut apparaître lors du basculement
+    // entre Fixe et Variable. On l'accepte automatiquement.
+    const dialogPromise = this.page
+      .waitForEvent("dialog", { timeout: 2_000 })
+      .then((d) => d.accept())
+      .catch(() => {}); // pas de dialogue → OK
     await this.incomeTypeToggle.click();
-    await this.page.waitForTimeout(500);
+    await dialogPromise;
+    await this.page.waitForTimeout(800);
   }
 
   async getIncomeTypeText(): Promise<string> {
+    // Re-query DOM après basculement — le texte Fixe/Variable est dans un <span>
+    const label = this.page.getByText(/^(Fixe|Variable)$/).first();
+    if ((await label.count()) > 0) {
+      return (await label.textContent()) || "";
+    }
     return (await this.incomeTypeValue.textContent()) || "";
   }
 

@@ -16,11 +16,17 @@ export function middleware(request: NextRequest) {
   // Générer un nonce aléatoire unique par requête
   const nonce = crypto.randomUUID();
 
+  const isDev = process.env.NODE_ENV === "development";
+
   // CSP production — identique à celui de next.config.mjs mais avec
   // 'nonce-{value}' au lieu de 'unsafe-inline' pour script-src.
+  // En développement, on garde 'unsafe-inline' + 'unsafe-eval' car
+  // webpack en a besoin pour le HMR et les source maps (eval()).
+  // Sans ça, le JS ne s'exécute pas → React n'hydrate jamais →
+  // AuthContext reste bloqué en loading:true.
   const csp = [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' https://apis.google.com https://*.firebaseapp.com https://*.googleapis.com https://accounts.google.com https://www.google.com https://www.gstatic.com https://*.gstatic.com`,
+    `script-src 'self' 'nonce-${nonce}'${isDev ? " 'unsafe-inline' 'unsafe-eval'" : ""} https://apis.google.com https://*.firebaseapp.com https://*.googleapis.com https://accounts.google.com https://www.google.com https://www.gstatic.com https://*.gstatic.com`,
     "style-src 'self' 'unsafe-inline'",
     "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://fcm.googleapis.com",
     "frame-src https://*.firebaseapp.com https://accounts.google.com https://*.google.com https://*.gstatic.com",
