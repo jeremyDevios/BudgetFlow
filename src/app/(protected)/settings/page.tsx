@@ -467,7 +467,7 @@ export default function SettingsPage() {
 
     const nextValue = !settings.isFixedIncome;
 
-    if (!nextValue) {
+    if (nextValue) {
       // Switching from variable to fixed: warn that per-month entries are preserved but ignored.
       const confirmed = window.confirm(
         "En passant en salaire fixe, vos revenus mois par mois seront conservés mais ignorés. " +
@@ -1156,10 +1156,25 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Revenus mensuels — inchangé */}
+            {/* Message d'information en mode variable */}
+            {!settings.isFixedIncome && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-sm text-app-text-secondary">
+                <svg className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>
+                  Le revenu peut être saisi directement sur le dashboard, mois par mois.
+                  Le montant ci-dessous sera utilisé comme valeur par défaut pour les mois sans saisie manuelle.
+                </span>
+              </div>
+            )}
+
+            {/* Revenus mensuels */}
             <div>
               <label htmlFor="settings-monthly-income" className="block text-sm text-app-text-secondary mb-1">
-                Revenus (Salaire)
+                {settings.isFixedIncome ? "Revenus (Salaire)" : "Revenus (Salaire) par défaut"}
               </label>
               <div className="relative">
                 <input

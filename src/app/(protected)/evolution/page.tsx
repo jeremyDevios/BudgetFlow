@@ -68,7 +68,11 @@ export default function EvolutionPage() {
 
         // 1b. If variable income, fetch per-month overrides.
         if (!isFixedIncome) {
-          monthlyIncomes = await getMonthlyIncomes(user.uid);
+          try {
+            monthlyIncomes = await getMonthlyIncomes(user.uid);
+          } catch (e) {
+            logger.warn("Monthly incomes read failed, using fallback income");
+          }
         }
 
         // 2. Determine Date Range (Last 6 months)

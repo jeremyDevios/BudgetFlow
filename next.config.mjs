@@ -21,21 +21,9 @@ const securityHeaders = [
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
   },
-  {
-    key: "Content-Security-Policy",
-    value: [
-      "default-src 'self'",
-      // 'unsafe-inline' est retiré en production — le middleware injecte
-      // un nonce CSP pour le script inline du thème. En développement,
-      // 'unsafe-eval' reste nécessaire pour le Hot Module Replacement.
-      `script-src 'self'${isDev ? " 'unsafe-inline' 'unsafe-eval'" : ""} https://apis.google.com https://*.firebaseapp.com https://*.googleapis.com https://accounts.google.com https://www.google.com https://www.gstatic.com https://*.gstatic.com`,
-      "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://fcm.googleapis.com",
-      "frame-src https://*.firebaseapp.com https://accounts.google.com https://*.google.com https://*.gstatic.com",
-      "img-src 'self' data: https:",
-      "frame-ancestors 'none'",
-    ].join("; "),
-  },
+  // La Content-Security-Policy est gérée par src/middleware.ts
+  // (nonce dynamique injecté par requête). Ne pas la dupliquer ici —
+  // deux headers CSP sur la même réponse causent un conflit.
 ];
 
 /** @type {import('next').NextConfig} */

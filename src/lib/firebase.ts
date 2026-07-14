@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { initializeFirestore, type Firestore } from "firebase/firestore";
 import { getMessaging, isSupported } from "firebase/messaging";
 
 // ── Lazy Firebase initialization ──────────────────────────────────
@@ -83,7 +83,14 @@ export const auth: Auth = lazyProxy(_authRef, () => {
 
 export const db: Firestore = lazyProxy(_dbRef, () => {
   const a = getOrInitApp();
-  return getFirestore(a);
+  // initializeFirestore avec experimentalAutoDetectLongPolling permet à
+  // Firestore de basculer automatiquement du streaming gRPC-Web vers du
+  // long polling HTTP si le canal Listen/Channel est bloqué (CSP, proxy,
+  // pare-feu, etc.). Évite les erreurs "Fetch API cannot load …
+  // firestore.googleapis.com/…/Listen/channel".
+  return initializeFirestore(a, {
+    experimentalAutoDetectLongPolling: true,
+  });
 });
 
 /** Active la persistance offline Firestore (IndexedDB). */

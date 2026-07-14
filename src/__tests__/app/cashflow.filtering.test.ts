@@ -67,31 +67,42 @@ interface SankeyData {
  * Builds the Sankey { nodes, links } structure.
  * Mirrors the node/link construction block in cashflow/page.tsx.
  * Receives the ALREADY-FILTERED envelope list.
+ *
+ * Dynamic indexing: nodes are only added when they have at least one link,
+ * preventing orphan nodes that cause d3-sankey to produce NaN positions.
  */
 function buildSankeyData(
   envelopes: CashFlowEnvelope[],
   settings: UserSettings,
 ): SankeyData {
-  const nodes: SankeyNode[] = [
-    { name: 'Revenu' },      // index 0
-    { name: 'Épargne' },     // index 1
-    { name: 'Frais Fixes' }, // index 2
-    ...envelopes.map(e => ({ name: e.name })),
-  ];
-
+  const nodes: SankeyNode[] = [];
   const links: SankeyLink[] = [];
 
+  // Node 0: Revenu (always present)
+  let nextIndex = 0;
+  const revenuIndex = nextIndex++;
+  nodes.push({ name: 'Revenu' });
+
+  // Épargne — only if savings > 0
   if (settings.monthlySavings > 0) {
-    links.push({ source: 0, target: 1, value: settings.monthlySavings });
+    const idx = nextIndex++;
+    nodes.push({ name: 'Épargne' });
+    links.push({ source: revenuIndex, target: idx, value: settings.monthlySavings });
   }
 
+  // Frais Fixes — only if fixedCosts > 0
   if (settings.fixedCosts > 0) {
-    links.push({ source: 0, target: 2, value: settings.fixedCosts });
+    const idx = nextIndex++;
+    nodes.push({ name: 'Frais Fixes' });
+    links.push({ source: revenuIndex, target: idx, value: settings.fixedCosts });
   }
 
-  envelopes.forEach((env, index) => {
+  // Envelopes — only those with budget > 0
+  envelopes.forEach((env) => {
     if (env.budget > 0) {
-      links.push({ source: 0, target: 3 + index, value: env.budget });
+      const idx = nextIndex++;
+      nodes.push({ name: env.name });
+      links.push({ source: revenuIndex, target: idx, value: env.budget });
     }
   });
 
@@ -267,11 +278,13 @@ describe('Cash Flow: Sankey nodes', () => {
     expect(nodes[2].name).toBe('Frais Fixes');
   });
 
-  it('adds one node per permanent envelope after the 3 fixed nodes', () => {
-    const filtered = filterForCashFlow(ALL_ENVELOPES); // 3 permanent
+  it('adds one node per permanent envelope with budget > 0 after the fixed nodes', () => {
+    const filtered = filterForCashFlow(ALL_ENVELOPES); // 3 permanent: Courses(400), Transport(150), Divers(0)
     const { nodes } = buildSankeyData(filtered, BASE_SETTINGS);
-    // 3 fixed + 3 permanent = 6
-    expect(nodes).toHaveLength(6);
+    // 3 fixed (Revenu + Épargne + Frais Fixes, since BASE_SETTINGS has savings & fixed costs)
+    // + 2 permanent with budget > 0 (Courses, Transport)
+    // Divers (budget 0) is NOT added — orphan nodes are excluded
+    expect(nodes).toHaveLength(5);
   });
 
   it('does not include temporary envelope names in the node list', () => {
@@ -283,13 +296,14 @@ describe('Cash Flow: Sankey nodes', () => {
     expect(names).not.toContain('Projet zéro');
   });
 
-  it('includes permanent envelope names in the node list', () => {
+  it('includes permanent envelope names with positive budgets in the node list', () => {
     const filtered = filterForCashFlow(ALL_ENVELOPES);
     const { nodes } = buildSankeyData(filtered, BASE_SETTINGS);
     const names = nodes.map(n => n.name);
     expect(names).toContain('Courses');
     expect(names).toContain('Transport');
-    expect(names).toContain('Divers');
+    // Divers has budget 0 — not added as a node (orphan prevention)
+    expect(names).not.toContain('Divers');
   });
 
   it('produces only 3 nodes when the entire unfiltered list is temporary', () => {
@@ -438,8 +452,8 @@ describe('Cash Flow: end-to-end pipeline with mixed envelopes', () => {
   const { nodes, links } = buildSankeyData(filtered, BASE_SETTINGS);
   const { totalAllocated, unallocated } = computeAllocation(filtered, BASE_SETTINGS);
 
-  it('produces 6 nodes total (3 fixed + 3 permanent)', () => {
-    expect(nodes).toHaveLength(6);
+  it('produces 5 nodes total (3 fixed + 2 permanent with budget > 0; Divers excluded as orphan)', () => {
+    expect(nodes).toHaveLength(5);
   });
 
   it('produces 4 links (savings + fixedCosts + Courses + Transport; Divers has budget 0)', () => {
@@ -464,5 +478,57 @@ describe('Cash Flow: end-to-end pipeline with mixed envelopes', () => {
     const tempBudgets = [800, 300]; // Vacances, Noël
     const linkValues = links.map(l => l.value);
     tempBudgets.forEach(v => expect(linkValues).not.toContain(v));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. Orphan node prevention — nodes with zero links must not be created
+//    (they cause d3-sankey to produce NaN positions, crashing the chart)
+// ---------------------------------------------------------------------------
+
+describe('Cash Flow: orphan node prevention', () => {
+  it('does not create Épargne node when monthlySavings is 0', () => {
+    const settings = { ...BASE_SETTINGS, monthlySavings: 0 };
+    const { nodes } = buildSankeyData([PERM_GROCERIES], settings);
+    expect(nodes.map(n => n.name)).not.toContain('Épargne');
+  });
+
+  it('does not create Frais Fixes node when fixedCosts is 0', () => {
+    const settings = { ...BASE_SETTINGS, fixedCosts: 0 };
+    const { nodes } = buildSankeyData([PERM_GROCERIES], settings);
+    expect(nodes.map(n => n.name)).not.toContain('Frais Fixes');
+  });
+
+  it('creates only Revenu when savings=0, fixedCosts=0, and no envelopes', () => {
+    const settings = { monthlyIncome: 3000, fixedCosts: 0, monthlySavings: 0 };
+    const { nodes, links } = buildSankeyData([], settings);
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].name).toBe('Revenu');
+    expect(links).toHaveLength(0);
+  });
+
+  it('does not create envelope nodes with budget=0', () => {
+    const filtered = filterForCashFlow([PERM_ZERO_BUDGET]);
+    const { nodes } = buildSankeyData(filtered, BASE_SETTINGS);
+    const names = nodes.map(n => n.name);
+    expect(names).not.toContain('Divers');
+  });
+
+  it('every node in the result has at least one link (no orphans)', () => {
+    // Test with varied settings: savings>0, fixedCosts>0, mixed envelopes
+    const filtered = filterForCashFlow(ALL_ENVELOPES);
+    const { nodes, links } = buildSankeyData(filtered, BASE_SETTINGS);
+
+    // Collect all node indices referenced by links
+    const referenced = new Set<number>();
+    links.forEach(l => {
+      referenced.add(l.source);
+      referenced.add(l.target);
+    });
+
+    // Every node index must appear in at least one link
+    nodes.forEach((_, idx) => {
+      expect(referenced.has(idx)).toBe(true);
+    });
   });
 });
