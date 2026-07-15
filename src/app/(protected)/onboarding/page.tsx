@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { doc, setDoc, collection, writeBatch } from "firebase/firestore";
+import { doc, setDoc, collection, writeBatch, increment } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
 import { DEFAULT_USER_SETTINGS, BudgetSubItem } from "@/types/settings";
@@ -239,6 +239,12 @@ export default function OnboardingPage() {
         createdAt: new Date().toISOString()
         });
       });
+
+      // 3. Initialiser le compteur d'enveloppes pour les règles Firestore.
+      // getAfter() dans firestore.rules lit ce document ; sans lui, la
+      // règle allow create échoue sur "Missing or insufficient permissions".
+      const counterRef = doc(db, "counters", user.uid);
+      batch.set(counterRef, { envelopeCount: increment(normalizedEnvelopes.length) }, { merge: true });
 
       await batch.commit();
       router.push("/dashboard");

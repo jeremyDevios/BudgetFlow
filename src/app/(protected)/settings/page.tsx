@@ -12,7 +12,6 @@ import {
   getDoc,
   getDocs,
   updateDoc,
-  addDoc,
   writeBatch,
   increment,
 } from "firebase/firestore";
@@ -651,9 +650,17 @@ export default function SettingsPage() {
         );
       } else {
         // Create — isTemporary and activeMonths are written from the form.
+        // Uses a batch so the counter increment is atomic with the envelope
+        // creation. Firestore rules check getAfter() on the counter document,
+        // so they must be in the same write batch.
         const newOrder = envelopes.length;
         const nowISO = new Date().toISOString();
-        const docRef = await addDoc(collection(db, "users", user.uid, "envelopes"), {
+
+        const batch = writeBatch(db);
+        const newEnvRef = doc(collection(db, "users", user.uid, "envelopes"));
+        const counterRef = doc(db, "counters", user.uid);
+
+        batch.set(newEnvRef, {
           name: values.name,
           budget: numBudget,
           icon: values.icon,
@@ -666,16 +673,14 @@ export default function SettingsPage() {
           updatedAt: nowISO,
         });
 
-        // Incrémenter le compteur d'enveloppes
-        const counterRef = doc(db, "counters", user.uid);
-        await updateDoc(counterRef, {
-          envelopeCount: increment(1),
-        }).catch(() => {/* compteur absent, ignoré */});
+        batch.set(counterRef, { envelopeCount: increment(1) }, { merge: true });
+
+        await batch.commit();
 
         setEnvelopes((prev) => [
           ...prev,
           {
-            id: docRef.id,
+            id: newEnvRef.id,
             name: values.name,
             budget: numBudget,
             icon: values.icon,

@@ -208,12 +208,18 @@ service cloud.firestore {
         allow create: if isAuthenticated() && isOwner(userId)
                          && isValidEnvelopeData(request.resource.data)
                          // Enforce 50-envelope quota via counter document.
-                         // getAfter reads the counter document state AFTER the
-                         // batched increment(1) has been applied, so the rule
-                         // checks the post-write count.
-                         && getAfter(
+                         // getAfter reads the counter state AFTER the batched writes
+                         // (e.g. increment(1) in the same batch).
+                         // If the counter document doesn't exist yet (first envelope
+                         // written by a client that doesn't batch the counter), allow
+                         // the creation — the client should still update the counter,
+                         // and the quota won't be enforced server-side until it does.
+                         && (!existsAfter(
                               /databases/$(database)/documents/counters/$(userId)
-                            ).data.envelopeCount <= 50;
+                            )
+                            || getAfter(
+                              /databases/$(database)/documents/counters/$(userId)
+                            ).data.envelopeCount <= 50);
         allow update: if isAuthenticated() && isOwner(userId)
                          && isValidEnvelopeData(request.resource.data);
         allow delete: if isAuthenticated() && isOwner(userId);
