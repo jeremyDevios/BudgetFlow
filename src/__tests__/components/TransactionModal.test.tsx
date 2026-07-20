@@ -387,24 +387,32 @@ describe("TransactionModal", () => {
     });
     await user.click(screen.getByRole("button", { name: "Modifier" }));
 
-    await waitFor(() => expect(updateDocMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(updateDocMock).toHaveBeenCalledTimes(3));
 
+    // 1st call: update transaction document
     expect(updateDocMock).toHaveBeenNthCalledWith(
       1,
       { path: ["users", "user-1", "transactions", "tx-1"] },
-      {
+      expect.objectContaining({
         amount: 30,
         description: "Taxi",
         envelopeId: "env-1",
-        date: "2026-04-10T00:00:00.000Z",
-        updatedAt: "2026-04-14T12:00:00.000Z",
-        isReimbursement: false,
-      }
+        type: "expense",
+      })
     );
+
+    // 2nd call: reverse old spent on old envelope
     expect(updateDocMock).toHaveBeenNthCalledWith(
       2,
       { path: ["users", "user-1", "envelopes", "env-1"] },
-      { spent: { incrementBy: 20 } }
+      { spent: { incrementBy: -10 } }
+    );
+
+    // 3rd call: apply new spent on new envelope
+    expect(updateDocMock).toHaveBeenNthCalledWith(
+      3,
+      { path: ["users", "user-1", "envelopes", "env-1"] },
+      { spent: { incrementBy: 30 } }
     );
     expect(refreshData).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -577,5 +585,253 @@ describe("TransactionModal", () => {
     await waitFor(() => {
       expect(updateDocMock).toHaveBeenCalled();
     });
+  });
+});
+
+// ── Income transaction tests ──
+
+describe("TransactionModal – income transactions", () => {
+  const onClose = jest.fn();
+  const refreshData = jest.fn();
+
+  beforeEach(() => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-04-14T12:00:00.000Z"));
+    addDocMock.mockReset().mockResolvedValue({ id: "tx-new" });
+    updateDocMock.mockReset().mockResolvedValue(undefined);
+    deleteDocMock.mockReset().mockResolvedValue(undefined);
+    incrementMock.mockReset().mockImplementation((value: number) => ({ incrementBy: value }));
+    collectionMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
+    docMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
+    sanitizedErrorMock.mockReset();
+    onClose.mockReset();
+    refreshData.mockReset();
+    window.alert = jest.fn();
+    window.confirm = jest.fn(() => true);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("renders Type toggle with Dépense and Revenu buttons", () => {
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    expect(screen.getByText("Dépense")).toBeInTheDocument();
+    expect(screen.getByText("Revenu")).toBeInTheDocument();
+  });
+
+  it("shows Source picker when Revenu is selected and hides Enveloppe", async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    // Click "Revenu"
+    await user.click(screen.getByText("Revenu"));
+
+    // Source picker should be visible
+    expect(screen.getByText("Prime")).toBeInTheDocument();
+    expect(screen.getByText("Freelance")).toBeInTheDocument();
+
+    // Envelope names should NOT be visible
+    expect(screen.queryByText("Courses")).not.toBeInTheDocument();
+  });
+
+  it("hides Remboursement toggle when Revenu is selected", async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    await user.click(screen.getByText("Revenu"));
+
+    expect(screen.queryByText("Remboursement")).not.toBeInTheDocument();
+  });
+
+  it("creates an income transaction without envelopeId and without updating spent", async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    // Switch to Revenu
+    await user.click(screen.getByText("Revenu"));
+
+    // Fill amount and description
+    fireEvent.change(screen.getByLabelText(/Montant de la transaction/i), {
+      target: { value: "500" },
+    });
+    fireEvent.change(screen.getByLabelText(/Description de la transaction/i), {
+      target: { value: "Freelance project" },
+    });
+
+    // Select source "Freelance"
+    await user.click(screen.getByText("Freelance"));
+
+    await user.click(screen.getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() => expect(addDocMock).toHaveBeenCalledTimes(1));
+
+    // Verify: no envelopeId, has type and source
+    expect(addDocMock).toHaveBeenCalledWith(
+      { path: ["users", "user-1", "transactions"] },
+      expect.objectContaining({
+        amount: 500,
+        description: "Freelance project",
+        type: "income",
+        source: "Freelance",
+      })
+    );
+
+    // Verify: no envelopeId in the call
+    const addCallArgs = addDocMock.mock.calls[0][1];
+    expect(addCallArgs.envelopeId).toBeUndefined();
+
+    // Verify: envelope spent NOT updated
+    const updateCalls = updateDocMock.mock.calls;
+    const spentUpdates = updateCalls.filter(
+      (call: unknown[]) => (call[1] as Record<string, unknown>)?.spent
+    );
+    expect(spentUpdates).toHaveLength(0);
+
+    expect(refreshData).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("still increments monthly counter for income transactions", async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    await user.click(screen.getByText("Revenu"));
+    fireEvent.change(screen.getByLabelText(/Montant de la transaction/i), {
+      target: { value: "200" },
+    });
+    fireEvent.change(screen.getByLabelText(/Description de la transaction/i), {
+      target: { value: "Bonus" },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Ajouter" }));
+
+    await waitFor(() => expect(addDocMock).toHaveBeenCalled());
+
+    // Counter should be incremented
+    const counterCalls = updateDocMock.mock.calls.filter(
+      (call: unknown[]) => (call[0] as { path: string[] })?.path?.[0] === "counters"
+    );
+    expect(counterCalls.length).toBeGreaterThan(0);
+  });
+
+  it("deletes an income transaction without reversing envelope spent", async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+        transactionToEdit={{
+          id: "tx-income-1",
+          amount: 300,
+          description: "Prime annuelle",
+          date: "2026-04-10T12:00:00.000Z",
+          type: "income",
+          source: "Prime",
+        }}
+      />
+    );
+
+    await user.click(screen.getByTitle(/Supprimer/i));
+
+    await waitFor(() => expect(deleteDocMock).toHaveBeenCalledTimes(1));
+
+    // No spent reversal on envelope
+    const spentReversals = updateDocMock.mock.calls.filter(
+      (call: unknown[]) =>
+        (call[0] as { path: string[] })?.path?.includes("envelopes")
+    );
+    expect(spentReversals).toHaveLength(0);
+
+    expect(refreshData).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("edits an income transaction changing the source", async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+        transactionToEdit={{
+          id: "tx-income-1",
+          amount: 200,
+          description: "Side gig",
+          date: "2026-04-10T12:00:00.000Z",
+          type: "income",
+          source: "Freelance",
+        }}
+      />
+    );
+
+    // Should show "Modifier Revenu" title
+    expect(screen.getByText("Modifier Revenu")).toBeInTheDocument();
+
+    // Select a different source
+    await user.click(screen.getByText("Bonus"));
+
+    await user.click(screen.getByRole("button", { name: "Modifier" }));
+
+    await waitFor(() => expect(updateDocMock).toHaveBeenCalled());
+
+    // Should update with new source
+    const updateCall = updateDocMock.mock.calls[0][1];
+    expect(updateCall.source).toBe("Bonus");
+    expect(updateCall.type).toBe("income");
+  });
+
+  it("shows dynamic title Nouveau Revenu when type is income and not editing", async () => {
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    render(
+      <TransactionModal
+        isOpen
+        onClose={onClose}
+        envelopes={envelopes}
+        refreshData={refreshData}
+      />
+    );
+
+    await user.click(screen.getByText("Revenu"));
+
+    expect(screen.getByText("Nouveau Revenu")).toBeInTheDocument();
   });
 });

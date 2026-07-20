@@ -13,6 +13,11 @@ import {
   validateAmountWithMessage,
   validateDescriptionWithMessage,
   validateEnvelopeNameWithMessage,
+  validateSource,
+  validateTransactionType,
+  validateSourceWithMessage,
+  validateTransactionTypeWithMessage,
+  INCOME_SOURCES,
   getMonthKey,
 } from '@/lib/validation';
 
@@ -359,5 +364,68 @@ describe('getMonthKey', () => {
   });
   it('works with datetime string', () => {
     expect(getMonthKey('2026-12-31T23:59:59')).toBe('tx_2026_12');
+  });
+});
+
+// ── Income source & transaction type validation ──
+
+describe('validateSource', () => {
+  it('returns true for all valid income sources', () => {
+    for (const source of INCOME_SOURCES) {
+      expect(validateSource(source)).toBe(true);
+    }
+  });
+  it('returns false for invalid sources', () => {
+    expect(validateSource('Salaire')).toBe(false);
+    expect(validateSource('')).toBe(false);
+    expect(validateSource('prime')).toBe(false); // case-sensitive
+    expect(validateSource(123)).toBe(false);
+    expect(validateSource(null)).toBe(false);
+    expect(validateSource(undefined)).toBe(false);
+  });
+});
+
+describe('validateTransactionType', () => {
+  it('returns true for "expense"', () => {
+    expect(validateTransactionType('expense')).toBe(true);
+  });
+  it('returns true for "income"', () => {
+    expect(validateTransactionType('income')).toBe(true);
+  });
+  it('returns true for undefined (backward compat)', () => {
+    expect(validateTransactionType(undefined)).toBe(true);
+  });
+  it('returns true for null', () => {
+    expect(validateTransactionType(null)).toBe(true);
+  });
+  it('returns false for invalid types', () => {
+    expect(validateTransactionType('revenu')).toBe(false);
+    expect(validateTransactionType('')).toBe(false);
+    expect(validateTransactionType(123)).toBe(false);
+  });
+});
+
+describe('validateSourceWithMessage', () => {
+  it('returns valid for a known source', () => {
+    expect(validateSourceWithMessage('Prime').valid).toBe(true);
+    expect(validateSourceWithMessage('Autre').valid).toBe(true);
+  });
+  it('returns invalid with French message for unknown source', () => {
+    const result = validateSourceWithMessage('Invalid');
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('source');
+  });
+});
+
+describe('validateTransactionTypeWithMessage', () => {
+  it('returns valid for expense and income', () => {
+    expect(validateTransactionTypeWithMessage('expense').valid).toBe(true);
+    expect(validateTransactionTypeWithMessage('income').valid).toBe(true);
+    expect(validateTransactionTypeWithMessage(undefined).valid).toBe(true);
+  });
+  it('returns invalid with French message for bad type', () => {
+    const result = validateTransactionTypeWithMessage('bad');
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('type');
   });
 });

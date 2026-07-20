@@ -10,10 +10,27 @@
  *
  * Field notes:
  *  - `envelopeId`  – foreign key referencing an envelope document in the
- *                    `envelopes` sub-collection.
+ *                    `envelopes` sub-collection. Absent for income transactions.
  *  - `date`        – ISO-8601 string (e.g. "2026-07-03T12:00:00.000Z").
  *  - `isReimbursement` – when true the amount is a credit that reduces `spent`.
+ *                        Only meaningful for expense transactions.
+ *  - `type`        – "expense" (default) or "income". Absent = expense
+ *                    for backward compatibility.
+ *  - `source`      – income category label. Only present when type === "income".
  */
+
+/** Allowed income source categories. */
+export const INCOME_SOURCES = [
+  "Prime",
+  "Freelance",
+  "Vente",
+  "Cadeau",
+  "Bonus",
+  "Autre",
+] as const;
+
+export type IncomeSource = (typeof INCOME_SOURCES)[number];
+
 export interface Transaction {
   /** Firestore document id. */
   id: string;
@@ -24,11 +41,17 @@ export interface Transaction {
   /** Short description / label for the transaction. */
   description: string;
 
-  /** Firestore document id of the parent envelope. */
-  envelopeId: string;
+  /** Firestore document id of the parent envelope. Absent for income. */
+  envelopeId?: string;
 
   /** ISO-8601 date string. */
   date: string;
+
+  /** Transaction kind. "expense" (default) or "income". */
+  type?: "expense" | "income";
+
+  /** Income category. Only meaningful when type === "income". */
+  source?: IncomeSource;
 
   /** When true the amount is subtracted from spent (a credit/refund). */
   isReimbursement?: boolean;

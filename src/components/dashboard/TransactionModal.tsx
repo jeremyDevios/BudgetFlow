@@ -12,7 +12,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
 import { type Envelope, isEnvelopeActiveForMonth } from "@/types/envelope";
-import { type Transaction } from "@/types/transaction";
+import { type Transaction, INCOME_SOURCES } from "@/types/transaction";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import {
   validateAmountWithMessage,
@@ -61,6 +61,8 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
   const [selectedEnvelopeId, setSelectedEnvelopeId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [isReimbursement, setIsReimbursement] = useState(false);
+  const [transactionType, setTransactionType] = useState<"expense" | "income">("expense");
+  const [selectedSource, setSelectedSource] = useState<string>("Prime");
 
   // Initialisation à l'ouverture ou au changement de transactionToEdit
   useEffect(() => {
@@ -68,15 +70,19 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         if (transactionToEdit) {
             setAmount(transactionToEdit.amount.toString());
             setDescription(transactionToEdit.description);
-            setSelectedEnvelopeId(transactionToEdit.envelopeId);
+            setSelectedEnvelopeId(transactionToEdit.envelopeId || "");
             setDate(transactionToEdit.date.split('T')[0]);
             setIsReimbursement(transactionToEdit.isReimbursement ?? false);
+            setTransactionType(transactionToEdit.type ?? "expense");
+            setSelectedSource(transactionToEdit.source ?? "Prime");
         } else {
             setAmount("");
             setDescription("");
             setSelectedEnvelopeId(defaultEnvelopeId || envelopes[0]?.id || "");
             setDate(new Date().toISOString().split('T')[0]);
             setIsReimbursement(false);
+            setTransactionType("expense");
+            setSelectedSource("Prime");
         }
     } else {
       setSaveSuccess(false);
@@ -118,7 +124,12 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !amount || !selectedEnvelopeId || isDateInvalidForTemp) return;
+
+    // Guard: user + amount required for all; envelopeId required only for expenses
+    const needsEnvelope = transactionType === "expense";
+    if (!user || !amount || isDateInvalidForTemp) return;
+    if (needsEnvelope && !selectedEnvelopeId) return;
+    if (!needsEnvelope && !selectedSource) return;
 
     // --- Validation côté client ---
     const errors: { amount?: string; description?: string; quota?: string } = {};
@@ -151,37 +162,58 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
       if (isEditing) {
         // --- MODE EDITION ---
         const oldTx = transactionToEdit!;
-        const oldAmount = oldTx.amount;
-        const oldEnvelopeId = oldTx.envelopeId;
+        const oldType = oldTx.type ?? "expense";
+        const newType = transactionType;
+        const wasExpense = oldType === "expense";
+        const isExpense = newType === "expense";
 
         // 1. Update Transaction
         const txRef = doc(db, "users", user.uid, "transactions", oldTx.id);
-        await updateDoc(txRef, {
-            amount: numAmount,
-            description,
-            envelopeId: selectedEnvelopeId,
-            date: new Date(date).toISOString(),
+        const updateData: Record<string, unknown> = {
+          amount: numAmount,
+          description,
+          date: new Date(date).toISOString(),
           updatedAt: new Date().toISOString(),
-          isReimbursement,
-        });
+          type: newType,
+        };
 
-        // 2. Update Envelopes Spent
-        const oldImpact = txImpact({ amount: oldAmount, isReimbursement: oldTx.isReimbursement });
-        const newImpact = txImpact({ amount: numAmount, isReimbursement });
-
-        if (oldEnvelopeId === selectedEnvelopeId) {
-          if (oldImpact !== newImpact) {
-                await updateDoc(doc(db, "users", user.uid, "envelopes", selectedEnvelopeId), {
-              spent: increment(newImpact - oldImpact)
-                });
-            }
+        if (isExpense) {
+          updateData.envelopeId = selectedEnvelopeId;
+          updateData.isReimbursement = isReimbursement;
+          // Nettoyer les champs income si on passe de income à expense
+          updateData.source = null;
         } else {
-            await updateDoc(doc(db, "users", user.uid, "envelopes", oldEnvelopeId), {
-            spent: increment(-oldImpact)
-            });
-            await updateDoc(doc(db, "users", user.uid, "envelopes", selectedEnvelopeId), {
-            spent: increment(newImpact)
-            });
+          updateData.source = selectedSource;
+          // Nettoyer les champs expense si on passe de expense à income
+          updateData.envelopeId = null;
+          updateData.isReimbursement = null;
+        }
+
+        await updateDoc(txRef, updateData);
+
+        // 2. Update Envelopes Spent — only for expenses
+        // Reverse old impact if was an expense
+        if (wasExpense) {
+          const oldImpact = txImpact({
+            amount: oldTx.amount,
+            isReimbursement: oldTx.isReimbursement,
+          });
+          await updateDoc(
+            doc(db, "users", user.uid, "envelopes", oldTx.envelopeId!),
+            { spent: increment(-oldImpact) }
+          );
+        }
+
+        // Apply new impact if now an expense
+        if (isExpense) {
+          const newImpact = txImpact({
+            amount: numAmount,
+            isReimbursement,
+          });
+          await updateDoc(
+            doc(db, "users", user.uid, "envelopes", selectedEnvelopeId),
+            { spent: increment(newImpact) }
+          );
         }
 
       } else {
@@ -189,22 +221,34 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
 
         // 1. Ajouter la transaction
         const nowISO = new Date().toISOString();
-        await addDoc(collection(db, "users", user.uid, "transactions"), {
-            amount: numAmount,
-            description,
-            envelopeId: selectedEnvelopeId,
-            date: new Date(date).toISOString(),
+        const isIncome = transactionType === "income";
+        const txData: Record<string, unknown> = {
+          amount: numAmount,
+          description,
+          date: new Date(date).toISOString(),
           createdAt: nowISO,
           updatedAt: nowISO,
-          isReimbursement,
-        });
+          type: transactionType,
+        };
 
-        // 2. Mettre à jour le 'spent' de l'enveloppe
-        const envRef = doc(db, "users", user.uid, "envelopes", selectedEnvelopeId);
-        const spentImpact = isReimbursement ? -numAmount : numAmount;
-        await updateDoc(envRef, {
-          spent: increment(spentImpact)
-        });
+        if (isIncome) {
+          txData.source = selectedSource;
+          // Pas de envelopeId pour les revenus
+        } else {
+          txData.envelopeId = selectedEnvelopeId;
+          txData.isReimbursement = isReimbursement;
+        }
+
+        await addDoc(collection(db, "users", user.uid, "transactions"), txData);
+
+        // 2. Mettre à jour le 'spent' de l'enveloppe (dépenses uniquement)
+        if (!isIncome) {
+          const envRef = doc(db, "users", user.uid, "envelopes", selectedEnvelopeId);
+          const spentImpact = isReimbursement ? -numAmount : numAmount;
+          await updateDoc(envRef, {
+            spent: increment(spentImpact)
+          });
+        }
 
         // 3. Incrémenter le compteur de transactions du mois
         const monthKey = getMonthKey(date);
@@ -231,7 +275,12 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
 const handleDelete = async () => {
     if (!user || !transactionToEdit) return;
 
-    if (!confirm("Voulez-vous vraiment supprimer cette dépense ?")) {
+    const isIncome = (transactionToEdit.type ?? "expense") === "income";
+
+    if (!confirm(isIncome
+      ? "Voulez-vous vraiment supprimer ce revenu ?"
+      : "Voulez-vous vraiment supprimer cette dépense ?"
+    )) {
         return;
     }
 
@@ -240,25 +289,23 @@ const handleDelete = async () => {
         // 1. Supprimer la transaction
         await deleteDoc(doc(db, "users", user.uid, "transactions", transactionToEdit.id));
 
-        // 2. Mettre à jour l'enveloppe (Rembourser le montant)
-        // On utilise transactionToEdit.envelopeId et transactionToEdit.amount (valeurs originales)
-        // Attention: Si l'enveloppe n'existe plus, ça peut planter, mais on suppose qu'elle existe.
-        const envRef = doc(db, "users", user.uid, "envelopes", transactionToEdit.envelopeId);
-        // On vérifie si l'enveloppe est toujours là pour éviter crash si user a supprimé l'enveloppe entre temps
-        // Mais pour simplifier ici :
-        const impactToReverse = transactionToEdit.isReimbursement
-          ? transactionToEdit.amount
-          : -transactionToEdit.amount;
-        await updateDoc(envRef, {
-            spent: increment(impactToReverse)
-        });
+        // 2. Mettre à jour l'enveloppe (dépenses uniquement)
+        if (!isIncome && transactionToEdit.envelopeId) {
+          const envRef = doc(db, "users", user.uid, "envelopes", transactionToEdit.envelopeId);
+          const impactToReverse = transactionToEdit.isReimbursement
+            ? transactionToEdit.amount
+            : -transactionToEdit.amount;
+          await updateDoc(envRef, {
+              spent: increment(impactToReverse)
+          });
+        }
 
-	        // 3. Décrémenter le compteur de transactions du mois
-	        const monthKey = getMonthKey(transactionToEdit.date);
-	        const counterRef = doc(db, "counters", user.uid);
-	        await updateDoc(counterRef, {
-	          [monthKey]: increment(-1),
-	        }).catch(() => {/* compteur absent, ignoré */});
+        // 3. Décrémenter le compteur de transactions du mois
+        const monthKey = getMonthKey(transactionToEdit.date);
+        const counterRef = doc(db, "counters", user.uid);
+        await updateDoc(counterRef, {
+          [monthKey]: increment(-1),
+        }).catch(() => {/* compteur absent, ignoré */});
 
         refreshData();
         onClose();
@@ -269,6 +316,7 @@ const handleDelete = async () => {
         setLoading(false);
     }
   };
+
 
   return (
     <AnimatePresence>
@@ -291,7 +339,12 @@ const handleDelete = async () => {
         className="w-full max-w-md bg-app-surface border border-app-border rounded-2xl p-6 shadow-2xl"
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 id="modal-title" className="text-xl font-bold text-app-text">{transactionToEdit ? "Modifier Dépense" : "Nouvelle Dépense"}</h2>
+          <h2 id="modal-title" className="text-xl font-bold text-app-text">
+            {transactionToEdit
+              ? (transactionType === "income" ? "Modifier Revenu" : "Modifier Dépense")
+              : (transactionType === "income" ? "Nouveau Revenu" : "Nouvelle Dépense")
+            }
+          </h2>
           <div className="flex gap-2">
             {transactionToEdit && (
                 <button 
@@ -335,83 +388,140 @@ const handleDelete = async () => {
             )}
           </div>
 
-          {/* Enveloppe */}
+          {/* Type de transaction */}
           <div>
-             <label className="block text-sm font-medium text-app-text-secondary mb-1">Enveloppe</label>
-             <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-700">
-                 {envelopes.map(env => {
-                   const isSelected = selectedEnvelopeId === env.id;
-                   const isTemp = !!env.isTemporary;
-                   // Build border/background classes based on selection state and temporality.
-                   const baseClass = "p-3 rounded-lg border text-left flex items-center gap-2 transition-all";
-                   const stateClass = isSelected
-                     ? isTemp
-                       ? "bg-app-surface border-dashed border-amber-500 ring-1 ring-amber-500"
-                       : "bg-app-surface border-amber-500 ring-1 ring-amber-500"
-                     : isTemp
-                       ? "bg-amber-500/5 border-dashed border-amber-500/50 hover:bg-amber-500/10"
-                       : "bg-app-bg border-app-border hover:bg-app-surface";
-                   return (
-                     <motion.button
-                       key={env.id}
-                       type="button"
-                       onClick={() => setSelectedEnvelopeId(env.id)}
-                       whileTap={{ scale: 0.95 }}
-                       transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                       className={`${baseClass} ${stateClass}`}
-                       title={isTemp ? "Enveloppe temporaire" : undefined}
-                     >
-                       <div className={`w-3 h-3 rounded-full flex-shrink-0 ${env.color}`} />
-                       <span className={`truncate text-sm ${isSelected ? "text-app-text font-medium" : "text-app-text-secondary"}`}>
-                         {env.name}
-                       </span>
-                       {/* Tiny temporary badge — dashed pill so it reads at a glance */}
-                       {isTemp && (
-                         <span className="ml-auto flex-shrink-0 rounded border border-dashed border-amber-500/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-amber-500/80">
-                           tmp
-                         </span>
-                       )}
-                     </motion.button>
-                   );
-                 })}
+            <label className="block text-sm font-medium text-app-text-secondary mb-2">Type</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTransactionType("expense")}
+                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${
+                  transactionType === "expense"
+                    ? "bg-amber-500 text-app-text"
+                    : "bg-app-bg border border-app-border text-app-text-secondary hover:text-app-text"
+                }`}
+              >
+                Dépense
+              </button>
+              <button
+                type="button"
+                onClick={() => setTransactionType("income")}
+                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all ${
+                  transactionType === "income"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-app-bg border border-app-border text-app-text-secondary hover:text-app-text"
+                }`}
+              >
+                Revenu
+              </button>
             </div>
-
-            <AnimatePresence>
-              {selectedEnv && envRemaining !== null && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${remainingToneClass}`}
-                >
-                  Reste disponible : {envRemaining.toFixed(2)} {symbol}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Temporary-envelope date-validation error */}
-            <AnimatePresence>
-              {isDateInvalidForTemp && (
-                <motion.p
-                  key="temp-date-error"
-                  initial={{ opacity: 0, y: -4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -4 }}
-                  transition={{ duration: 0.2 }}
-                  className="mt-2 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-400"
-                  role="alert"
-                >
-                  Cette enveloppe temporaire n&apos;accepte pas de dépense pour cette date.
-                  {validMonthLabels && (
-                    <> Mois valides&nbsp;: <span className="font-semibold">{validMonthLabels}</span>.</>
-                  )}
-                </motion.p>
-              )}
-            </AnimatePresence>
           </div>
 
-          {/* Description & Date */}
+          {/* Enveloppe (dépenses) ou Source (revenus) */}
+          {transactionType === "expense" ? (
+            <div>
+               <label className="block text-sm font-medium text-app-text-secondary mb-1">Enveloppe</label>
+               <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-700">
+                   {envelopes.map(env => {
+                     const isSelected = selectedEnvelopeId === env.id;
+                     const isTemp = !!env.isTemporary;
+                     const baseClass = "p-3 rounded-lg border text-left flex items-center gap-2 transition-all";
+                     const stateClass = isSelected
+                       ? isTemp
+                         ? "bg-app-surface border-dashed border-amber-500 ring-1 ring-amber-500"
+                         : "bg-app-surface border-amber-500 ring-1 ring-amber-500"
+                       : isTemp
+                         ? "bg-amber-500/5 border-dashed border-amber-500/50 hover:bg-amber-500/10"
+                         : "bg-app-bg border-app-border hover:bg-app-surface";
+                     return (
+                       <motion.button
+                         key={env.id}
+                         type="button"
+                         onClick={() => setSelectedEnvelopeId(env.id)}
+                         whileTap={{ scale: 0.95 }}
+                         transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                         className={`${baseClass} ${stateClass}`}
+                         title={isTemp ? "Enveloppe temporaire" : undefined}
+                       >
+                         <div className={`w-3 h-3 rounded-full flex-shrink-0 ${env.color}`} />
+                         <span className={`truncate text-sm ${isSelected ? "text-app-text font-medium" : "text-app-text-secondary"}`}>
+                           {env.name}
+                         </span>
+                         {isTemp && (
+                           <span className="ml-auto flex-shrink-0 rounded border border-dashed border-amber-500/60 px-1 py-0.5 text-[9px] font-semibold uppercase leading-none tracking-wide text-amber-500/80">
+                             tmp
+                           </span>
+                         )}
+                       </motion.button>
+                     );
+                   })}
+              </div>
+
+              <AnimatePresence>
+                {selectedEnv && envRemaining !== null && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${remainingToneClass}`}
+                  >
+                    Reste disponible : {envRemaining.toFixed(2)} {symbol}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <AnimatePresence>
+                {isDateInvalidForTemp && (
+                  <motion.p
+                    key="temp-date-error"
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -4 }}
+                    transition={{ duration: 0.2 }}
+                    className="mt-2 rounded-lg border border-dashed border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-400"
+                    role="alert"
+                  >
+                    Cette enveloppe temporaire n&apos;accepte pas de dépense pour cette date.
+                    {validMonthLabels && (
+                      <> Mois valides&nbsp;: <span className="font-semibold">{validMonthLabels}</span>.</>
+                    )}
+                  </motion.p>
+                )}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-app-text-secondary mb-1">Source</label>
+              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-zinc-700">
+                {INCOME_SOURCES.map(source => {
+                  const isSelected = selectedSource === source;
+                  return (
+                    <motion.button
+                      key={source}
+                      type="button"
+                      onClick={() => setSelectedSource(source)}
+                      whileTap={{ scale: 0.95 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                      className={`p-3 rounded-lg border text-left flex items-center gap-2 transition-all ${
+                        isSelected
+                          ? "bg-app-surface border-emerald-500 ring-1 ring-emerald-500"
+                          : "bg-app-bg border-app-border hover:bg-app-surface"
+                      }`}
+                    >
+                      <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isSelected ? "bg-emerald-500" : "bg-emerald-500/30"}`} />
+                      <span className={`truncate text-sm ${isSelected ? "text-app-text font-medium" : "text-app-text-secondary"}`}>
+                        {source}
+                      </span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Remboursement (dépenses uniquement) */}
+          {transactionType === "expense" && (
           <div className="flex items-center justify-between p-3 rounded-lg bg-app-bg border border-app-border">
             <div>
               <p className="text-sm font-medium text-app-text">Remboursement</p>
@@ -433,6 +543,9 @@ const handleDelete = async () => {
               />
             </button>
           </div>
+          )}
+
+          {/* Description & Date */}
 
           <div className="grid grid-cols-2 gap-4">
              <div>

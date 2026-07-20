@@ -1,4 +1,9 @@
 // Utility functions for validation across the app
+import { INCOME_SOURCES, type IncomeSource } from "@/types/transaction";
+
+export { INCOME_SOURCES };
+export type { IncomeSource };
+
 export const VALIDATION_CONSTRAINTS = {
   AMOUNT_MIN: 0.01,
   AMOUNT_MAX: 1000000,
@@ -179,4 +184,57 @@ export function validateEnvelopeNameWithMessage(
 /** Construit la clé de mois utilisée dans le document compteur (ex: "tx_2026_06"). */
 export function getMonthKey(dateStr: string): string {
   return "tx_" + dateStr.slice(0, 7).replace("-", "_");
+}
+
+// ── Validation des revenus supplémentaires ──
+
+/**
+ * Valide que la source de revenu fait partie de la liste autorisée.
+ */
+export function validateSource(source: unknown): source is IncomeSource {
+  return (
+    typeof source === "string" &&
+    (INCOME_SOURCES as readonly string[]).includes(source)
+  );
+}
+
+/**
+ * Valide que le type de transaction est "expense" ou "income".
+ * Retourne aussi true pour undefined/null (backward compat).
+ */
+export function validateTransactionType(
+  type: unknown
+): type is "expense" | "income" | undefined {
+  if (type === undefined || type === null) return true;
+  return type === "expense" || type === "income";
+}
+
+/**
+ * Version avec message d'erreur en français pour la source.
+ */
+export function validateSourceWithMessage(
+  source: unknown
+): { valid: boolean; message: string } {
+  if (!validateSource(source)) {
+    return {
+      valid: false,
+      message: `La source doit être l'une des valeurs suivantes : ${INCOME_SOURCES.join(", ")}.`,
+    };
+  }
+  return { valid: true, message: "" };
+}
+
+/**
+ * Version avec message d'erreur en français pour le type.
+ */
+export function validateTransactionTypeWithMessage(
+  type: unknown
+): { valid: boolean; message: string } {
+  if (type !== undefined && type !== null && type !== "expense" && type !== "income") {
+    return {
+      valid: false,
+      message: "Le type doit être 'expense' ou 'income'.",
+    };
+  }
+  return { valid: true, message: "" };
 }

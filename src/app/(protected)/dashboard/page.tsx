@@ -439,6 +439,8 @@ export default function DashboardPage() {
   const perEnvelopeSpendPerDay = useMemo(() => {
     const raw = new Map<string, Map<string, number>>();
     transactions.forEach(tx => {
+      // Skip income transactions — they have no envelope
+      if (!tx.envelopeId || tx.type === "income") return;
       const day = tx.date?.split("T")[0];
       if (!day || !envelopeBudgetById.has(tx.envelopeId)) return;
       if (!raw.has(day)) raw.set(day, new Map());
@@ -518,6 +520,20 @@ export default function DashboardPage() {
   const totalBudgetEnvelopes = visibleEnvelopes.reduce((acc, env) => acc + env.budget, 0);
   const totalSpentEnvelopes = visibleEnvelopes.reduce((acc, env) => acc + env.spent, 0);
 
+  // Revenus supplémentaires (transactions de type "income")
+  const totalIncomeForMonth = transactions
+    .filter(tx => tx.type === "income")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+
+  // Regrouper les revenus par source pour l'affichage dashboard
+  const incomeBySource: Record<string, number> = {};
+  transactions
+    .filter(tx => tx.type === "income" && tx.source)
+    .forEach(tx => {
+      const src = tx.source!;
+      incomeBySource[src] = (incomeBySource[src] || 0) + tx.amount;
+    });
+
   // Temporary envelopes that are active for the selected month contribute their own
   // budget on top of the base monthly pool (income - fixedCosts - savings).
   // visibleEnvelopes already contains only month-active envelopes, so filtering by
@@ -543,7 +559,7 @@ export default function DashboardPage() {
   const monthlyTotalAvailable = settings
     ? resolvedIncome - settings.fixedCosts - settings.monthlySavings + temporaryEnvelopesBudget
     : 0;
-  const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes;
+  const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes + totalIncomeForMonth;
   
   const globalProgress =
     monthlyTotalAvailable > 0
@@ -555,12 +571,14 @@ export default function DashboardPage() {
     currentDate.getFullYear() === today.getFullYear() &&
     currentDate.getMonth() === today.getMonth();
 
-  const forecastTransactions: ForecastTransaction[] = transactions.map(tx => ({
-    envelopeId: tx.envelopeId || '',
-    amount: tx.amount || 0,
-    date: tx.date || '',
-    isReimbursement: tx.isReimbursement ?? false,
-  }));
+  const forecastTransactions: ForecastTransaction[] = transactions
+    .filter(tx => tx.type !== "income" && tx.envelopeId)
+    .map(tx => ({
+      envelopeId: tx.envelopeId!,
+      amount: tx.amount || 0,
+      date: tx.date || '',
+      isReimbursement: tx.isReimbursement ?? false,
+    }));
 
   const { globalForecast, envelopeForecasts, loading: forecastLoading } = useSpendingForecast({
     userId: user?.uid ?? null,
@@ -578,14 +596,16 @@ export default function DashboardPage() {
         name: envelope.name,
         budget: envelope.budget,
       })),
-      currentMonthTransactions: transactions.map((transaction) => ({
-        id: transaction.id,
-        envelopeId: transaction.envelopeId,
-        amount: transaction.amount,
-        date: transaction.date,
-        description: transaction.description,
-        isReimbursement: transaction.isReimbursement ?? false,
-      })),
+      currentMonthTransactions: transactions
+        .filter((tx) => tx.type !== "income" && tx.envelopeId)
+        .map((transaction) => ({
+          id: transaction.id,
+          envelopeId: transaction.envelopeId!,
+          amount: transaction.amount,
+          date: transaction.date,
+          description: transaction.description,
+          isReimbursement: transaction.isReimbursement ?? false,
+        })),
       envelopeForecasts,
       isCurrentMonth,
       currency,
@@ -698,6 +718,7 @@ export default function DashboardPage() {
           
           txSnap.forEach((doc) => {
             const data = doc.data();
+            const txType = data.type === "income" ? "income" : "expense";
             txList.push({
                 id: doc.id,
                 amount: Number(data.amount || 0),
@@ -705,8 +726,13 @@ export default function DashboardPage() {
                 envelopeId: typeof data.envelopeId === "string" ? data.envelopeId : "",
                 date: typeof data.date === "string" ? data.date : "",
                 isReimbursement: data.isReimbursement ?? false,
+                type: txType,
+                source: typeof data.source === "string" ? data.source as Transaction["source"] : undefined,
             });
-            
+
+            // Les revenus n'affectent pas le spent des enveloppes
+            if (data.type === "income") return;
+
             // Ajouter au 'spent' de l'enveloppe correspondante
             const envIndex = envList.findIndex(e => e.id === data.envelopeId);
             if (envIndex !== -1) {
@@ -1065,6 +1091,14 @@ export default function DashboardPage() {
                 <div className="text-xs text-app-text-secondary">
                     Sur {formatAmountWithoutCurrency(monthlyTotalAvailable, 0)} {symbol} prévus
                 </div>
+                {totalIncomeForMonth > 0 && (
+                  <div className="text-xs text-emerald-400/80">
+                    dont {formatAmountWithoutCurrency(totalIncomeForMonth, 0)} {symbol} de revenus
+                    {Object.entries(incomeBySource).length === 1 && (
+                      <> ({Object.keys(incomeBySource)[0]})</>
+                    )}
+                  </div>
+                )}
             </div>
 
             {/* Global Progress Bar */}

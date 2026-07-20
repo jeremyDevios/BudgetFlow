@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db } from "@/lib/firebase";
 import { collection, doc, getDocs, orderBy, query, limit, where, getDoc } from "firebase/firestore";
-import { MoveLeft, ArrowDown, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, LucideIcon, Calendar } from "lucide-react";
+import { MoveLeft, ArrowDown, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, TrendingUp, LucideIcon, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
@@ -81,13 +81,14 @@ export default function HistoryPage() {
     ? transactions.filter((tx) => {
         const desc = normalize(tx.description || "");
         const envName = normalize(envelopes[tx.envelopeId]?.name || "");
+        const sourceName = normalize(tx.source || "");
         const q = normalize(searchQuery);
         // Amount matching
         const amountStr = tx.amount.toFixed(2).replace(".", ",");
         const amountStrDot = tx.amount.toFixed(2);
         const amountInt = Math.floor(tx.amount).toString();
         const amountMatch = amountStr.includes(searchQuery.trim()) || amountStrDot.includes(searchQuery.trim()) || amountInt.includes(searchQuery.trim());
-        return desc.includes(q) || envName.includes(q) || amountMatch;
+        return desc.includes(q) || envName.includes(q) || sourceName.includes(q) || amountMatch;
       })
     : transactions;
 
@@ -167,8 +168,9 @@ export default function HistoryPage() {
         >
           <AnimatePresence>
             {filteredTransactions.map((tx, index) => {
-              const env = envelopes[tx.envelopeId] || {};
-              const Icon = ICON_MAP[env.icon] || ShoppingCart;
+              const isIncome = tx.type === "income";
+              const env = isIncome ? {} : (envelopes[tx.envelopeId] || {});
+              const Icon = isIncome ? TrendingUp : (ICON_MAP[env.icon] || ShoppingCart);
               const dateObj = new Date(tx.date);
 
               // Afficher le mois si c'est le premier item ou si le mois change par rapport au précédent
@@ -204,27 +206,27 @@ export default function HistoryPage() {
                   )}
 
                   {/* Timeline Dot */}
-                  <div className={`absolute -left-[42px] sm:-left-[58px] top-4 w-5 h-5 rounded-full border-4 border-black ${env.color || 'bg-zinc-500'}`}></div>
+                  <div className={`absolute -left-[42px] sm:-left-[58px] top-4 w-5 h-5 rounded-full border-4 border-black ${isIncome ? 'bg-emerald-500' : (env.color || 'bg-zinc-500')}`}></div>
 
                   <div 
                     onClick={() => handleEditClick(tx)}
                     className="bg-app-surface/40 border border-app-border hover:border-app-border hover:bg-app-surface/60 p-4 rounded-xl transition-all transition-transform duration-100 active:scale-[0.995] flex items-center justify-between group cursor-pointer"
                   >
                     <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-xl ${env.color || 'bg-app-surface'} text-app-text`}>
+                      <div className={`p-3 rounded-xl ${isIncome ? 'bg-emerald-500/20' : (env.color || 'bg-app-surface')} text-app-text`}>
                         <Icon className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="font-semibold text-app-text">{tx.description || env.name || "Dépense"}</p>
+                        <p className="font-semibold text-app-text">{tx.description || (isIncome ? "Revenu" : env.name || "Dépense")}</p>
                         <p className="text-xs text-app-text-secondary flex items-center gap-1">
                           {dateObj.toLocaleDateString()}
                           <span className="text-zinc-600">•</span>
-                          {env.name}
+                          {isIncome ? (tx.source || "Revenu") : env.name}
                         </p>
                       </div>
                     </div>
-                    <span className={`font-bold text-lg ${tx.isReimbursement ? "text-emerald-400" : "text-red-500"}`}>
-                      {tx.isReimbursement ? "+" : "-"}{formatAmount(tx.amount)}
+                    <span className={`font-bold text-lg ${isIncome || tx.isReimbursement ? "text-emerald-400" : "text-red-500"}`}>
+                      {isIncome || tx.isReimbursement ? "+" : "-"}{formatAmount(tx.amount)}
                     </span>
                   </div>
                 </motion.div>

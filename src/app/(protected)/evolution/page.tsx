@@ -106,6 +106,7 @@ export default function EvolutionPage() {
             const monthEnd = endOfMonth(month);
 
             let totalSpent = 0;
+            let totalIncome = 0;
             let transactionCount = 0;
 
             querySnapshot.forEach((doc) => {
@@ -120,7 +121,11 @@ export default function EvolutionPage() {
 
                 if (txDate >= monthStart && txDate <= monthEnd) {
                     const amount = parseFloat(tx.amount);
-                    totalSpent += tx.isReimbursement ? -amount : amount;
+                    if (tx.type === "income") {
+                      totalIncome += amount;
+                    } else {
+                      totalSpent += tx.isReimbursement ? -amount : amount;
+                    }
                     transactionCount++;
                 }
             });
@@ -131,9 +136,9 @@ export default function EvolutionPage() {
               ? income
               : resolveMonthlyIncome(monthStr, monthlyIncomes, income);
 
-            // Logic: Remaining = (Income - FixedCosts - Savings) - Spent
+            // Logic: Remaining = (Income - FixedCosts - Savings) - Spent + Extra Income
             // Correspond au "Reste disponible" du Dashboard
-            const remaining = (resolvedIncome - fixedCosts - savingsObjective) - totalSpent;
+            const remaining = (resolvedIncome - fixedCosts - savingsObjective) - totalSpent + totalIncome;
 
             return {
                 date: month,

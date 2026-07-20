@@ -117,21 +117,28 @@ service cloud.firestore {
     }
 
     // Transaction: /users/{userId}/transactions/{transactionId}
-    // Required: amount, envelopeId, date, createdAt
+    // Required: amount, date, createdAt
     // Optional: description, note (note retained for backward-compat with pre-rename iOS clients),
-    //           isReimbursement (bool; absent = false; when true the amount is a credit, not a debit)
+    //           isReimbursement (bool; absent = false; when true the amount is a credit, not a debit),
+    //           type ("expense" | "income"; absent = expense for backward compat),
+    //           source (income category; required when type === "income")
+    // envelopeId is required for expenses, optional for income transactions.
     function isValidTransactionData(data) {
       return data.keys().hasOnly([
-            'amount', 'envelopeId', 'date', 'createdAt', 'updatedAt', 'description', 'note', 'isReimbursement'
+            'amount', 'envelopeId', 'date', 'createdAt', 'updatedAt', 'description', 'note', 'isReimbursement', 'type', 'source'
           ])
         && data.amount     is number && data.amount > 0             && data.amount     <= 1000000
-        && data.envelopeId is string && data.envelopeId.size() >= 1 && data.envelopeId.size() <= 128
         && data.date       is string && data.date.size()       >= 1 && data.date.size()       <= 30
         && data.createdAt  is string && data.createdAt.size()  >= 1 && data.createdAt.size()  <= 30
+        // envelopeId: required for expenses, optional for income
+        && (data.type == 'income' || (data.envelopeId is string && data.envelopeId.size() >= 1 && data.envelopeId.size() <= 128))
+        && (!('envelopeId'    in data) || data.type == 'income' || (data.envelopeId is string && data.envelopeId.size() >= 1 && data.envelopeId.size() <= 128))
         && (!('updatedAt'      in data) || (data.updatedAt      is string && data.updatedAt.size()      >= 1 && data.updatedAt.size()      <= 30))
         && (!('description'     in data) || (data.description     is string && data.description.size()     <= 255))
         && (!('note'            in data) || (data.note            is string && data.note.size()            <= 255))
-        && (!('isReimbursement' in data) || data.isReimbursement is bool);
+        && (!('isReimbursement' in data) || data.isReimbursement is bool)
+        && (!('type'            in data) || data.type in ['expense', 'income'])
+        && (!('source'          in data) || (data.source is string && data.source.size() >= 1 && data.source.size() <= 100));
     }
 
     // Monthly income override: /users/{userId}/monthlyIncomes/{YYYY-MM}

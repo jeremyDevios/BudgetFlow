@@ -101,6 +101,9 @@ export function computeForecast(params: {
   const observedMonthKeys = new Set<string>();
 
   for (const tx of pastTransactions) {
+    // Skip income transactions — they have no envelope
+    if (!tx.envelopeId) continue;
+
     const monthKey = getMonthKey(tx.date);
     if (!monthKey) {
       continue;

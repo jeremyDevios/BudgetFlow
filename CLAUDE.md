@@ -68,6 +68,15 @@ An envelope marked `isTemporary: true` only appears in months listed in its `act
 
 A display-only privacy feature that masks currency amounts in the web UI. Toggled in Settings, persisted in Firestore `settings/general.anonymousMode`, hydrates via `src/context/AnonymousModeContext.tsx`. Masking is done by `src/lib/maskAmount.ts`.
 
+## Database changes & backward compatibility
+
+**The app is in production** with active users on both web and iOS. Any change to the Firestore data structure, security rules, or document shape **must** be backward-compatible with the previous production version of the iOS app and web app.
+
+- **Firestore rules**: When adding/removing fields or changing validation, old clients writing the old set of fields must still pass all new rules. New fields should always be optional (`!('newField' in data) || ...`). A required field that old clients don't send will break them.
+- **Document shape**: Adding a field is safe if old clients gracefully ignore unknown fields. Removing or renaming a field requires a migration plan. Changing a field's type or meaning is a breaking change.
+- **Validation alignment**: Keep constraints aligned across `src/lib/validation.ts`, API routes, and `firestore.rules` — a change in one must be reflected in the others, and all three must accept the old format.
+- **Unit tests are mandatory**: Every data-structure change must include regression tests proving that payloads matching the old client format still pass validation. Test specifically: old field sets with `hasOnly`, old value ranges, and old required-vs-optional constraints.
+
 ## Key conventions
 
 - **`@/` alias** maps to `src/` (configured in tsconfig.json paths).

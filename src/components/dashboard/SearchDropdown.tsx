@@ -40,14 +40,16 @@ export default function SearchDropdown({ transactions, envelopes, currentDate }:
     ? transactions
         .filter((tx) => {
           const desc = normalize(tx.description || "");
-          const envName = normalize(envelopeMap[tx.envelopeId]?.name || "");
+          const envOrSource = tx.type === "income"
+            ? normalize(tx.source || "")
+            : normalize(envelopeMap[tx.envelopeId ?? ""]?.name || "");
           const q = normalize(query);
           // Amount matching: if query is a number (possibly partial), match against formatted amount
           const amountStr = tx.amount.toFixed(2).replace(".", ",");
           const amountStrDot = tx.amount.toFixed(2);
           const amountInt = Math.floor(tx.amount).toString();
           const amountMatch = amountStr.includes(query.trim()) || amountStrDot.includes(query.trim()) || amountInt.includes(query.trim());
-          return desc.includes(q) || envName.includes(q) || amountMatch;
+          return desc.includes(q) || envOrSource.includes(q) || amountMatch;
         })
         .slice(0, 6)
     : [];
@@ -133,7 +135,8 @@ export default function SearchDropdown({ transactions, envelopes, currentDate }:
             ) : (
               <ul className="divide-y divide-app-border/50">
                 {results.map((tx, index) => {
-                  const env = envelopeMap[tx.envelopeId];
+                  const env = tx.envelopeId ? envelopeMap[tx.envelopeId] : undefined;
+                  const isIncome = tx.type === "income";
                   return (
                     <motion.li
                       key={tx.id}
@@ -146,19 +149,24 @@ export default function SearchDropdown({ transactions, envelopes, currentDate }:
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-app-bg/60 active:scale-[0.99] transition-all text-left group"
                         role="option"
                       >
-                        {env && (
+                        {isIncome ? (
+                          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 bg-emerald-500" />
+                        ) : env ? (
                           <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${env.color}`} />
-                        )}
+                        ) : null}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-app-text truncate">
-                            {tx.description || "Dépense"}
+                            {tx.description || (isIncome ? "Revenu" : "Dépense")}
                           </p>
                           <p className="text-xs text-app-text-secondary truncate">
-                            dans {env?.name ?? "Enveloppe supprimée"}
+                            {isIncome
+                              ? tx.source || "Revenu"
+                              : `dans ${env?.name ?? "Enveloppe supprimée"}`
+                            }
                           </p>
                         </div>
-                        <span className={`text-sm font-bold flex-shrink-0 ${tx.isReimbursement ? "text-emerald-400" : "text-red-400"}`}>
-                          {tx.isReimbursement ? "+" : "-"}{formatAmount(tx.amount)}
+                        <span className={`text-sm font-bold flex-shrink-0 ${isIncome || tx.isReimbursement ? "text-emerald-400" : "text-red-400"}`}>
+                          {isIncome || tx.isReimbursement ? "+" : "-"}{formatAmount(tx.amount)}
                         </span>
                       </button>
                     </motion.li>
