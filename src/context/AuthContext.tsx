@@ -65,7 +65,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             // Ne pas return : onAuthStateChanged va s'initialiser ci-dessous
             // et retournera le vrai utilisateur Firebase (même UID).
           } catch (e) {
-            logger.warn("AuthContext: custom token E2E échoué, fallback sur bypass", e);
+            logger.warn("AuthContext: custom token E2E échoué, fallback sur bypass");
             setUser(bypassUser);
             setLoading(false);
             return;
