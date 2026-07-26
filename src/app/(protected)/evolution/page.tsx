@@ -12,6 +12,7 @@ import { ChevronLeft, TrendingUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { logger } from "@/lib/logger";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
+import { isEnvelopeActiveForMonth } from "@/types/envelope";
 import { motion, AnimatePresence } from "framer-motion";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
 import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
@@ -75,12 +76,29 @@ export default function EvolutionPage() {
           }
         }
 
-        // 2. Determine Date Range (Last 6 months)
+        // 2. Fetch envelopes (needed for temporary-envelope budgets per month)
+        const envelopes: Array<{ isTemporary?: boolean; budget: number; activeMonths?: string[] }> = [];
+        try {
+          const envRef = collection(db, "users", user.uid, "envelopes");
+          const envSnap = await getDocs(envRef);
+          envSnap.forEach((doc) => {
+            const data = doc.data();
+            envelopes.push({
+              isTemporary: data.isTemporary ?? false,
+              budget: Number(data.budget || 0),
+              activeMonths: data.activeMonths ?? [],
+            });
+          });
+        } catch (e) {
+          logger.warn("Envelopes read failed, temporary budgets will be absent");
+        }
+
+        // 3. Determine Date Range (Last 6 months)
         const today = new Date();
         const end = endOfMonth(today);
         const start = startOfMonth(subMonths(today, 5));
 
-        // 3. Get Transactions (date-filtered, last 6 months)
+        // 4. Get Transactions (date-filtered, last 6 months)
         const txRef = collection(db, "users", user.uid, "transactions");
         const fmt = (d: Date) => {
           const y = d.getFullYear();
@@ -98,7 +116,7 @@ export default function EvolutionPage() {
         );
         const querySnapshot = await getDocs(q);
 
-        // 4. Aggregate by Month
+        // 5. Aggregate by Month
         const months = eachMonthOfInterval({ start, end });
 
         const monthlyData = months.map(month => {
@@ -139,9 +157,13 @@ export default function EvolutionPage() {
               ? income
               : resolveMonthlyIncome(monthStr, monthlyIncomes, income);
 
-            // Logic: Remaining = (Income - FixedCosts - Savings) - Spent + Extra Income
-            // Correspond au "Reste disponible" du Dashboard
-            const remaining = (resolvedIncome - fixedCosts - savingsObjective) - totalSpent + totalIncome;
+            // Logic: Remaining = (Income - FixedCosts - Savings + TemporaryBudget) - Spent + Extra Income
+            // Correspond au "Reste disponible" du Dashboard (monthlyTotalAvailable - totalSpent + totalIncome)
+            const temporaryBudget = envelopes
+              .filter((env) => isEnvelopeActiveForMonth(env, monthStr))
+              .filter((env) => env.isTemporary)
+              .reduce((sum, env) => sum + env.budget, 0);
+            const remaining = (resolvedIncome - fixedCosts - savingsObjective + temporaryBudget) - totalSpent + totalIncome;
 
             return {
                 date: month,
