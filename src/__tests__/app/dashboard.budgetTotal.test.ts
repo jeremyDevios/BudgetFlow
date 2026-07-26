@@ -309,3 +309,156 @@ describe('Scenario D: settings absent — monthlyTotalAvailable is 0', () => {
     expect(monthlyTotalAvailable).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Unassigned-spending helpers — mirrors getTransactionImpact and the
+// unassignedSpent useMemo added to dashboard/page.tsx
+// ---------------------------------------------------------------------------
+
+interface TransactionStub {
+  amount: number;
+  type: "income" | "expense";
+  envelopeId: string;
+  isReimbursement?: boolean;
+}
+
+function getTransactionImpact(tx: { amount: number; isReimbursement?: boolean }): number {
+  return tx.isReimbursement ? -tx.amount : tx.amount;
+}
+
+/**
+ * Replicates the `unassignedSpent` useMemo from dashboard/page.tsx:
+ *   const assignedIds = new Set(envelopes.map(e => e.id));
+ *   return transactions
+ *     .filter(tx => tx.type !== "income" && !assignedIds.has(tx.envelopeId))
+ *     .reduce((sum, tx) => sum + getTransactionImpact(tx), 0);
+ */
+function computeUnassignedSpent(
+  allEnvelopeIds: Set<string>,
+  transactions: TransactionStub[],
+): number {
+  return transactions
+    .filter((tx) => tx.type !== "income" && !allEnvelopeIds.has(tx.envelopeId))
+    .reduce((sum, tx) => sum + getTransactionImpact(tx), 0);
+}
+
+/**
+ * Replicates the `totalIncomeForMonth` calculation from dashboard/page.tsx.
+ */
+function computeTotalIncome(transactions: TransactionStub[]): number {
+  return transactions
+    .filter((tx) => tx.type === "income")
+    .reduce((sum, tx) => sum + tx.amount, 0);
+}
+
+/**
+ * Full balance formula as applied in the dashboard:
+ *   currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes
+ *                          - unassignedSpent + totalIncomeForMonth
+ */
+function computeFinalBalance(
+  monthlyTotalAvailable: number,
+  totalSpentEnvelopes: number,
+  unassignedSpent: number,
+  totalIncomeForMonth: number,
+): number {
+  return monthlyTotalAvailable - totalSpentEnvelopes - unassignedSpent + totalIncomeForMonth;
+}
+
+// ---------------------------------------------------------------------------
+// Scenario E — Transactions WITHOUT an envelope → unassignedSpent > 0
+// ---------------------------------------------------------------------------
+
+describe('Scenario E: unassigned spending — orphan transactions', () => {
+  const allIds = new Set(['env-1', 'env-2']);
+
+  it('captures transactions with empty envelopeId', () => {
+    const transactions: TransactionStub[] = [
+      { amount: 50, type: 'expense', envelopeId: 'env-1' },
+      { amount: 30, type: 'expense', envelopeId: '' },
+    ];
+    expect(computeUnassignedSpent(allIds, transactions)).toBe(30);
+  });
+
+  it('captures transactions with deleted/non-existent envelopeId', () => {
+    const transactions: TransactionStub[] = [
+      { amount: 100, type: 'expense', envelopeId: 'deleted-env-123' },
+    ];
+    expect(computeUnassignedSpent(allIds, transactions)).toBe(100);
+  });
+
+  it('returns 0 when all transactions are assigned to existing envelopes', () => {
+    const transactions: TransactionStub[] = [
+      { amount: 50, type: 'expense', envelopeId: 'env-1' },
+      { amount: 30, type: 'expense', envelopeId: 'env-2' },
+    ];
+    expect(computeUnassignedSpent(allIds, transactions)).toBe(0);
+  });
+
+  it('excludes income transactions from unassignedSpent', () => {
+    const transactions: TransactionStub[] = [
+      { amount: 200, type: 'income', envelopeId: '' },
+    ];
+    expect(computeUnassignedSpent(allIds, transactions)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario F — Reimbursements without an envelope → reduce unassignedSpent
+// ---------------------------------------------------------------------------
+
+describe('Scenario F: unassigned spending — reimbursements', () => {
+  const allIds = new Set(['env-1']);
+
+  it('reimbursement without envelope reduces unassignedSpent net', () => {
+    const transactions: TransactionStub[] = [
+      { amount: 50, type: 'expense', envelopeId: '' },
+      { amount: 20, type: 'expense', envelopeId: '', isReimbursement: true },
+    ];
+    // 50 - 20 = 30
+    expect(computeUnassignedSpent(allIds, transactions)).toBe(30);
+  });
+
+  it('reimbursement assigned to a valid envelope does NOT affect unassignedSpent', () => {
+    const transactions: TransactionStub[] = [
+      { amount: 50, type: 'expense', envelopeId: '' },
+      { amount: 20, type: 'expense', envelopeId: 'env-1', isReimbursement: true },
+    ];
+    // Only the 50 is unassigned, the reimbursement is assigned
+    expect(computeUnassignedSpent(allIds, transactions)).toBe(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario G — Full balance formula integration
+// ---------------------------------------------------------------------------
+
+describe('Scenario G: full balance formula with unassigned + income', () => {
+  it('subtracts unassignedSpent and adds income to the base balance', () => {
+    // Given: totalAvailable = 2000, assignedSpent = 170, unassignedSpent = 30, income = 200
+    const balance = computeFinalBalance(2000, 170, 30, 200);
+    // 2000 - 170 - 30 + 200 = 2000
+    expect(balance).toBe(2000);
+  });
+
+  it('negative unassignedSpent (net reimbursement) increases the balance', () => {
+    // All-unassigned reimbursements → unassignedSpent = -50
+    const balance = computeFinalBalance(2000, 170, -50, 0);
+    // 2000 - 170 - (-50) + 0 = 1880
+    expect(balance).toBe(1880);
+  });
+
+  it('balance equals base calculation when unassigned and income are both zero', () => {
+    const balance = computeFinalBalance(2000, 170, 0, 0);
+    expect(balance).toBe(1830); // 2000 - 170
+  });
+
+  it('totalIncomeForMonth sums only income-type transactions', () => {
+    const transactions: TransactionStub[] = [
+      { amount: 100, type: 'income', envelopeId: '' },
+      { amount: 50, type: 'income', envelopeId: '' },
+      { amount: 200, type: 'expense', envelopeId: 'env-1' },
+    ];
+    expect(computeTotalIncome(transactions)).toBe(150);
+  });
+});

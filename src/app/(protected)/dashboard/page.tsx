@@ -555,13 +555,25 @@ export default function DashboardPage() {
     return resolveMonthlyIncome(selectedMonth, monthlyIncomes, settings.monthlyIncome);
   }, [settings, selectedMonth, monthlyIncomes]);
 
+  // Dépenses sans enveloppe assignée (transactions orphelines ou avec envelopeId invalide).
+  // Elles ne sont pas comptabilisées dans totalSpentEnvelopes (qui ne somme que les
+  // enveloppes visibles), mais réduisent bien le solde disponible réel.
+  // On utilise toutes les enveloppes (pas seulement visibles) car une transaction
+  // assignée à une enveloppe temporaire inactive reste une transaction "assignée".
+  const unassignedSpent = useMemo(() => {
+    const assignedIds = new Set(envelopes.map(e => e.id));
+    return transactions
+      .filter(tx => tx.type !== "income" && !assignedIds.has(tx.envelopeId))
+      .reduce((sum, tx) => sum + getTransactionImpact(tx), 0);
+  }, [transactions, envelopes]);
+
   // Reste à vivre réel (ce qu'il reste dans les enveloppes + surplus non alloué)
   // Logic: (Income - Fixed - Savings) + active-temporary-envelope budgets = Total Available for Month
-  // Current Balance = Total Available - Total Spent
+  // Current Balance = Total Available - Total Spent (envelopes + unassigned) + Extra Income
   const monthlyTotalAvailable = settings
     ? resolvedIncome - settings.fixedCosts - settings.monthlySavings + temporaryEnvelopesBudget
     : 0;
-  const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes + totalIncomeForMonth;
+  const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes - unassignedSpent + totalIncomeForMonth;
   
   const globalProgress =
     monthlyTotalAvailable > 0
@@ -1043,6 +1055,12 @@ export default function DashboardPage() {
                 <h2 className={`text-4xl font-extrabold tracking-tighter ${currentMonthBalance < 0 ? 'text-red-500' : 'text-app-text'}`}>
                     {formatAmountWithoutCurrency(currentMonthBalance)} <span className="text-2xl text-app-text-secondary">{symbol}</span>
                 </h2>
+                {/* Dépenses sans enveloppe : avertissement pour inciter à les assigner */}
+                {unassignedSpent !== 0 && (
+                  <div className="text-xs text-amber-500/80 mt-1" title="Ces dépenses ne sont pas rattachées à une enveloppe et réduisent votre solde disponible.">
+                    ⚠️ Dont {unassignedSpent > 0 ? "" : "+"}{formatAmountWithoutCurrency(Math.abs(unassignedSpent))} {symbol} de dépenses sans enveloppe
+                  </div>
+                )}
                 {/* Variable income: show editable income line */}
                 {settings?.isFixedIncome === false && (
                   <div className="text-xs text-app-text-secondary mt-1">
