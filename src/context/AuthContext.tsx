@@ -39,30 +39,61 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Bypass E2E : injecte l'utilisateur factice sans Firebase Auth
-    const bypassUser = getE2EBypassUser();
-    if (bypassUser) {
-      logger.info(`AuthContext: bypass E2E activé, uid: ${(bypassUser as any).uid}`);
-      setUser(bypassUser);
-      setLoading(false);
-      return;
-    }
-
     let unsubscribe: (() => void) | undefined;
 
-    try {
-      unsubscribe = onAuthStateChanged(auth, (user) => {
-        setUser(user);
+    const initAuth = async () => {
+      // Bypass E2E : injecte un utilisateur factice depuis localStorage.
+      // Si un custom token Admin est présent, on crée une VRAIE session
+      // Firebase Auth pour que request.auth ≠ null dans les règles Firestore.
+      const bypassUser = getE2EBypassUser();
+      if (bypassUser) {
+        logger.info(`AuthContext: bypass E2E activé, uid: ${(bypassUser as any).uid}`);
+
+        const customToken = typeof window !== "undefined"
+          ? window.localStorage.getItem("e2e_token")
+          : null;
+
+        if (customToken) {
+          try {
+            const { signInWithCustomToken } = await import("firebase/auth");
+            await signInWithCustomToken(auth, customToken);
+            // Token consommé — le supprimer pour ne pas tenter de le
+            // réutiliser (les custom tokens sont one-shot). Si un autre
+            // onglet/test en avait besoin, il aura son propre token
+            // injecté par auth.setup.ts.
+            window.localStorage.removeItem("e2e_token");
+            // Ne pas return : onAuthStateChanged va s'initialiser ci-dessous
+            // et retournera le vrai utilisateur Firebase (même UID).
+          } catch (e) {
+            logger.warn("AuthContext: custom token E2E échoué, fallback sur bypass", e);
+            setUser(bypassUser);
+            setLoading(false);
+            return;
+          }
+        } else {
+          // Ancien comportement : bypass pur, pas de session Firestore réelle.
+          // Les opérations Firestore échoueront (request.auth = null).
+          setUser(bypassUser);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Configurer onAuthStateChanged (cas normal OU après custom token E2E).
+      try {
+        unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+          setUser(firebaseUser);
+          setLoading(false);
+        });
+      } catch (err) {
+        // Firebase Auth indisponible (ex: pas de config en CI).
+        logger.warn('AuthContext: onAuthStateChanged a échoué, auth indisponible');
+        setUser(null);
         setLoading(false);
-      });
-    } catch (err) {
-      // Firebase Auth indisponible (ex: pas de config en CI).
-      // Dégradation gracieuse : on traite comme non-authentifié.
-      logger.warn('AuthContext: onAuthStateChanged a échoué, auth indisponible');
-      setUser(null);
-      setLoading(false);
-      return;
-    }
+      }
+    };
+
+    initAuth();
 
     return () => {
       if (unsubscribe) unsubscribe();

@@ -7,7 +7,7 @@ import {
   Trash2,
   Loader2 
 } from "lucide-react";
-import { collection, addDoc, doc, updateDoc, deleteDoc, increment } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, deleteDoc, deleteField, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
@@ -181,12 +181,12 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
           updateData.envelopeId = selectedEnvelopeId;
           updateData.isReimbursement = isReimbursement;
           // Nettoyer les champs income si on passe de income à expense
-          updateData.source = null;
+          updateData.source = deleteField();
         } else {
           updateData.source = selectedSource;
           // Nettoyer les champs expense si on passe de expense à income
-          updateData.envelopeId = null;
-          updateData.isReimbursement = null;
+          updateData.envelopeId = deleteField();
+          updateData.isReimbursement = deleteField();
         }
 
         await updateDoc(txRef, updateData);
@@ -253,12 +253,17 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         // 3. Incrémenter le compteur de transactions du mois
         const monthKey = getMonthKey(date);
         const counterRef = doc(db, "counters", user.uid);
-        await updateDoc(counterRef, {
-          [monthKey]: increment(1),
-        }).catch(() => {
-          // Le document compteur peut ne pas exister encore, on le crée
-          // avec setDoc en mode merge (ne plante pas si déjà existant).
-        });
+        try {
+          await updateDoc(counterRef, {
+            [monthKey]: increment(1),
+          });
+        } catch {
+          // Le document compteur n'existe pas encore, on le crée en mode merge.
+          const { setDoc } = await import("firebase/firestore");
+          await setDoc(counterRef, { [monthKey]: 1 }, { merge: true }).catch(() => {
+            // Ignorer silencieusement — quota non critique.
+          });
+        }
       }
 
       refreshData();

@@ -4,13 +4,16 @@ service cloud.firestore {
 
     // ── Auth ─────────────────────────────────────────────────────────────────
 
-    // Require a live Google or Apple Sign-In session.
+    // Require a live Google, Apple Sign-In, or custom token (E2E tests) session.
     // Explicitly checking the provider prevents any accidentally re-enabled
     // auth method (e.g. email/password) from silently granting access.
+    // Custom tokens are allowed for E2E testing — they require the Admin SDK
+    // private key to mint, so they don't weaken production security.
     function isAuthenticated() {
       return request.auth != null
         && (request.auth.token.firebase.sign_in_provider == 'google.com'
-            || request.auth.token.firebase.sign_in_provider == 'apple.com');
+            || request.auth.token.firebase.sign_in_provider == 'apple.com'
+            || request.auth.token.firebase.sign_in_provider == 'custom');
     }
 
     function isOwner(userId) {

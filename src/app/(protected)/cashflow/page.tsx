@@ -123,19 +123,6 @@ export default function CashFlowPage() {
     return resolveMonthlyIncome(currentMonth, monthlyIncomes, settings.monthlyIncome);
   }, [settings, monthlyIncomes]);
 
-  if (loading) {
-    return <div className="min-h-screen bg-app-bg flex items-center justify-center text-amber-500"><Loader2 className="animate-spin" /></div>;
-  }
-
-  if (!settings) {
-      return (
-          <div className="min-h-screen bg-app-bg text-app-text p-4 flex flex-col items-center justify-center">
-              <p className="mb-4">Veuillez configurer vos paramètres (Revenu, Frais fixes) pour voir le diagramme.</p>
-              <button onClick={() => router.push('/settings')} className="text-amber-500 underline">Aller aux paramètres</button>
-          </div>
-      )
-  }
-
   // --- Sankey Data Construction ---
   // Build nodes and links together to avoid orphan nodes (nodes with zero links).
   // Orphan nodes cause d3-sankey to produce NaN positions, crashing the chart.
@@ -277,10 +264,14 @@ export default function CashFlowPage() {
     );
   };
 
+  // Helper pour l'affichage conditionnel (0 si données non chargées)
+  const displayIncome = settings ? resolvedIncome : 0;
+  const displayAllocated = settings ? totalAllocated : 0;
+
   return (
     <div className="min-h-screen bg-app-bg text-app-text p-4 pb-20">
       <header className="flex items-center gap-4 mb-4">
-        <button 
+        <button
           onClick={() => router.back()}
           className="p-2 rounded-full bg-app-surface border border-app-border hover:bg-app-surface transition-colors"
         >
@@ -291,78 +282,92 @@ export default function CashFlowPage() {
             Cash Flow
         </h1>
       </header>
-      
-      <div className="bg-app-surface/40 border border-app-border rounded-3xl p-2 sm:p-6 h-[75vh] w-full overflow-hidden flex flex-col">
-         {resolvedIncome > 0 ? (
-             <ResponsiveContainer width="100%" height="100%">
-                <Sankey
-                    data={data}
-                    node={<MyCustomNode />}
-                    nodePadding={20}
-                  link={<MyCustomLink />}
-                    margin={{
-                        left: 20,
-                        right: 120, // Space for labels
-                        top: 20,
-                        bottom: 20,
-                    }}
-                >
-                    <Tooltip 
-                        contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', borderRadius: '12px', color: '#fff' }}
-                        itemStyle={{ color: '#fff' }}
-                        formatter={(value: any, name: any, props: any) => {
-                             if (props && props.payload && props.payload.target && props.payload.source) {
-                                 return [formatAmount(Number(value || 0)), `${props.payload.source.name} → ${props.payload.target.name}`];
-                             }
-                             return [formatAmount(Number(value || 0)), name];
+
+      {loading ? (
+        <div className="flex h-[60vh] items-center justify-center text-amber-500">
+          <Loader2 className="animate-spin h-8 w-8" />
+        </div>
+      ) : !settings ? (
+        <div className="flex h-[60vh] items-center justify-center">
+          <div className="text-center">
+            <p className="mb-4 text-app-text-secondary">Veuillez configurer vos paramètres (Revenu, Frais fixes) pour voir le diagramme.</p>
+            <button onClick={() => router.push('/settings')} className="text-amber-500 underline">Aller aux paramètres</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="bg-app-surface/40 border border-app-border rounded-3xl p-2 sm:p-6 h-[75vh] w-full overflow-hidden flex flex-col">
+             {resolvedIncome > 0 ? (
+                 <ResponsiveContainer width="100%" height="100%">
+                    <Sankey
+                        data={data}
+                        node={<MyCustomNode />}
+                        nodePadding={20}
+                      link={<MyCustomLink />}
+                        margin={{
+                            left: 20,
+                            right: 120,
+                            top: 20,
+                            bottom: 20,
                         }}
-                    />
-                </Sankey>
-             </ResponsiveContainer>
-         ) : (
-             <div className="flex h-full items-center justify-center text-app-text-secondary">
-                 Aucun revenu configuré.
-             </div>
-         )}
-      </div>
+                    >
+                        <Tooltip
+                            contentStyle={{ backgroundColor: '#18181b', borderColor: '#3f3f46', borderRadius: '12px', color: '#fff' }}
+                            itemStyle={{ color: '#fff' }}
+                            formatter={(value: any, name: any, props: any) => {
+                                 if (props && props.payload && props.payload.target && props.payload.source) {
+                                     return [formatAmount(Number(value || 0)), `${props.payload.source.name} → ${props.payload.target.name}`];
+                                 }
+                                 return [formatAmount(Number(value || 0)), name];
+                            }}
+                        />
+                    </Sankey>
+                 </ResponsiveContainer>
+             ) : (
+                 <div className="flex h-full items-center justify-center text-app-text-secondary">
+                     Aucun revenu configuré.
+                 </div>
+             )}
+          </div>
 
-       {/* Legend / Summary */}
-       <motion.div
-         className="mt-8 grid grid-cols-2 gap-4 text-center"
-         initial="hidden"
-         animate="visible"
-         variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
-       >
-             <motion.div
-               className="bg-app-surface/50 p-4 rounded-2xl border border-app-border"
-               variants={{
-                 hidden: { opacity: 0, y: 20 },
-                 visible: {
-                   opacity: 1,
-                   y: 0,
-                   transition: { type: "spring", stiffness: 280, damping: 22 },
-                 },
-               }}
-             >
-                 <span className="block text-app-text-secondary text-xs uppercase mb-1">Revenu Total</span>
-                 <span className="text-2xl font-bold text-emerald-400">{formatAmount(resolvedIncome)}</span>
-             </motion.div>
-             <motion.div
-               className="bg-app-surface/50 p-4 rounded-2xl border border-app-border"
-               variants={{
-                 hidden: { opacity: 0, y: 20 },
-                 visible: {
-                   opacity: 1,
-                   y: 0,
-                   transition: { type: "spring", stiffness: 280, damping: 22 },
-                 },
-               }}
-             >
-                 <span className="block text-app-text-secondary text-xs uppercase mb-1">Total Alloué</span>
-                 <span className="text-2xl font-bold text-amber-500">{formatAmount(totalAllocated)}</span>
-             </motion.div>
-       </motion.div>
-
+          {/* Legend / Summary */}
+          <motion.div
+            className="mt-8 grid grid-cols-2 gap-4 text-center"
+            initial="hidden"
+            animate="visible"
+            variants={{ visible: { transition: { staggerChildren: 0.1 } } }}
+          >
+                <motion.div
+                  className="bg-app-surface/50 p-4 rounded-2xl border border-app-border"
+                  variants={{
+                    hidden: { opacity: 0, y: 20 },
+                    visible: {
+                      opacity: 1,
+                      y: 0,
+                      transition: { type: "spring", stiffness: 280, damping: 22 },
+                    },
+                  }}
+                >
+                    <span className="block text-app-text-secondary text-xs uppercase mb-1">Revenu Total</span>
+                    <span className="text-2xl font-bold text-emerald-400">{formatAmount(displayIncome)}</span>
+                </motion.div>
+                <motion.div
+                  className="bg-app-surface/50 p-4 rounded-2xl border border-app-border"
+                  variants={{
+                    hidden: { opacity: 0, y: 20 },
+                    visible: {
+                      opacity: 1,
+                      y: 0,
+                      transition: { type: "spring", stiffness: 280, damping: 22 },
+                    },
+                  }}
+                >
+                    <span className="block text-app-text-secondary text-xs uppercase mb-1">Total Alloué</span>
+                    <span className="text-2xl font-bold text-amber-500">{formatAmount(displayAllocated)}</span>
+                </motion.div>
+          </motion.div>
+        </>
+      )}
     </div>
   );
 }

@@ -109,22 +109,25 @@ export default function EvolutionPage() {
             let totalIncome = 0;
             let transactionCount = 0;
 
-            querySnapshot.forEach((doc) => {
-                const tx = doc.data();
+            querySnapshot.forEach((txDoc) => {
+                const data = txDoc.data();
                 // Handle Firestore Timestamp or ISO string
                 let txDate: Date;
-                if (tx.date && typeof tx.date.toDate === 'function') {
-                     txDate = tx.date.toDate();
+                if (data.date && typeof data.date.toDate === 'function') {
+                     txDate = data.date.toDate();
                 } else {
-                     txDate = new Date(tx.date);
+                     txDate = new Date(data.date);
                 }
 
                 if (txDate >= monthStart && txDate <= monthEnd) {
-                    const amount = parseFloat(tx.amount);
-                    if (tx.type === "income") {
+                    // Normalize type: "income" → income, everything else → expense
+                    // (same normalization as Dashboard for backward compatibility)
+                    const txType = data.type === "income" ? "income" : "expense";
+                    const amount = Number(data.amount || 0);
+                    if (txType === "income") {
                       totalIncome += amount;
                     } else {
-                      totalSpent += tx.isReimbursement ? -amount : amount;
+                      totalSpent += data.isReimbursement ? -amount : amount;
                     }
                     transactionCount++;
                 }

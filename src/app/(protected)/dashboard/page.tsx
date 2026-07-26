@@ -409,10 +409,12 @@ export default function DashboardPage() {
     currentDate
   );
 
-  // Sum all transaction amounts per calendar day ("YYYY-MM-DD") for heatmap severity.
+  // Sum all expense transaction amounts per calendar day ("YYYY-MM-DD") for heatmap severity.
+  // Income transactions are excluded — they don't represent spending.
   const dailySpend = useMemo(() => {
     const map = new Map<string, number>();
     transactions.forEach((tx) => {
+      if (tx.type === "income") return;
       const day = tx.date?.split("T")[0];
       if (day) map.set(day, (map.get(day) ?? 0) + getTransactionImpact(tx));
     });
@@ -1107,12 +1109,18 @@ export default function DashboardPage() {
                     <span>Dépenses : {formatAmountWithCurrency(totalSpentEnvelopes)}</span>
                   <span data-testid="global-progress-label">{globalProgress.toFixed(0)}%</span>
                 </div>
-                <div className="h-3 rounded-full overflow-hidden bg-black/10 dark:bg-white/10">
-                    <div 
+                <div className="h-3 rounded-full overflow-hidden bg-black/10 dark:bg-white/10 relative">
+                    <div
                     data-testid="global-progress-fill"
                         className={`h-full rounded-full transition-all duration-1000 ease-out ${globalProgress > 100 ? 'bg-red-500' : 'bg-gradient-to-r from-amber-400 to-orange-600'}`}
-                        style={{ width: `${Math.min(globalProgress, 100)}%` }}
+                        style={{ width: globalProgress > 100 ? '100%' : `${globalProgress}%` }}
                     ></div>
+                    {globalProgress > 100 && (
+                        <div
+                            className="absolute top-0 bottom-0 w-0.5 bg-white dark:bg-gray-800 rounded-full"
+                            style={{ left: `${(100 / globalProgress) * 100}%` }}
+                        />
+                    )}
                 </div>
                 {/* Visualisation des segments (Optionnel, simplifié ici) */}
                 <div className="flex h-1 mt-1 gap-1">
@@ -1121,7 +1129,7 @@ export default function DashboardPage() {
                             key={env.id} 
                             className={`h-full rounded-full ${env.color} opacity-80`}
                             style={{ 
-                                width: `${monthlyTotalAvailable > 0 ? (env.spent / monthlyTotalAvailable) * 100 : 0}%`,
+                                width: `${monthlyTotalAvailable > 0 ? (env.spent / (globalProgress > 100 ? totalSpentEnvelopes : monthlyTotalAvailable)) * 100 : 0}%`,
                                 display: env.spent > 0 ? 'block' : 'none'
                              }}
                         />
