@@ -128,48 +128,54 @@ export default function CashFlowPage() {
   // Orphan nodes cause d3-sankey to produce NaN positions, crashing the chart.
   //
   // Dynamic indexing: each node is only added when it has at least one link.
+  // GUARD: settings is null on initial render (before Firestore data loads).
+  // The Sankey is only rendered inside the !loading && settings branch, so
+  // an empty data object here is safe — it won't be passed to the chart.
   const nodes: Array<{ name: string; color: string }> = [];
   const links: Array<{ source: number; target: number; value: number }> = [];
+  let totalAllocated = 0;
 
-  // Node 0: Revenu (always present — it is the source of all flows)
-  let nextIndex = 0;
-  const revenuIndex = nextIndex++;
-  nodes.push({ name: "Revenu", color: "#10b981" }); // Emerald 500
+  if (settings) {
+    // Node 0: Revenu (always present — it is the source of all flows)
+    let nextIndex = 0;
+    const revenuIndex = nextIndex++;
+    nodes.push({ name: "Revenu", color: "#10b981" }); // Emerald 500
 
-  // Épargne — only if the user has savings
-  if (settings.monthlySavings > 0) {
-    const idx = nextIndex++;
-    nodes.push({ name: "Épargne", color: "#3b82f6" }); // Blue 500
-    links.push({ source: revenuIndex, target: idx, value: settings.monthlySavings });
-  }
-
-  // Frais Fixes — only if the user has fixed costs
-  if (settings.fixedCosts > 0) {
-    const idx = nextIndex++;
-    nodes.push({ name: "Frais Fixes", color: "#ef4444" }); // Red 500
-    links.push({ source: revenuIndex, target: idx, value: settings.fixedCosts });
-  }
-
-  // Envelopes — only those with a positive budget
-  envelopes.forEach((env) => {
-    if (env.budget > 0) {
+    // Épargne — only if the user has savings
+    if (settings.monthlySavings > 0) {
       const idx = nextIndex++;
-      nodes.push({ name: env.name, color: resolveColor(env.color) });
-      links.push({ source: revenuIndex, target: idx, value: env.budget });
+      nodes.push({ name: "Épargne", color: "#3b82f6" }); // Blue 500
+      links.push({ source: revenuIndex, target: idx, value: settings.monthlySavings });
     }
-  });
 
-  // Calculate Unallocated
-  const totalAllocated =
-    (settings.monthlySavings || 0) +
-    (settings.fixedCosts || 0) +
-    envelopes.reduce((acc, curr) => acc + curr.budget, 0);
-  const unallocated = resolvedIncome - totalAllocated;
+    // Frais Fixes — only if the user has fixed costs
+    if (settings.fixedCosts > 0) {
+      const idx = nextIndex++;
+      nodes.push({ name: "Frais Fixes", color: "#ef4444" }); // Red 500
+      links.push({ source: revenuIndex, target: idx, value: settings.fixedCosts });
+    }
 
-  if (unallocated > 0) {
-    const idx = nextIndex++;
-    nodes.push({ name: "Reste", color: "#71717a" }); // Zinc 500
-    links.push({ source: revenuIndex, target: idx, value: unallocated });
+    // Envelopes — only those with a positive budget
+    envelopes.forEach((env) => {
+      if (env.budget > 0) {
+        const idx = nextIndex++;
+        nodes.push({ name: env.name, color: resolveColor(env.color) });
+        links.push({ source: revenuIndex, target: idx, value: env.budget });
+      }
+    });
+
+    // Calculate Unallocated
+    totalAllocated =
+      (settings.monthlySavings || 0) +
+      (settings.fixedCosts || 0) +
+      envelopes.reduce((acc, curr) => acc + curr.budget, 0);
+    const unallocated = resolvedIncome - totalAllocated;
+
+    if (unallocated > 0) {
+      const idx = nextIndex++;
+      nodes.push({ name: "Reste", color: "#71717a" }); // Zinc 500
+      links.push({ source: revenuIndex, target: idx, value: unallocated });
+    }
   }
 
   const data = { nodes, links };

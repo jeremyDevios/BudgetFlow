@@ -117,8 +117,12 @@ export class DashboardPage extends BasePage {
   }
 
   async clickEnvelope(envelopeName: string): Promise<void> {
-    const tile = this.page.locator("[class*='bento'], [class*='envelope-card'], [class*='tile']").filter({ hasText: envelopeName }).first();
-    await tile.click();
+    // Cibler la tuile bento-tile puis cliquer sur son titre (h4).
+    // On évite de cliquer au centre de la tuile car les boutons
+    // d'options/grip/resize avec stopPropagation peuvent intercepter le clic.
+    const tile = this.page.locator(".bento-tile").filter({ hasText: envelopeName }).first();
+    const heading = tile.locator("h4").first();
+    await heading.click();
     await this.page.waitForURL(/\/envelopes\//, { timeout: 10_000 });
     await this.waitForDataLoaded();
   }
