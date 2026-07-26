@@ -563,7 +563,7 @@ export default function DashboardPage() {
   const unassignedSpent = useMemo(() => {
     const assignedIds = new Set(envelopes.map(e => e.id));
     return transactions
-      .filter(tx => tx.type !== "income" && !assignedIds.has(tx.envelopeId))
+      .filter(tx => tx.type !== "income" && !assignedIds.has(tx.envelopeId ?? ""))
       .reduce((sum, tx) => sum + getTransactionImpact(tx), 0);
   }, [transactions, envelopes]);
 
