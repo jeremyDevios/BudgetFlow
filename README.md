@@ -32,6 +32,12 @@
 - **Revenu variable** : Désactivez le revenu fixe et définissez un revenu différent chaque mois — les calculs de capacité budgétaire suivent automatiquement.
 - **Support multi-devises** : EUR, USD, CHF, GBP et BTC — affichage seulement, pas de conversion. Disponible sur **Web et iOS**.
 - **Mode Anonyme** : Floutage des montants pour consulter son budget en public. Un toggle rapide dans la navbar (Web) ou secouez le téléphone (iOS). Données intactes, purement visuel.
+- **Analyse & Score Bilan** :
+  - Page dédiée avec 5 périodes au choix (mois, 7 jours, 30 jours, 3 mois, 6 mois).
+  - Score Bilan sur 100 points décomposé en 5 sous-scores : équilibre budgétaire, tendance d'évolution, respect des enveloppes, régularité des dépenses, absences d'impulsions.
+  - Métriques clés : total dépenses/revenus, moyenne et médiane quotidiennes, taux d'épargne, jours sans dépense, enveloppe la plus dépensière et la plus fréquente.
+  - Moteur de calcul pur (`AnalysisEngine.swift`) sans dépendance SwiftData/SwiftUI — testable unitairement.
+  - Disponible sur **iOS** (onglet Analyse).
 - **Prévisions & Insights** :
   - Projection à 90 jours par enveloppe (score de confiance, alertes de dépassement prévisible).
   - Détection de dépenses exceptionnelles.
@@ -228,6 +234,78 @@ Chaque cellule du calendrier représente un jour passé. Sa couleur est détermi
 
 Le calcul est implémenté dans `src/lib/calendarSeverity.ts` (Web) et `iOS/BudgetFlowIOS/BudgetFlow/CalendarDaySeverity.swift` (iOS), et les deux restent strictement synchronisés.
 
+## Calcul du Score Bilan (Analyse)
+
+Le Score Bilan est un indicateur de santé financière sur 100 points, calculé par `AnalysisEngine.computeBilanScore()` sur iOS. Il se décompose en 5 sous-scores :
+
+### 1. Dépenses vs Revenus (30 points) — progressif
+
+Aligné sur le calcul du Dashboard et de l'Évolution : `balance = budgetPrévu - totalDépenses + totalRevenus`.
+
+| Situation | Barres | Points |
+|---|---|---|
+| Balance ≥ 0 (à l'équilibre) | ▂▂▂▂ | 30 |
+| Déficit ≤ 1 % du budget prévu | ▂▂▂▁ | 22 |
+| Déficit ≤ 4 % | ▂▂▁▁ | 15 |
+| Déficit ≤ 10 % | ▂▁▁▁ | 7 |
+| Déficit > 10 % | ▁▁▁▁ | 0 |
+
+Le **budget prévu** = `revenuMensuel − chargesFixes − épargneMensuelle + budgetEnveloppesTemporaires`. Les charges fixes et l'épargne réduisent le budget disponible, les enveloppes temporaires actives l'augmentent.
+
+### 2. Évolution stable (20 points) — tendance vs période précédente
+
+Compare le taux de dépense quotidien entre la période courante et la période précédente équivalente.
+
+| Augmentation | Barres | Points |
+|---|---|---|
+| ≤ 5 % | ▂▂▂▂ | 20 |
+| ≤ 10 % | ▂▂▂▁ | 15 |
+| ≤ 20 % | ▂▂▁▁ | 10 |
+| ≤ 30 % | ▂▁▁▁ | 5 |
+| > 30 % | ▁▁▁▁ | 0 |
+
+### 3. Budget enveloppes respecté (20 points) — proportionnel
+
+Proportion des enveloppes (permanentes uniquement) dont le budget n'est pas dépassé. Une enveloppe avec `budget ≤ 0` est toujours considérée comme respectée. Score = `(enveloppesDansLeBudget / totalEnveloppes) × 20`.
+
+### 4. Régularité des dépenses (20 points) — coefficient de variation
+
+Mesure la **régularité** des dépenses quotidiennes sur la période. Utilise le coefficient de variation (CV = écart-type / moyenne) des dépenses positives par jour. Ne compare pas avec les mois précédents.
+
+| CV | Interprétation | Barres | Points |
+|---|---|---|---|
+| ≤ 0,5 | Très régulier | ▂▂▂▂ | 20 |
+| ≤ 1,0 | Assez régulier | ▂▂▂▁ | 15 |
+| ≤ 1,5 | Modérément irrégulier | ▂▂▁▁ | 10 |
+| ≤ 2,0 | Irrégulier | ▂▁▁▁ | 5 |
+| > 2,0 | Très chaotique | ▁▁▁▁ | 0 |
+
+Moins de 3 jours avec dépenses → 20 points par défaut (données insuffisantes).
+
+### 5. Sans dépenses impulsives (10 points) — transaction max / budget
+
+Évalue la transaction la plus élevée par rapport au budget de son enveloppe.
+
+| Ratio max | Barres | Points |
+|---|---|---|
+| ≤ 25 % | ▂▂▂▂ | 10 |
+| ≤ 50 % | ▂▂▂▁ | 7 |
+| ≤ 75 % | ▂▂▁▁ | 5 |
+| ≤ 100 % | ▂▁▁▁ | 2 |
+| > 100 % | ▁▁▁▁ | 0 |
+
+### Exemple concret
+
+- Revenu mensuel : 3 000 €, Charges fixes : 1 000 €, Épargne : 500 €
+- Budget prévu = 3 000 − 1 000 − 500 = 1 500 €
+- Dépenses du mois : 1 200 €, Revenus additionnels : 200 €
+- Balance = 1 500 − 1 200 + 200 = **+500 €** → 30 pts ✅
+- Tendance : taux quotidien en baisse de 3 % → 20 pts ✅
+- 3 enveloppes sur 4 respectées → 15 pts
+- CV quotidien = 0,6 → 15 pts
+- Plus grosse transaction = 40 % du budget → 7 pts
+- **Score total = 87/100**
+
 ## Notifications
 
 Voir [NOTIFICATION.md](NOTIFICATION.md) pour la configuration de Firebase Cloud Messaging et des crons de notifications.
@@ -302,10 +380,11 @@ src/
 iOS/BudgetFlowIOS/
 ├── BudgetFlow/               # Code source Swift (80+ fichiers)
 │   ├── Models/               # Envelope, Transaction, UserSettings, DailyActivity, BudgetSubItem, MonthlyIncome, PendingSyncOperation
-│   ├── Views/                # Toutes les vues SwiftUI
+│   ├── Views/                # Toutes les vues SwiftUI (Dashboard, Analysis, Evolution, CashFlow, History, Settings, Onboarding)
 │   ├── Services/
 │   │   ├── SyncService.swift           # Synchronisation Firestore
 │   │   ├── SyncCoordinator.swift       # Orchestrateur de synchronisation
+│   │   ├── AnalysisEngine.swift        # Moteur de calcul du Score Bilan (pur, sans SwiftData)
 │   │   ├── SpendingForecastEngine.swift   # Prévisions 90 jours (parité Web)
 │   │   ├── SpendingInsightsEngine.swift   # Dépenses exceptionnelles
 │   │   ├── CalendarDaySeverity.swift      # Couleur heatmap (parité Web)
@@ -327,6 +406,7 @@ iOS/BudgetFlowIOS/
 │   ├── BentoLayoutEngine.swift      # Moteur de layout Bento Grid
 │   ├── BudgetCalculations.swift     # Arithmétique budgétaire
 │   ├── EvolutionCalculator.swift    # Calculs d'évolution 12 mois
+│   ├── CashFlowSheet.swift          # Diagramme Sankey (dans Réglages)
 │   ├── EnvelopeMutationService.swift   # CRUD enveloppes (offline/online)
 │   ├── TransactionMutationService.swift # CRUD transactions (offline/online)
 │   └── CalendarDateFormatting.swift    # Formatage localisé des dates
@@ -344,6 +424,7 @@ L'application iOS native est **fonctionnelle** et disponible via le dossier `iOS
 ### Fonctionnalités disponibles
 
 - ✅ Toutes les fonctionnalités de base (enveloppes, transactions, historique, évolution, cash flow)
+- ✅ Page Analyse avec Score Bilan sur 100 points et 5 indicateurs (`AnalysisEngine.swift`)
 - ✅ Enveloppes temporaires avec filtrage automatique par mois
 - ✅ Prévisions à 90 jours (`SpendingForecastEngine.swift`) — parité algorithmique avec le Web
 - ✅ Détection de dépenses exceptionnelles (`SpendingInsightsEngine.swift`)
