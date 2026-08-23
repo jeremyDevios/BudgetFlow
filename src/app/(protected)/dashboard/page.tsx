@@ -15,7 +15,8 @@ import { getMonthlyIncomes, saveMonthlyIncome } from "@/lib/monthlyIncomeService
 import {
   LogOut, 
   Settings, 
-  Plus, 
+  Plus,
+  X,
   ChevronLeft,
   ChevronRight,
   TrendingUp, 
@@ -47,6 +48,7 @@ import {
   Share,
   List,
   Workflow,
+  BarChart3,
   GripVertical,
   Maximize2,
   Minimize2,
@@ -742,6 +744,11 @@ export default function DashboardPage() {
                 isReimbursement: data.isReimbursement ?? false,
                 type: txType,
                 source: typeof data.source === "string" ? data.source as Transaction["source"] : undefined,
+                // Champs récurrence (séries iOS/web) — préserver pour la pastille
+                // et l'édition depuis la recherche du dashboard.
+                recurrenceId: typeof data.recurrenceId === "string" ? data.recurrenceId : undefined,
+                recurrenceAnchorDay: typeof data.recurrenceAnchorDay === "number" ? data.recurrenceAnchorDay : undefined,
+                recurrenceEndDate: typeof data.recurrenceEndDate === "string" ? data.recurrenceEndDate : undefined,
             });
 
             // Les revenus n'affectent pas le spent des enveloppes
@@ -967,6 +974,14 @@ export default function DashboardPage() {
                         <TrendingUp className="h-5 w-5" />
                     </button>
                     <button
+                        onClick={() => router.push('/analysis')}
+                        className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-amber-500 transition-colors active:scale-90"
+                        title="Analyse"
+                        aria-label="Analyse"
+                    >
+                        <BarChart3 className="h-5 w-5" />
+                    </button>
+                    <button
                         onClick={() => router.push('/history')}
                         className="hidden sm:flex p-2 rounded-full hover:bg-app-surface text-app-text-secondary hover:text-app-text transition-colors active:scale-90"
                         title="Historique Global"
@@ -1009,6 +1024,12 @@ export default function DashboardPage() {
                                     className="flex items-center gap-3 w-full px-3 py-3 text-sm text-app-text-secondary hover:text-amber-500 hover:bg-app-bg rounded-lg transition-colors text-left"
                                 >
                                     <TrendingUp className="h-4 w-4 shrink-0" /> Évolution
+                                </button>
+                                <button
+                                    onClick={() => { router.push('/analysis'); setShowMoreMenu(false); }}
+                                    className="flex items-center gap-3 w-full px-3 py-3 text-sm text-app-text-secondary hover:text-amber-500 hover:bg-app-bg rounded-lg transition-colors text-left"
+                                >
+                                    <BarChart3 className="h-4 w-4 shrink-0" /> Analyse
                                 </button>
                                 <button
                                     onClick={() => { router.push('/history'); setShowMoreMenu(false); }}
@@ -1298,40 +1319,46 @@ export default function DashboardPage() {
         <Plus className="h-8 w-8" />
       </button>
       
-      {/* Popup Notification */}
+      {/* Toast Notification (non bloquant : n'intercepte pas les clics hors de la carte) */}
       {showNotifPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-app-bg/80 backdrop-blur-sm p-4 animate-in fade-in">
-           <div className="glass-panel-strong w-full max-w-sm rounded-2xl p-6 relative overflow-hidden">
-             
-              <div className="absolute top-0 right-0 p-4 opacity-10">
-                  <Bell className="w-24 h-24 text-amber-500 -rotate-12 transform translate-x-4 -translate-y-4" />
-              </div>
+        <div className="pointer-events-none fixed bottom-24 right-4 z-50 w-[calc(100%-2rem)] max-w-sm animate-in fade-in sm:right-6">
+           <div className="glass-panel-strong pointer-events-auto relative overflow-hidden rounded-2xl p-5 shadow-2xl">
 
-              <div className="relative z-10 text-center space-y-4">
-                  <div className="mx-auto w-12 h-12 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mb-2">
-                     <Bell className="w-6 h-6" />
+              <button
+                  onClick={() => setShowNotifPopup(false)}
+                  aria-label="Fermer la notification"
+                  className="absolute right-2 top-2 rounded-full p-1 text-app-text-secondary hover:bg-app-surface hover:text-app-text transition-colors"
+              >
+                  <X className="h-4 w-4" />
+              </button>
+
+              <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-500">
+                     <Bell className="h-5 w-5" />
                   </div>
-                  
-                  <h2 className="text-xl font-bold text-app-text">Ne loupez aucune dépense !</h2>
-                  
-                  <p className="text-app-text-secondary text-sm">
-                     Activez le rappel quotidien de 19h pour garder votre budget à jour. 
-                     C'est le meilleur moyen de tenir ses objectifs ! 🎯
-                  </p>
 
-                  <div className="flex flex-col gap-3 pt-4">
-                      <button 
-                          onClick={() => router.push('/settings')}
-                          className="w-full py-3 px-4 bg-amber-500 hover:bg-amber-600 text-app-text font-bold rounded-xl transition-colors shadow-lg shadow-amber-900/20"
-                      >
-                          Aller activer les notifications
-                      </button>
-                      <button 
-                          onClick={() => setShowNotifPopup(false)}
-                          className="w-full py-2 px-4 text-app-text-secondary hover:text-app-text text-sm font-medium transition-colors"
-                      >
-                          Peut-être plus tard
-                      </button>
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                      <h2 className="text-base font-bold text-app-text">Ne loupez aucune dépense !</h2>
+
+                      <p className="text-app-text-secondary text-sm">
+                         Activez le rappel quotidien de 19h pour garder votre budget à jour.
+                         C'est le meilleur moyen de tenir ses objectifs ! 🎯
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                              onClick={() => router.push('/settings')}
+                              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-app-text font-bold rounded-xl transition-colors shadow-lg shadow-amber-900/20"
+                          >
+                              Aller activer les notifications
+                          </button>
+                          <button
+                              onClick={() => setShowNotifPopup(false)}
+                              className="px-2 py-2 text-app-text-secondary hover:text-app-text text-sm font-medium transition-colors"
+                          >
+                              Peut-être plus tard
+                          </button>
+                      </div>
                   </div>
               </div>
            </div>

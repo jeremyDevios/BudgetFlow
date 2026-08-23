@@ -11,6 +11,12 @@ const incrementMock = jest.fn();
 const collectionMock = jest.fn();
 const docMock = jest.fn();
 const sanitizedErrorMock = jest.fn();
+const setDocMock = jest.fn();
+const queryMock = jest.fn();
+const whereMock = jest.fn();
+const getDocsMock = jest.fn();
+const limitMock = jest.fn();
+const deleteFieldMock = jest.fn();
 
 jest.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
@@ -35,7 +41,33 @@ jest.mock("firebase/firestore", () => ({
   updateDoc: (...args: unknown[]) => updateDocMock(...args),
   deleteDoc: (...args: unknown[]) => deleteDocMock(...args),
   increment: (...args: unknown[]) => incrementMock(...args),
+  setDoc: (...args: unknown[]) => setDocMock(...args),
+  query: (...args: unknown[]) => queryMock(...args),
+  where: (...args: unknown[]) => whereMock(...args),
+  getDocs: (...args: unknown[]) => getDocsMock(...args),
+  limit: (...args: unknown[]) => limitMock(...args),
+  deleteField: (...args: unknown[]) => deleteFieldMock(...args),
 }));
+
+/**
+ * Réinitialise tous les mocks Firestore avec les comportements par défaut
+ * (résolution vide pour les lectures, identité pour les builders).
+ */
+function resetFirestoreMocks() {
+  addDocMock.mockReset().mockResolvedValue({ id: "tx-new" });
+  updateDocMock.mockReset().mockResolvedValue(undefined);
+  deleteDocMock.mockReset().mockResolvedValue(undefined);
+  incrementMock.mockReset().mockImplementation((value: number) => ({ incrementBy: value }));
+  collectionMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
+  docMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
+  setDocMock.mockReset().mockResolvedValue(undefined);
+  queryMock.mockReset().mockImplementation((...args: unknown[]) => ({ kind: "query", args }));
+  whereMock.mockReset().mockImplementation((field: string, op: string, value: unknown) => ({ field, op, value }));
+  getDocsMock.mockReset().mockResolvedValue({ forEach: jest.fn(), size: 0, docs: [] });
+  limitMock.mockReset().mockImplementation((n: number) => ({ limit: n }));
+  deleteFieldMock.mockReset().mockReturnValue({ __deleteField: true });
+  sanitizedErrorMock.mockReset();
+}
 
 jest.mock("framer-motion", () => {
   const motionProps = new Set([
@@ -145,13 +177,7 @@ describe("TransactionModal – temporary-envelope regression", () => {
   beforeEach(() => {
     // System time: 14 April 2026 – inside the temp envelope's activeMonths.
     jest.useFakeTimers().setSystemTime(new Date("2026-04-14T12:00:00.000Z"));
-    addDocMock.mockReset().mockResolvedValue({ id: "tx-new" });
-    updateDocMock.mockReset().mockResolvedValue(undefined);
-    deleteDocMock.mockReset().mockResolvedValue(undefined);
-    incrementMock.mockReset().mockImplementation((value: number) => ({ incrementBy: value }));
-    collectionMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
-    docMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
-    sanitizedErrorMock.mockReset();
+    resetFirestoreMocks();
     window.alert = jest.fn();
     window.confirm = jest.fn(() => true);
   });
@@ -304,13 +330,7 @@ describe("TransactionModal", () => {
 
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(new Date("2026-04-14T12:00:00.000Z"));
-    addDocMock.mockReset().mockResolvedValue({ id: "tx-new" });
-    updateDocMock.mockReset().mockResolvedValue(undefined);
-    deleteDocMock.mockReset().mockResolvedValue(undefined);
-    incrementMock.mockReset().mockImplementation((value: number) => ({ incrementBy: value }));
-    collectionMock.mockReset().mockImplementation((_db, ...path) => ({ path }));
-    docMock.mockReset().mockImplementation((_db, ...path) => ({ path }));
-    sanitizedErrorMock.mockReset();
+    resetFirestoreMocks();
     onClose.mockReset();
     refreshData.mockReset();
     window.alert = jest.fn();
@@ -596,13 +616,7 @@ describe("TransactionModal – income transactions", () => {
 
   beforeEach(() => {
     jest.useFakeTimers().setSystemTime(new Date("2026-04-14T12:00:00.000Z"));
-    addDocMock.mockReset().mockResolvedValue({ id: "tx-new" });
-    updateDocMock.mockReset().mockResolvedValue(undefined);
-    deleteDocMock.mockReset().mockResolvedValue(undefined);
-    incrementMock.mockReset().mockImplementation((value: number) => ({ incrementBy: value }));
-    collectionMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
-    docMock.mockReset().mockImplementation((_db: unknown, ...path: unknown[]) => ({ path }));
-    sanitizedErrorMock.mockReset();
+    resetFirestoreMocks();
     onClose.mockReset();
     refreshData.mockReset();
     window.alert = jest.fn();

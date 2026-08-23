@@ -67,6 +67,13 @@ export async function fetchLinkedTransactions(
       isReimbursement: data.isReimbursement ?? false,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
+      // Recurrence fields (iOS feature) — must survive envelope migration
+      // so the series stays intact when the envelope is deleted/merged.
+      recurrenceId: typeof data.recurrenceId === "string" ? data.recurrenceId : undefined,
+      recurrenceAnchorDay:
+        typeof data.recurrenceAnchorDay === "number" ? data.recurrenceAnchorDay : undefined,
+      recurrenceEndDate:
+        typeof data.recurrenceEndDate === "string" ? data.recurrenceEndDate : undefined,
     });
   });
 

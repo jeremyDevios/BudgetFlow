@@ -12,6 +12,7 @@ import { MoveLeft, Trash2, Calendar, Plus, ShoppingCart, Fuel, Utensils, Plane, 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, use } from "react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
+import RecurrenceBadge from "@/components/dashboard/RecurrenceBadge";
 import RotatingSmartInsight from "@/components/dashboard/RotatingSmartInsight";
 import { logger } from "@/lib/logger";
 import { maskAmount } from "@/lib/maskAmount";
@@ -446,7 +447,10 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
                       <Calendar className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="font-medium text-app-text">{tx.description || "Dépense"}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-medium text-app-text">{tx.description || "Dépense"}</p>
+                        {tx.recurrenceId && <RecurrenceBadge className="h-5 w-5 p-0.5" />}
+                      </div>
                       <p className="text-xs text-app-text-secondary">{new Date(tx.date).toLocaleDateString()}</p>
                     </div>
                   </div>

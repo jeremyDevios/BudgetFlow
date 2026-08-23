@@ -5,6 +5,7 @@ import { Search, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
+import RecurrenceBadge from "@/components/dashboard/RecurrenceBadge";
 import { type Transaction } from "@/types/transaction";
 
 type Envelope = {
@@ -155,9 +156,12 @@ export default function SearchDropdown({ transactions, envelopes, currentDate }:
                           <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${env.color}`} />
                         ) : null}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-app-text truncate">
-                            {tx.description || (isIncome ? "Revenu" : "Dépense")}
-                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-app-text truncate">
+                              {tx.description || (isIncome ? "Revenu" : "Dépense")}
+                            </p>
+                            {tx.recurrenceId && <RecurrenceBadge className="h-4 w-4 p-0.5 flex-shrink-0" />}
+                          </div>
                           <p className="text-xs text-app-text-secondary truncate">
                             {isIncome
                               ? tx.source || "Revenu"

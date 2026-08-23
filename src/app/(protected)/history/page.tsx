@@ -8,6 +8,7 @@ import { MoveLeft, ArrowDown, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepa
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import TransactionModal from "@/components/dashboard/TransactionModal";
+import RecurrenceBadge from "@/components/dashboard/RecurrenceBadge";
 import { logger } from "@/lib/logger";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X } from "lucide-react";
@@ -217,7 +218,10 @@ export default function HistoryPage() {
                         <Icon className="h-5 w-5" />
                       </div>
                       <div>
-                        <p className="font-semibold text-app-text">{tx.description || (isIncome ? "Revenu" : env.name || "Dépense")}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-app-text">{tx.description || (isIncome ? "Revenu" : env.name || "Dépense")}</p>
+                          {tx.recurrenceId && <RecurrenceBadge className="h-5 w-5 p-0.5" />}
+                        </div>
                         <p className="text-xs text-app-text-secondary flex items-center gap-1">
                           {dateObj.toLocaleDateString()}
                           <span className="text-zinc-600">•</span>

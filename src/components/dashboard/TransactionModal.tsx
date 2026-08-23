@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  X, 
+import {
+  X,
   Trash2,
-  Loader2 
+  Loader2,
+  RefreshCw
 } from "lucide-react";
-import { collection, addDoc, doc, updateDoc, deleteDoc, deleteField, increment } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, deleteDoc, deleteField, increment, setDoc, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { logger } from "@/lib/logger";
@@ -20,6 +21,18 @@ import {
   checkTransactionQuota,
   getMonthKey,
 } from "@/lib/validation";
+import {
+  MATERIALIZED_MONTHS_AHEAD,
+  monthKey,
+  previousMonthKey,
+  nextMonthKeys,
+  nominalAnchorDay,
+  occurrenceDate,
+  endOfMonthIso,
+  firestoreDocumentId,
+  missingMonthKeys,
+  requiresDeletionConfirmation,
+} from "@/lib/recurrence";
 
 // French month names indexed 1-based (index 0 unused).
 const FRENCH_MONTHS = [
@@ -32,6 +45,228 @@ function formatMonthFr(yyyyMm: string): string {
   const [year, month] = yyyyMm.split("-");
   const label = FRENCH_MONTHS[parseInt(month, 10)] ?? month;
   return `${label} ${year}`;
+}
+
+/** Impact d'une transaction sur le `spent` de son enveloppe. */
+function transactionImpact(amount: number, isReimbursement?: boolean): number {
+  return isReimbursement ? -amount : amount;
+}
+
+/** Toutes les occurrences de la série partageant le même recurrenceId. */
+async function fetchSeries(userId: string, recurrenceId: string): Promise<Transaction[]> {
+  const q = query(
+    collection(db, "users", userId, "transactions"),
+    where("recurrenceId", "==", recurrenceId),
+  );
+  const snap = await getDocs(q);
+  const list: Transaction[] = [];
+  snap.forEach((docSnap) => {
+    list.push({ id: docSnap.id, ...(docSnap.data() as Omit<Transaction, "id">) });
+  });
+  return list;
+}
+
+/**
+ * Incrémente/décrémente les compteurs mensuels tx_YYYY_MM (quota web) en un
+ * seul update. Si le document compteur n'existe pas encore (création), on le
+ * crée en mode merge.
+ */
+async function updateCounters(userId: string, deltas: Record<string, number>): Promise<void> {
+  if (Object.keys(deltas).length === 0) return;
+  const counterRef = doc(db, "counters", userId);
+  try {
+    await updateDoc(counterRef, Object.fromEntries(
+      Object.entries(deltas).map(([key, delta]) => [key, increment(delta)]),
+    ));
+  } catch {
+    // Le document compteur n'existe pas encore — création en mode merge.
+    await setDoc(counterRef, deltas, { merge: true }).catch(() => {
+      // Ignorer silencieusement — quota non critique.
+    });
+  }
+}
+
+// ── Séries récurrentes ───────────────────────────────────────────────
+
+/**
+ * Matérialise les occurrences futures d'une série dans les documents
+ * déterministes "<recurrenceId>_<YYYY-MM>" (les mêmes id que l'iOS →
+ * convergence last-write-wins entre les deux apps). Incrémente `spent` de
+ * l'enveloppe et le compteur mensuel pour chaque occurrence créée.
+ */
+async function materializeSeries(
+  userId: string,
+  opts: {
+    recurrenceId: string;
+    anchorDay: number;
+    amount: number;
+    description: string;
+    envelopeId: string;
+    isReimbursement?: boolean;
+    /** Mois de l'occurrence initiale — les mois strictement après sont créés. */
+    tailMonth: string;
+  },
+): Promise<void> {
+  const upTo = nextMonthKeys(monthKey(new Date()), MATERIALIZED_MONTHS_AHEAD).at(-1)!;
+  const missing = missingMonthKeys(opts.tailMonth, upTo);
+  const counterDeltas: Record<string, number> = {};
+  const nowISO = new Date().toISOString();
+  for (const m of missing) {
+    await setDoc(doc(db, "users", userId, "transactions", firestoreDocumentId(opts.recurrenceId, m)), {
+      amount: opts.amount,
+      description: opts.description,
+      date: occurrenceDate(opts.anchorDay, m),
+      createdAt: nowISO,
+      updatedAt: nowISO,
+      type: "expense",
+      envelopeId: opts.envelopeId,
+      isReimbursement: opts.isReimbursement ?? false,
+      recurrenceId: opts.recurrenceId,
+      recurrenceAnchorDay: opts.anchorDay,
+    });
+    await updateDoc(doc(db, "users", userId, "envelopes", opts.envelopeId), {
+      spent: increment(transactionImpact(opts.amount, opts.isReimbursement)),
+    });
+    counterDeltas[m] = (counterDeltas[m] ?? 0) + 1;
+  }
+  await updateCounters(userId, counterDeltas);
+}
+
+/**
+ * Propagation d'une édition à la série (règle 4) : l'occurrence éditée
+ * porte déjà les nouvelles valeurs ; les occurrences des mois strictement
+ * après le nouveau mois reçoivent le nouveau montant/note et une date
+ * re-clampsée sur le nouveau jour d'ancrage ; une collision dans le mois
+ * cible est dédupliquée (l'éditée gagne). Les mois passés ne sont jamais
+ * modifiés. `spent` est ajusté par delta par enveloppe concernée.
+ */
+async function propagateSeriesEdit(
+  userId: string,
+  edited: Transaction,
+  opts: { newDateISO: string; newAmount: number; newDescription: string },
+): Promise<void> {
+  const rid = edited.recurrenceId!;
+  const newMonth = monthKey(opts.newDateISO);
+  const newAnchorDay = nominalAnchorDay(opts.newDateISO);
+  const series = await fetchSeries(userId, rid);
+  const counterDeltas: Record<string, number> = {};
+  const nowISO = new Date().toISOString();
+
+  for (const tx of series) {
+    if (tx.id === edited.id) continue;
+    const txMonth = monthKey(tx.date);
+    if (txMonth === newMonth) {
+      // Collision : l'occurrence de la série occupant déjà le mois cible.
+      if (tx.envelopeId) {
+        await updateDoc(doc(db, "users", userId, "envelopes", tx.envelopeId), {
+          spent: increment(-transactionImpact(tx.amount, tx.isReimbursement)),
+        });
+      }
+      await deleteDoc(doc(db, "users", userId, "transactions", tx.id));
+      counterDeltas[txMonth] = (counterDeltas[txMonth] ?? 0) - 1;
+    } else if (txMonth > newMonth) {
+      // Mois suivants : nouveau montant/note, date re-clampsée sur le nouvel
+      // ancrage. L'enveloppe de l'occurrence garde la sienne (non propagée).
+      if (tx.envelopeId) {
+        const delta =
+          transactionImpact(opts.newAmount, tx.isReimbursement) -
+          transactionImpact(tx.amount, tx.isReimbursement);
+        if (delta !== 0) {
+          await updateDoc(doc(db, "users", userId, "envelopes", tx.envelopeId), {
+            spent: increment(delta),
+          });
+        }
+      }
+      await updateDoc(doc(db, "users", userId, "transactions", tx.id), {
+        amount: opts.newAmount,
+        description: opts.newDescription,
+        date: occurrenceDate(newAnchorDay, txMonth),
+        recurrenceAnchorDay: newAnchorDay,
+        updatedAt: nowISO,
+      });
+    }
+  }
+  await updateCounters(userId, counterDeltas);
+}
+
+/**
+ * Arrêt de la série (règle 5) : l'occurrence éditée devient simple
+ * (champs récurrence supprimés), les occurrences strictement après le mois
+ * d'arrêt sont supprimées (durablement — même doc id que l'iOS), les
+ * occurrences passées sont marquées avec `recurrenceEndDate` à la fin du
+ * mois précédent.
+ */
+async function stopSeriesAt(userId: string, edited: Transaction, newDateISO: string): Promise<void> {
+  const rid = edited.recurrenceId!;
+  const stopMonth = monthKey(newDateISO);
+  const series = await fetchSeries(userId, rid);
+  const counterDeltas: Record<string, number> = {};
+  const nowISO = new Date().toISOString();
+  const endDate = endOfMonthIso(previousMonthKey(stopMonth));
+
+  for (const tx of series) {
+    if (tx.id === edited.id) continue;
+    const txMonth = monthKey(tx.date);
+    if (txMonth > stopMonth) {
+      if (tx.envelopeId) {
+        await updateDoc(doc(db, "users", userId, "envelopes", tx.envelopeId), {
+          spent: increment(-transactionImpact(tx.amount, tx.isReimbursement)),
+        });
+      }
+      await deleteDoc(doc(db, "users", userId, "transactions", tx.id));
+      counterDeltas[txMonth] = (counterDeltas[txMonth] ?? 0) - 1;
+    } else if (txMonth < stopMonth) {
+      await updateDoc(doc(db, "users", userId, "transactions", tx.id), {
+        recurrenceEndDate: endDate,
+        updatedAt: nowISO,
+      });
+    }
+  }
+
+  // L'occurrence éditée devient une transaction simple.
+  await updateDoc(doc(db, "users", userId, "transactions", edited.id), {
+    recurrenceId: deleteField(),
+    recurrenceAnchorDay: deleteField(),
+    recurrenceEndDate: deleteField(),
+    updatedAt: nowISO,
+  });
+  await updateCounters(userId, counterDeltas);
+}
+
+/**
+ * Suppression durable d'une série à partir du mois de l'occurrence éditée
+ * (règle 6) : l'éditée et toutes les occurrences des mois ≥ sont supprimées
+ * (mêmes doc ids que l'iOS), les occurrences passées sont marquées avec
+ * `recurrenceEndDate` à la fin du mois précédent. `spent` et les compteurs
+ * mensuels sont ajustés. Appelée après la popup de confirmation — les
+ * occurrences passées n'atteignent jamais ce chemin.
+ */
+async function deleteSeriesFromMonth(userId: string, edited: Transaction): Promise<void> {
+  const rid = edited.recurrenceId!;
+  const deleteKey = monthKey(edited.date);
+  const series = await fetchSeries(userId, rid);
+  const counterDeltas: Record<string, number> = {};
+  const nowISO = new Date().toISOString();
+  const endDate = endOfMonthIso(previousMonthKey(deleteKey));
+
+  for (const tx of series) {
+    const txMonth = monthKey(tx.date);
+    if (txMonth >= deleteKey) {
+      if (tx.envelopeId) {
+        await updateDoc(doc(db, "users", userId, "envelopes", tx.envelopeId), {
+          spent: increment(-transactionImpact(tx.amount, tx.isReimbursement)),
+        });
+      }
+      await deleteDoc(doc(db, "users", userId, "transactions", tx.id));
+      counterDeltas[txMonth] = (counterDeltas[txMonth] ?? 0) - 1;
+    } else {
+      await updateDoc(doc(db, "users", userId, "transactions", tx.id), {
+        recurrenceEndDate: endDate,
+        updatedAt: nowISO,
+      });
+    }
+  }
+  await updateCounters(userId, counterDeltas);
 }
 
 interface TransactionModalProps {
@@ -63,6 +298,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
   const [isReimbursement, setIsReimbursement] = useState(false);
   const [transactionType, setTransactionType] = useState<"expense" | "income">("expense");
   const [selectedSource, setSelectedSource] = useState<string>("Prime");
+  const [isRecurring, setIsRecurring] = useState(false);
 
   // Initialisation à l'ouverture ou au changement de transactionToEdit
   useEffect(() => {
@@ -75,6 +311,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             setIsReimbursement(transactionToEdit.isReimbursement ?? false);
             setTransactionType(transactionToEdit.type ?? "expense");
             setSelectedSource(transactionToEdit.source ?? "Prime");
+            setIsRecurring(!!transactionToEdit.recurrenceId);
         } else {
             setAmount("");
             setDescription("");
@@ -83,6 +320,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             setIsReimbursement(false);
             setTransactionType("expense");
             setSelectedSource("Prime");
+            setIsRecurring(false);
         }
     } else {
       setSaveSuccess(false);
@@ -166,13 +404,16 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         const newType = transactionType;
         const wasExpense = oldType === "expense";
         const isExpense = newType === "expense";
+        const wasRecurring = !!oldTx.recurrenceId;
+        const newDateISO = new Date(date).toISOString();
+        const newAnchorDay = nominalAnchorDay(newDateISO);
 
         // 1. Update Transaction
         const txRef = doc(db, "users", user.uid, "transactions", oldTx.id);
         const updateData: Record<string, unknown> = {
           amount: numAmount,
           description,
-          date: new Date(date).toISOString(),
+          date: newDateISO,
           updatedAt: new Date().toISOString(),
           type: newType,
         };
@@ -182,6 +423,10 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
           updateData.isReimbursement = isReimbursement;
           // Nettoyer les champs income si on passe de income à expense
           updateData.source = deleteField();
+          if (isRecurring) {
+            // Série active : le nouveau jour d'ancrage s'applique à la série.
+            updateData.recurrenceAnchorDay = newAnchorDay;
+          }
         } else {
           updateData.source = selectedSource;
           // Nettoyer les champs expense si on passe de expense à income
@@ -216,12 +461,50 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
           );
         }
 
+        // 3. Série récurrente : propagation, arrêt ou activation.
+        if (wasRecurring && isExpense) {
+          if (isRecurring) {
+            // L'utilisateur garde la récurrence → propagation aux mois suivants.
+            await propagateSeriesEdit(user.uid, oldTx, {
+              newDateISO,
+              newAmount: numAmount,
+              newDescription: description,
+            });
+          } else {
+            // Décocher → la série s'arrête à ce mois (règle 5).
+            await stopSeriesAt(user.uid, oldTx, newDateISO);
+          }
+        } else if (wasRecurring && !isExpense) {
+          // Passage à un revenu → la série s'arrête proprement.
+          await stopSeriesAt(user.uid, oldTx, newDateISO);
+        } else if (!wasRecurring && isExpense && isRecurring) {
+          // Activation de la récurrence en édition → démarrage de la série.
+          const recurrenceId = crypto.randomUUID();
+          await updateDoc(txRef, {
+            recurrenceId,
+            recurrenceAnchorDay: newAnchorDay,
+            recurrenceEndDate: deleteField(),
+            updatedAt: new Date().toISOString(),
+          });
+          await materializeSeries(user.uid, {
+            recurrenceId,
+            anchorDay: newAnchorDay,
+            amount: numAmount,
+            description,
+            envelopeId: selectedEnvelopeId,
+            isReimbursement,
+            tailMonth: monthKey(newDateISO),
+          });
+        }
+
       } else {
         // --- MODE CREATION ---
 
         // 1. Ajouter la transaction
         const nowISO = new Date().toISOString();
         const isIncome = transactionType === "income";
+        const isSeries = isRecurring && !isIncome;
+        const recurrenceId = isSeries ? crypto.randomUUID() : undefined;
         const txData: Record<string, unknown> = {
           amount: numAmount,
           description,
@@ -237,6 +520,11 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         } else {
           txData.envelopeId = selectedEnvelopeId;
           txData.isReimbursement = isReimbursement;
+          if (isSeries) {
+            // Série récurrente : id + jour d'ancrage de la première dépense.
+            txData.recurrenceId = recurrenceId;
+            txData.recurrenceAnchorDay = nominalAnchorDay(date);
+          }
         }
 
         await addDoc(collection(db, "users", user.uid, "transactions"), txData);
@@ -251,17 +539,30 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         }
 
         // 3. Incrémenter le compteur de transactions du mois
-        const monthKey = getMonthKey(date);
+        const initialMonth = getMonthKey(date);
         const counterRef = doc(db, "counters", user.uid);
         try {
           await updateDoc(counterRef, {
-            [monthKey]: increment(1),
+            [initialMonth]: increment(1),
           });
         } catch {
           // Le document compteur n'existe pas encore, on le crée en mode merge.
           const { setDoc } = await import("firebase/firestore");
-          await setDoc(counterRef, { [monthKey]: 1 }, { merge: true }).catch(() => {
+          await setDoc(counterRef, { [initialMonth]: 1 }, { merge: true }).catch(() => {
             // Ignorer silencieusement — quota non critique.
+          });
+        }
+
+        // 4. Matérialiser les occurrences futures de la série (mois courant + 3)
+        if (isSeries && recurrenceId) {
+          await materializeSeries(user.uid, {
+            recurrenceId,
+            anchorDay: nominalAnchorDay(date),
+            amount: numAmount,
+            description,
+            envelopeId: selectedEnvelopeId,
+            isReimbursement,
+            tailMonth: initialMonth,
           });
         }
       }
@@ -281,8 +582,16 @@ const handleDelete = async () => {
     if (!user || !transactionToEdit) return;
 
     const isIncome = (transactionToEdit.type ?? "expense") === "income";
+    const deletingSeries =
+      !isIncome &&
+      !!transactionToEdit.recurrenceId &&
+      requiresDeletionConfirmation(transactionToEdit.date, true);
 
-    if (!confirm(isIncome
+    if (deletingSeries) {
+      if (!confirm("Cette dépense est récurrente. Supprimer toute la série à partir de ce mois ? Les occurrences passées seront conservées.")) {
+        return;
+      }
+    } else if (!confirm(isIncome
       ? "Voulez-vous vraiment supprimer ce revenu ?"
       : "Voulez-vous vraiment supprimer cette dépense ?"
     )) {
@@ -291,26 +600,31 @@ const handleDelete = async () => {
 
     setLoading(true);
     try {
-        // 1. Supprimer la transaction
-        await deleteDoc(doc(db, "users", user.uid, "transactions", transactionToEdit.id));
+        if (deletingSeries) {
+          // Suppression de la série entière à partir de ce mois.
+          await deleteSeriesFromMonth(user.uid, transactionToEdit);
+        } else {
+          // 1. Supprimer la transaction
+          await deleteDoc(doc(db, "users", user.uid, "transactions", transactionToEdit.id));
 
-        // 2. Mettre à jour l'enveloppe (dépenses uniquement)
-        if (!isIncome && transactionToEdit.envelopeId) {
-          const envRef = doc(db, "users", user.uid, "envelopes", transactionToEdit.envelopeId);
-          const impactToReverse = transactionToEdit.isReimbursement
-            ? transactionToEdit.amount
-            : -transactionToEdit.amount;
-          await updateDoc(envRef, {
-              spent: increment(impactToReverse)
-          });
+          // 2. Mettre à jour l'enveloppe (dépenses uniquement)
+          if (!isIncome && transactionToEdit.envelopeId) {
+            const envRef = doc(db, "users", user.uid, "envelopes", transactionToEdit.envelopeId);
+            const impactToReverse = transactionToEdit.isReimbursement
+              ? transactionToEdit.amount
+              : -transactionToEdit.amount;
+            await updateDoc(envRef, {
+                spent: increment(impactToReverse)
+            });
+          }
+
+          // 3. Décrémenter le compteur de transactions du mois
+          const delMonth = getMonthKey(transactionToEdit.date);
+          const counterRef = doc(db, "counters", user.uid);
+          await updateDoc(counterRef, {
+            [delMonth]: increment(-1),
+          }).catch(() => {/* compteur absent, ignoré */});
         }
-
-        // 3. Décrémenter le compteur de transactions du mois
-        const monthKey = getMonthKey(transactionToEdit.date);
-        const counterRef = doc(db, "counters", user.uid);
-        await updateDoc(counterRef, {
-          [monthKey]: increment(-1),
-        }).catch(() => {/* compteur absent, ignoré */});
 
         refreshData();
         onClose();
@@ -544,6 +858,39 @@ const handleDelete = async () => {
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                   isReimbursement ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+          )}
+
+          {/* Récurrente (dépenses uniquement, hors enveloppes temporaires) */}
+          {transactionType === "expense" && !selectedEnv?.isTemporary && (
+          <div className="flex items-center justify-between p-3 rounded-lg bg-app-bg border border-app-border">
+            <div className="flex items-start gap-2">
+              <RefreshCw className="h-4 w-4 text-app-text-secondary mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-app-text">Récurrente</p>
+                <p className="text-xs text-app-text-secondary">
+                  {isRecurring
+                    ? "Cette dépense se répète chaque mois. Les mois suivants seront mis à jour automatiquement."
+                    : "Cette dépense se répétera chaque mois à la même date"}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isRecurring}
+              aria-label="Dépense récurrente"
+              onClick={() => setIsRecurring(v => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                isRecurring ? "bg-amber-500" : "bg-app-border"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isRecurring ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>
