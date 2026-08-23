@@ -61,4 +61,20 @@ export interface Transaction {
 
   /** ISO-8601 last-update timestamp. */
   updatedAt?: string;
+
+  /**
+   * Recurring series id (iOS feature). Shared by all monthly occurrences of
+   * the same series. Absent for plain transactions. Optional so old documents
+   * and old clients keep working.
+   */
+  recurrenceId?: string;
+
+  /** Nominal day of month (1..31) in effect for the series. Optional. */
+  recurrenceAnchorDay?: number;
+
+  /**
+   * ISO-8601 end date: last month allowed for the series. Set on kept
+   * occurrences when the series is stopped. Absent = series active.
+   */
+  recurrenceEndDate?: string;
 }

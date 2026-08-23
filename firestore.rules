@@ -124,11 +124,15 @@ service cloud.firestore {
     // Optional: description, note (note retained for backward-compat with pre-rename iOS clients),
     //           isReimbursement (bool; absent = false; when true the amount is a credit, not a debit),
     //           type ("expense" | "income"; absent = expense for backward compat),
-    //           source (income category; required when type === "income")
+    //           source (income category; required when type === "income"),
+    //           recurrenceId/recurrenceAnchorDay/recurrenceEndDate (optional; monthly recurring
+    //           series. recurrenceEndDate marks a stopped series. All optional so old clients
+    //           and the web app (which ignores them) keep writing valid payloads).
     // envelopeId is required for expenses, optional for income transactions.
     function isValidTransactionData(data) {
       return data.keys().hasOnly([
-            'amount', 'envelopeId', 'date', 'createdAt', 'updatedAt', 'description', 'note', 'isReimbursement', 'type', 'source'
+            'amount', 'envelopeId', 'date', 'createdAt', 'updatedAt', 'description', 'note', 'isReimbursement', 'type', 'source',
+            'recurrenceId', 'recurrenceAnchorDay', 'recurrenceEndDate'
           ])
         && data.amount     is number && data.amount > 0             && data.amount     <= 1000000
         && data.date       is string && data.date.size()       >= 1 && data.date.size()       <= 30
@@ -141,7 +145,10 @@ service cloud.firestore {
         && (!('note'            in data) || (data.note            is string && data.note.size()            <= 255))
         && (!('isReimbursement' in data) || data.isReimbursement is bool)
         && (!('type'            in data) || data.type in ['expense', 'income'])
-        && (!('source'          in data) || (data.source is string && data.source.size() >= 1 && data.source.size() <= 100));
+        && (!('source'          in data) || (data.source is string && data.source.size() >= 1 && data.source.size() <= 100))
+        && (!('recurrenceId'         in data) || (data.recurrenceId         is string && data.recurrenceId.size()       >= 8  && data.recurrenceId.size()       <= 128))
+        && (!('recurrenceAnchorDay'  in data) || (data.recurrenceAnchorDay  is number && data.recurrenceAnchorDay       >= 1  && data.recurrenceAnchorDay       <= 31))
+        && (!('recurrenceEndDate'    in data) || (data.recurrenceEndDate    is string && data.recurrenceEndDate.size()  >= 1  && data.recurrenceEndDate.size()  <= 30));
     }
 
     // Monthly income override: /users/{userId}/monthlyIncomes/{YYYY-MM}
