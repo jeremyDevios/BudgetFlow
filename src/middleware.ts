@@ -28,7 +28,9 @@ export function middleware(request: NextRequest) {
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'${isDev ? " 'unsafe-inline' 'unsafe-eval'" : ""} https://apis.google.com https://*.firebaseapp.com https://*.googleapis.com https://accounts.google.com https://www.google.com https://www.gstatic.com https://*.gstatic.com`,
     "style-src 'self' 'unsafe-inline'",
-    "connect-src 'self' https://*.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://fcm.googleapis.com",
+    // SEC-22 : www.google.com est requis par App Check (reCAPTCHA v3) —
+    // le SDK appelle www.google.com/recaptcha/api2/... pour obtenir les jetons.
+    "connect-src 'self' https://*.googleapis.com https://firestore.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://fcm.googleapis.com https://www.google.com",
     "frame-src https://*.firebaseapp.com https://accounts.google.com https://*.google.com https://*.gstatic.com",
     "img-src 'self' data: https:",
     "frame-ancestors 'none'",
