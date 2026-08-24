@@ -32,7 +32,11 @@ export async function POST(
         await adminAuth.verifyIdToken(authToken);
         isAuthenticated = true;
       } catch {
-        // Token invalide → on continue sans auth
+        // SEC-30 : token invalide/expiré → refus explicite.
+        return NextResponse.json(
+          { error: "Invalid authentication token" },
+          { status: 401 }
+        );
       }
     }
 
@@ -53,7 +57,10 @@ export async function POST(
 
     const { id } = await params;
 
-    const res = await fetch(`${QUACKBACK_BASE_URL}/posts/${id}/vote`, {
+    // SEC-30 : id encodé (paramètre d'URL).
+    const res = await fetch(
+      `${QUACKBACK_BASE_URL}/posts/${encodeURIComponent(id)}/vote`,
+      {
       method: "POST",
       headers: {
         Authorization: `Bearer ${QUACKBACK_API_KEY}`,

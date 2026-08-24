@@ -82,6 +82,10 @@ Strict-Transport-Security: max-age=31536000
 - ✅ Utilisez toujours des variables d'env pour les clés sensibles
 - ✅ Commettez `.env.example` (avec valeurs vides)
 - ❌ Ne commitez JAMAIS `.env.local` ou d'autres fichiers `.env`
+- ✅ **Depuis le 24/08 (SEC-25)** : les secrets ne vivent plus dans l'arbre du projet.
+  - Emplacement externe : `~/.config/budgetflow/` (surchargeable via `BUDGETFLOW_SECRETS_DIR`) — comptes de service dans `service-accounts/`, valeurs privées (`FIREBASE_PRIVATE_KEY`, `FIREBASE_CLIENT_EMAIL`, `CRON_SECRET`, `QUACKBACK_API_KEY`) dans `env/{dev,prod}.env`, backups Firestore dans `backups/`. Permissions 600/700.
+  - Migration / réversibilité : `node scripts/migrate-secrets.js` (sauvegardes des `.env` dans `env/backup-avant-migration/`).
+  - Tous les chargeurs lisent l'emplacement externe en priorité avec repli sur les emplacements historiques : `scripts/load-env.js` (`getSecretsDir`, `loadExternalEnvFile`), `scripts/firebase-admin-config.js`, seed/restore/backup, `trigger-notifications.js`, `playwrightTest/specs/auth.setup.ts`, `next.config.mjs`, `docker-compose.yml` (second `env_file`).
 
 ### 2. Logs
 - ✅ Utilisez `logger` de [src/lib/logger.ts](src/lib/logger.ts)
@@ -188,4 +192,8 @@ Si une clé est exposée :
 - [ ] Logs sanitisés en production
 - [ ] Validations côté client implémentées
 - [ ] Validations côté serveur implémentées
+- [ ] Secrets dans `~/.config/budgetflow/` — aucun `service-account*.json` dans `scripts/`
+- [ ] Clés de service account rotées après déplacement (console Firebase)
+- [ ] `CRON_SECRET` distinct entre dev et prod
+- [ ] Bypass E2E inerte en production (garde `NODE_ENV`, SEC-28)
 

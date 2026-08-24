@@ -24,7 +24,8 @@
  *   --confirm               Écrit réellement en base (sinon dry-run)
  *   --dry-run               Force le mode simulation
  *   --replace-existing      Supprime les enveloppes, transactions et dailyActivity existants
- *   --env prod|dev          Environnement cible (défaut: prod)
+ *   --env prod|dev          Environnement cible (défaut: dev — la production
+ *                           exige --env prod explicite, cf. SEC-33)
  *   --project <projectId>   Override du projectId Firebase
  *   --today <YYYY-MM-DD>    Date d'ancrage pour générer les 5 derniers mois
  *   --help                  Affiche cette aide
@@ -34,9 +35,10 @@
 
 const admin = require("firebase-admin");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
-const { loadEnvFiles } = require("./load-env");
+const { loadEnvFiles, getSecretsDir } = require("./load-env");
 
 loadEnvFiles(".env.local", ".env");
 
@@ -111,7 +113,8 @@ const positionalEnv =
 const positionalUserId = positionalEnv ? positionalArgs[1] || null : positionalArgs[0] || null;
 
 const userId = getArg("--user") || positionalUserId;
-const env = getArg("--env") || positionalEnv || "prod";
+// SEC-33 : défaut `dev` — écrire en production doit être un choix explicite.
+const env = getArg("--env") || positionalEnv || "dev";
 const customProjectId = getArg("--project");
 const todayArg = getArg("--today");
 const replaceExisting = hasFlag("--replace-existing");
@@ -643,7 +646,12 @@ function buildSeedDataset(today) {
 }
 
 function resolveFirebaseCredential(targetEnv) {
+  // SEC-25 : comptes de service déplacés hors de l'arbre du projet par
+  // scripts/migrate-secrets.js — emplacement externe en priorité, repli
+  // sur les emplacements historiques.
   const serviceAccountCandidates = [
+    path.join(getSecretsDir(), "service-accounts", `service-account-${targetEnv}.json`),
+    path.join(getSecretsDir(), "service-accounts", "service-account.json"),
     path.resolve(__dirname, `service-account-${targetEnv}.json`),
     path.resolve(__dirname, "service-account.json"),
   ];
@@ -659,7 +667,8 @@ function resolveFirebaseCredential(targetEnv) {
     if (!found) {
       console.error(
         `❌ Aucune credential trouvée pour --env ${targetEnv}.\n` +
-          `   → Attendu : scripts/service-account-${targetEnv}.json ou scripts/service-account.json\n` +
+          `   → Attendu : ${getSecretsDir()}/service-accounts/service-account-${targetEnv}.json\n` +
+          `     ou scripts/service-account-${targetEnv}.json (emplacement historique)\n` +
           "   → ou définissez GOOGLE_APPLICATION_CREDENTIALS"
       );
       process.exit(1);

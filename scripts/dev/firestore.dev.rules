@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ⚠️ RÈGLES DEV UNIQUEMENT — NE JAMAIS DÉPLOYER EN PRODUCTION
+    // Accès sans authentification pour les tests E2E Playwright qui
+    // utilisent le bypass AuthContext.
+    //
+    // SEC-27 : ce fichier a été déplacé hors de la racine du projet
+    // (scripts/dev/) — `firebase deploy --only firestore:rules` ne lit
+    // que `firestore.rules` (voir firebase.json). Aucun script ne
+    // référence ce fichier : pour l'utiliser, copier explicitement son
+    // contenu et vérifier le projet cible (--project).
+
+    // Allow all reads/writes without auth for development
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

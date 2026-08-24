@@ -1,4 +1,5 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { parseEnv } = require("node:util");
 
@@ -65,6 +66,32 @@ function loadEnvFiles(...relativePaths) {
   }
 }
 
+/**
+ * Répertoire externe des secrets (SEC-25).
+ *
+ * Après `node scripts/migrate-secrets.js`, les clés privées
+ * (FIREBASE_PRIVATE_KEY, CRON_SECRET, …) et les comptes de service ne vivent
+ * plus dans l'arbre du projet mais dans ce répertoire — hors du chemin de
+ * tout backup/sync du dépôt. Surchargeable via BUDGETFLOW_SECRETS_DIR.
+ */
+function getSecretsDir() {
+  return (
+    process.env.BUDGETFLOW_SECRETS_DIR ||
+    path.join(os.homedir(), ".config", "budgetflow")
+  );
+}
+
+/**
+ * Charge $SECRETS_DIR/env/<envName>.env (valeurs privées déplacées hors du
+ * projet). À appeler APRÈS loadEnvFiles() : ne complète que les variables
+ * encore absentes, jamais d'écrasement.
+ */
+function loadExternalEnvFile(envName) {
+  loadEnvFileIfExists(path.join(getSecretsDir(), "env", `${envName}.env`));
+}
+
 module.exports = {
   loadEnvFiles,
+  loadExternalEnvFile,
+  getSecretsDir,
 };

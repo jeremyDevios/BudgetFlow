@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
+import { timingSafeEqual, createHash } from "crypto";
 import { adminDb, adminMessaging } from "@/lib/firebaseAdmin";
 import { logger } from "@/lib/logger";
 
@@ -78,6 +78,12 @@ function getMessagingErrorCode(error: unknown): string | undefined {
   return typeof code === "string" ? code : undefined;
 }
 
+// SEC-31 : identifiant non réversible pour les logs de production —
+// les UID Firebase ne doivent pas apparaître dans les journaux.
+function shortUid(uid: string): string {
+  return createHash("sha256").update(uid).digest("hex").slice(0, 8);
+}
+
 async function runNotificationTrigger(now = new Date()): Promise<TriggerStats> {
   const { dayKey, start, end } = getDayBounds(now);
   const usersSnap = await adminDb.collection("users").get();
@@ -119,44 +125,20 @@ async function runNotificationTrigger(now = new Date()): Promise<TriggerStats> {
         .where("date", "<=", end)
         .get();
 
-      let dailyTotal = 0;
       let transactionCount = 0;
 
       transactionsSnap.forEach((txDoc) => {
         const data = txDoc.data();
         const amount = Number(data.amount);
         if (Number.isFinite(amount) && amount !== 0) {
-          dailyTotal += amount;
           transactionCount += 1;
         }
       });
 
-      // Read user's currency preference (default EUR)
-      let currency = "EUR";
-      try {
-        const settingsSnap = await adminDb
-          .collection("users")
-          .doc(userDoc.id)
-          .collection("settings")
-          .doc("general")
-          .get();
-        if (settingsSnap.exists) {
-          const settingsData = settingsSnap.data();
-          if (typeof settingsData?.currency === "string") {
-            currency = settingsData.currency;
-          }
-        }
-      } catch {
-        // Fall back to EUR if settings read fails
-      }
-
-      const formattedTotal = new Intl.NumberFormat("fr-FR", {
-        style: "currency",
-        currency,
-      }).format(dailyTotal);
-
+      // SEC-31 : le corps de la notification ne contient aucun montant
+      // financier — une notification est visible sur l'écran verrouillé.
       const body = transactionCount > 0
-        ? `Vous avez déjà saisi ${formattedTotal} aujourd'hui (${transactionCount} dépenses). Avez-vous oublié quelque chose ?`
+        ? `Vous avez saisi ${transactionCount} dépense(s) aujourd'hui. Avez-vous oublié quelque chose ?`
         : "Aucune dépense saisie aujourd'hui. Rien à déclarer ?";
 
       notifications.push(
@@ -178,17 +160,17 @@ async function runNotificationTrigger(now = new Date()): Promise<TriggerStats> {
         }).then(() => {
           stats.sent += 1;
         }).catch(async (error) => {
-          logger.error(`[notifications] Failed for user ${userDoc.id}`, error);
+          logger.error(`[notifications] Failed for user ${shortUid(userDoc.id)}`, error);
 
           if (getMessagingErrorCode(error) === "messaging/registration-token-not-registered") {
             try {
               await adminDb.collection("users").doc(userDoc.id).update({
                 fcmToken: null,
               });
-              logger.info(`[notifications] Cleaned up invalid FCM token for user ${userDoc.id}`);
+              logger.info(`[notifications] Cleaned up invalid FCM token for user ${shortUid(userDoc.id)}`);
             } catch (cleanupError) {
               logger.error(
-                `[notifications] Failed to clean up FCM token for user ${userDoc.id}`,
+                `[notifications] Failed to clean up FCM token for user ${shortUid(userDoc.id)}`,
                 cleanupError
               );
             }
@@ -196,7 +178,7 @@ async function runNotificationTrigger(now = new Date()): Promise<TriggerStats> {
         })
       );
     } catch (error) {
-      logger.error(`[notifications] Failed while preparing user ${userDoc.id}`, error);
+      logger.error(`[notifications] Failed while preparing user ${shortUid(userDoc.id)}`, error);
     }
   }
 
@@ -230,8 +212,10 @@ async function handleTriggerRequest(request: Request) {
   }
 }
 
-export async function GET(request: Request) {
-  return handleTriggerRequest(request);
+export async function GET() {
+  // SEC-31 : pas d'effet de bord sur GET — les crawlers et préchargements
+  // ne doivent pas pouvoir déclencher un envoi massif de notifications.
+  return NextResponse.json({ error: "Method Not Allowed" }, { status: 405 });
 }
 
 export async function POST(request: Request) {

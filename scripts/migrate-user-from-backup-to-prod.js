@@ -28,6 +28,8 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 
+const { getSecretsDir } = require("./load-env");
+
 const args = process.argv.slice(2);
 const hasFlag = (flag) => args.includes(flag);
 const getArg = (flag) => {
@@ -41,7 +43,12 @@ const TARGET_USER_ARG = getArg("--target-user");
 const AUTO_CONFIRM = hasFlag("--yes");
 const INCLUDE_PROFILE = hasFlag("--include-profile");
 
-const SERVICE_ACCOUNT_PATH = path.resolve(__dirname, "service-account-prod.json");
+// SEC-25 : comptes de service déplacés hors de l'arbre du projet —
+// emplacement externe en priorité, repli sur l'emplacement historique.
+const SERVICE_ACCOUNT_PATH = [
+  path.join(getSecretsDir(), "service-accounts", "service-account-prod.json"),
+  path.resolve(__dirname, "service-account-prod.json"),
+].find(fs.existsSync);
 const BACKUPS_DIR = path.resolve(__dirname, "..", "backups");
 
 const PROFILE_KEYS_TO_PRESERVE = new Set([

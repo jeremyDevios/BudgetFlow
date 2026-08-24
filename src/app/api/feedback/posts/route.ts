@@ -85,7 +85,12 @@ export async function POST(request: Request) {
         userName = decodedToken.name;
         isAuthenticated = true;
       } catch {
-        // Token invalide → on continue en anonyme
+        // SEC-30 : un token invalide/expiré est refusé explicitement —
+        // pas de dégradation silencieuse en anonyme.
+        return NextResponse.json(
+          { error: "Invalid authentication token" },
+          { status: 401 }
+        );
       }
     }
 
@@ -110,6 +115,19 @@ export async function POST(request: Request) {
     if (!title?.trim() || !content?.trim() || !boardId?.trim()) {
       return NextResponse.json(
         { error: "Missing required fields: title, content, boardId" },
+        { status: 400 }
+      );
+    }
+
+    // SEC-30 : longueurs maximales — un contenu non borné est transmis
+    // tel quel à l'API tierce.
+    if (
+      title.trim().length > 200 ||
+      content.trim().length > 5000 ||
+      boardId.trim().length > 100
+    ) {
+      return NextResponse.json(
+        { error: "title (max 200), content (max 5000) ou boardId (max 100) trop long" },
         { status: 400 }
       );
     }

@@ -54,6 +54,7 @@ jobs:
         run: |
           node scripts/seed-test-data.js \
             --user "${{ secrets.E2E_TEST_USER_UID }}" \
+            --env dev \
             --confirm \
             --replace-existing \
             --today "${{ inputs.anchor_date || '2026-06-01' }}"

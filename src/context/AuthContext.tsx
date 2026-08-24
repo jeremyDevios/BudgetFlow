@@ -23,6 +23,12 @@ export const useAuth = () => useContext(AuthContext);
  */
 function getE2EBypassUser(): User | null {
   if (typeof window === "undefined") return null;
+  // SEC-28 : garde d'environnement — le bypass ne doit jamais être embarqué
+  // dans un build de production, même si NEXT_PUBLIC_E2E_AUTH_BYPASS=true est
+  // présent dans un .env.local de la machine de build (Next charge .env.local
+  // pour tous les builds). Les tests E2E tournent sous `next dev`
+  // (NODE_ENV=development) et ne sont pas affectés.
+  if (process.env.NODE_ENV === "production") return null;
   if (process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS !== "true") return null;
 
   try {
@@ -114,8 +120,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     if (!user) return;
 
-    // Désactiver l'auto-logout en mode E2E
-    if (process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === "true") return;
+    // Désactiver l'auto-logout en mode E2E (SEC-28 : jamais en production,
+    // même si le flag E2E a fuité dans un build).
+    if (
+      process.env.NODE_ENV !== "production" &&
+      process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === "true"
+    ) {
+      return;
+    }
 
     const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
     let inactivityTimer: ReturnType<typeof setTimeout>;

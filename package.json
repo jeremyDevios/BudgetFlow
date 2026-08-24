@@ -27,7 +27,7 @@
     "test:e2e:new": "playwright test --config=playwrightTest/playwright.config.ts",
     "test:e2e:new:headed": "playwright test --config=playwrightTest/playwright.config.ts --headed",
     "test:e2e:auth": "playwright test --config=playwrightTest/playwright.config.ts --project=auth-setup --headed",
-    "test:e2e:seed": "node scripts/seed-test-data.js --confirm --replace-existing"
+    "test:e2e:seed": "node scripts/seed-test-data.js --confirm --replace-existing --env dev"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

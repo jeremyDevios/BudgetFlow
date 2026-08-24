@@ -81,7 +81,8 @@ if (hasFlag("--help")) {
 const inputFile = getArg("--input");
 const targetUserId = getArg("--user") || null;
 const customProjectId = getArg("--project") || null;
-const targetEnv = getArg("--env") || "prod";
+// SEC-33 : défaut `dev` — restaurer en production doit être un choix explicite.
+const targetEnv = getArg("--env") || "dev";
 const isDryRun = !hasFlag("--confirm");
 const useOverwrite = hasFlag("--overwrite");
 const useMerge = hasFlag("--merge");

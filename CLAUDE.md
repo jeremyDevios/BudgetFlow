@@ -87,6 +87,7 @@ A display-only privacy feature that masks currency amounts in the web UI. Toggle
 - **Use the shared `logger`** from `src/lib/logger.ts` for application errors (especially Firebase/auth flows) — it sanitizes sensitive data in production.
 - **Transaction writes must update both** the transaction document and the envelope's `spent` aggregate.
 - **Detailed mode invariants**: `fixedCostsDetailedEnabled`/`savingsDetailedEnabled` are auto-set to `false` when their items arrays are empty. Items are preserved when disabled (no data loss on toggle). Enforced at both read time (`loadSettings`) and write time (`normalizeSettingsPayload`).
+- **Secrets locaux (SEC-25)**: les clés privées (comptes de service, `FIREBASE_PRIVATE_KEY`, `CRON_SECRET`, `QUACKBACK_API_KEY`) et les backups Firestore vivent dans `~/.config/budgetflow/` (surchargeable via `BUDGETFLOW_SECRETS_DIR`) — jamais dans l'arbre du projet. Voir `scripts/migrate-secrets.js`, `scripts/load-env.js` (`getSecretsDir`/`loadExternalEnvFile`) et `scripts/firebase-admin-config.js`.
 
 ## Testing strategy
 

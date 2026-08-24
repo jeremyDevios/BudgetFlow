@@ -1,10 +1,22 @@
 import { test as setup, expect } from "@playwright/test";
 import path from "path";
+import os from "os";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
 
 // Charger les variables d'environnement depuis .env.local
 dotenv.config({ path: path.resolve(__dirname, "../../.env.local") });
+// SEC-25 : les clés privées Firebase (FIREBASE_PRIVATE_KEY, …) ont été
+// déplacées hors de l'arbre du projet par scripts/migrate-secrets.js —
+// compléter avec le fichier externe (sans écraser les valeurs existantes).
+dotenv.config({
+  path: path.resolve(
+    process.env.BUDGETFLOW_SECRETS_DIR ||
+      path.join(os.homedir(), ".config", "budgetflow"),
+    "env",
+    "dev.env"
+  ),
+});
 
 const AUTH_FILE = path.resolve(__dirname, "playwright.auth.json");
 const ONBOARDING_AUTH_FILE = path.resolve(

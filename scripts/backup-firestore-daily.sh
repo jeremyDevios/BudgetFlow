@@ -65,7 +65,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "${BACKUP_OUTPUT_DIR}" ]]; then
-  BACKUP_OUTPUT_DIR="${PROJECT_ROOT}/backups/daily/${BACKUP_ENV}"
+  # SEC-25 : les backups contiennent toutes les données utilisateur en clair —
+  # sortie par défaut dans le répertoire externe des secrets, hors de l'arbre
+  # du projet (surchargeable avec --output-dir ou BACKUP_OUTPUT_DIR).
+  BACKUP_OUTPUT_DIR="${BUDGETFLOW_SECRETS_DIR:-$HOME/.config/budgetflow}/backups/daily/${BACKUP_ENV}"
 fi
 
 TIMESTAMP="$(date '+%Y-%m-%dT%H-%M-%S')"

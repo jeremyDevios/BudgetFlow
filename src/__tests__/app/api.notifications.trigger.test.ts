@@ -105,14 +105,22 @@ describe("notifications trigger route", () => {
   });
 
   it("rejects unauthorized requests", async () => {
-    const response = await GET(createMockRequest("http://localhost/api/notifications/trigger"));
+    const response = await POST(createMockRequest("http://localhost/api/notifications/trigger"));
     const payload = await response.json();
 
     expect(response.status).toBe(401);
     expect(payload).toEqual({ error: "Unauthorized" });
   });
 
-  it("supports legacy GET requests with ?key and returns detailed stats", async () => {
+  it("refuses GET requests — no side effects on GET (SEC-31)", async () => {
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(405);
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("supports POST requests with x-cron-secret and returns detailed stats", async () => {
     mockUsers = [
       {
         id: "user-1",
@@ -146,7 +154,7 @@ describe("notifications trigger route", () => {
 
     mockSend.mockResolvedValue("message-id");
 
-    const response = await GET(
+    const response = await POST(
       createMockRequest("http://localhost/api/notifications/trigger", "test-secret")
     );
     const payload = await response.json();
@@ -172,7 +180,17 @@ describe("notifications trigger route", () => {
         token: "token-1",
         notification: expect.objectContaining({
           title: "Bilan Quotidien",
-          body: expect.stringContaining("15,00"),
+          body: expect.stringContaining("2 dépense"),
+        }),
+      })
+    );
+
+    // SEC-31 : plus aucun montant financier dans le corps du push —
+    // une notification est visible sur l'écran verrouillé.
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notification: expect.objectContaining({
+          body: expect.not.stringContaining("15,00"),
         }),
       })
     );

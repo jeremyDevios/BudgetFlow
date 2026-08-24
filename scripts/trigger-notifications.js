@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 
-const { loadEnvFiles } = require("./load-env");
+const { loadEnvFiles, loadExternalEnvFile } = require("./load-env");
 
 loadEnvFiles(".env.local", ".env");
+// SEC-25 : CRON_SECRET déplacé hors de l'arbre du projet par
+// scripts/migrate-secrets.js — le cron vise le serveur de production.
+loadExternalEnvFile("prod");
 
 const defaultPort = process.env.PORT || "8095";
 const triggerUrl = process.env.NOTIFICATION_TRIGGER_URL || `http://127.0.0.1:${defaultPort}/api/notifications/trigger`;

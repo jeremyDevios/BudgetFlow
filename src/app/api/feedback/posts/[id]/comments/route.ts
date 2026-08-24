@@ -21,7 +21,10 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const res = await fetch(`${QUACKBACK_BASE_URL}/posts/${id}/comments`, {
+    // SEC-30 : id encodé (paramètre d'URL).
+    const res = await fetch(
+      `${QUACKBACK_BASE_URL}/posts/${encodeURIComponent(id)}/comments`,
+      {
       headers: {
         Authorization: `Bearer ${QUACKBACK_API_KEY}`,
         "Content-Type": "application/json",
@@ -82,7 +85,12 @@ export async function POST(
         userName = decodedToken.name;
         isAuthenticated = true;
       } catch {
-        // Token invalide → on continue en anonyme
+        // SEC-30 : token invalide/expiré → refus explicite, pas de
+        // dégradation silencieuse en anonyme.
+        return NextResponse.json(
+          { error: "Invalid authentication token" },
+          { status: 401 }
+        );
       }
     }
 
@@ -111,6 +119,14 @@ export async function POST(
       );
     }
 
+    // SEC-30 : longueur maximale.
+    if (content.trim().length > 5000) {
+      return NextResponse.json(
+        { error: "content trop long (max 5000 caractères)" },
+        { status: 400 }
+      );
+    }
+
     // ── Build attributed content ──────────────────────────────────
     // Note : l'email n'est plus inclus, seulement le displayName
     // ou "Anonyme" (cf. SEC-17).
@@ -121,8 +137,9 @@ export async function POST(
 
     const { id } = await params;
 
+    // SEC-30 : id encodé (paramètre d'URL).
     const res = await fetch(
-      `${QUACKBACK_BASE_URL}/posts/${id}/comments`,
+      `${QUACKBACK_BASE_URL}/posts/${encodeURIComponent(id)}/comments`,
       {
         method: "POST",
         headers: {

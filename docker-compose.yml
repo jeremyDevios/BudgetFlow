@@ -19,6 +19,10 @@ services:
       - PORT=8095
     env_file:
       - .env.local.prod
+      # SEC-25 : clés privées déplacées hors de l'arbre du projet
+      # (scripts/migrate-secrets.js) — chargées après .env.local.prod,
+      # elles complètent les variables privées absentes.
+      - $HOME/.config/budgetflow/env/prod.env
     #volumes:
     #  - .:/app
     #  - /app/node_modules

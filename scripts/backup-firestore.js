@@ -28,6 +28,7 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
 const { resolveFirebaseAdminConfig } = require("./firebase-admin-config");
+const { getSecretsDir } = require("./load-env");
 
 // ─── Résolution des arguments CLI ────────────────────────────────────────────
 
@@ -230,7 +231,10 @@ async function main() {
   const suffix = targetUserId ? `_user-${targetUserId.slice(0, 8)}` : "_full";
   const defaultFilename = `backup-${timestamp}${suffix}.json`;
 
-  const backupsDir = path.resolve(__dirname, "..", "backups");
+  // SEC-25 : les backups contiennent toutes les données utilisateur en clair —
+  // sortie par défaut dans le répertoire externe des secrets, hors de l'arbre
+  // du projet (surchargeable avec --output).
+  const backupsDir = path.join(getSecretsDir(), "backups");
   if (!fs.existsSync(backupsDir)) {
     fs.mkdirSync(backupsDir, { recursive: true });
   }

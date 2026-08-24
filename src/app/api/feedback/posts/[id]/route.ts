@@ -19,7 +19,9 @@ export async function GET(
   try {
     const { id } = await params;
 
-    const res = await fetch(`${QUACKBACK_BASE_URL}/posts/${id}`, {
+    // SEC-30 : l'id est un paramètre d'URL — encodé pour empêcher toute
+    // manipulation du chemin/des paramètres de la requête sortante.
+    const res = await fetch(`${QUACKBACK_BASE_URL}/posts/${encodeURIComponent(id)}`, {
       headers: {
         Authorization: `Bearer ${QUACKBACK_API_KEY}`,
         "Content-Type": "application/json",

@@ -2,7 +2,7 @@ const admin = require("firebase-admin");
 const fs = require("fs");
 const path = require("path");
 
-const { loadEnvFiles } = require("./load-env");
+const { loadEnvFiles, loadExternalEnvFile, getSecretsDir } = require("./load-env");
 
 loadEnvFiles(".env.local", ".env");
 
@@ -13,7 +13,15 @@ function resolveFirebaseAdminConfig(options = {}) {
     defaultProjectId = "budgetflow-86842",
   } = options;
 
+  // SEC-25 : clés privées déplacées hors de l'arbre du projet par
+  // scripts/migrate-secrets.js — complète les variables absentes de .env.local.
+  loadExternalEnvFile(env);
+
   const serviceAccountCandidates = [
+    // Emplacement externe (post-migration)
+    path.join(getSecretsDir(), "service-accounts", `service-account-${env}.json`),
+    path.join(getSecretsDir(), "service-accounts", "service-account.json"),
+    // Fallback : emplacements historiques dans l'arbre du projet
     path.resolve(__dirname, `service-account-${env}.json`),
     path.resolve(__dirname, "service-account.json"),
   ];
@@ -32,7 +40,8 @@ function resolveFirebaseAdminConfig(options = {}) {
     if (!found) {
       throw new Error(
         `Aucune credential trouvée pour --env ${env}.\n` +
-          `   → Attendu : scripts/service-account-${env}.json ou scripts/service-account.json\n` +
+          `   → Attendu : ${getSecretsDir()}/service-accounts/service-account-${env}.json\n` +
+          `     ou scripts/service-account-${env}.json (emplacement historique)\n` +
           "   → ou définissez GOOGLE_APPLICATION_CREDENTIALS"
       );
     }

@@ -28,6 +28,8 @@ const admin = require("firebase-admin");
 const fs    = require("fs");
 const path  = require("path");
 
+const { getSecretsDir } = require("./load-env");
+
 // ─── Arguments CLI ────────────────────────────────────────────────────────────
 
 const args   = process.argv.slice(2);
@@ -52,7 +54,11 @@ if (!single && !(from && to)) {
 // ─── Initialisation Firebase Admin ───────────────────────────────────────────
 
 const env = getArg("--env") || "prod"; // prod | dev
+// SEC-25 : comptes de service déplacés hors de l'arbre du projet —
+// emplacement externe en priorité, repli sur les emplacements historiques.
 const SA_CANDIDATES = [
+  path.join(getSecretsDir(), "service-accounts", `service-account-${env}.json`),
+  path.join(getSecretsDir(), "service-accounts", "service-account.json"),
   path.resolve(__dirname, `service-account-${env}.json`),
   path.resolve(__dirname, "service-account.json"),
 ];
