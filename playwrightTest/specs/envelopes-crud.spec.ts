@@ -103,8 +103,10 @@ test.describe("Gestion des enveloppes (CRUD)", () => {
       // plutôt qu'un sélecteur CSS trop large ([class*='tile'] etc.)
       await dashboard.clickEnvelope("Courses");
 
-      // Vérifier que la page détail s'affiche
-      await expect(page.locator("h1")).toBeVisible({ timeout: 5_000 });
+      // Vérifier que la page détail s'affiche.
+      // 15s : le h1 n'apparaît qu'après plusieurs lectures Firestore séquentielles
+      // (enveloppe + enveloppes + transactions) — 5s flakait sous charge.
+      await expect(page.locator("h1")).toBeVisible({ timeout: 15_000 });
     });
 
     test("la page détail a un bouton Nouvelle Dépense", async ({ page }) => {
@@ -117,7 +119,7 @@ test.describe("Gestion des enveloppes (CRUD)", () => {
       const newTxButton = page.getByRole("button", {
         name: /Nouvelle Dépense|Ajouter/i,
       });
-      await expect(newTxButton.first()).toBeVisible({ timeout: 5_000 });
+      await expect(newTxButton.first()).toBeVisible({ timeout: 15_000 });
     });
   });
 

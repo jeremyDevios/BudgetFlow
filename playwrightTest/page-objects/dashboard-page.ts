@@ -123,7 +123,9 @@ export class DashboardPage extends BasePage {
     const tile = this.page.locator(".bento-tile").filter({ hasText: envelopeName }).first();
     const heading = tile.locator("h4").first();
     await heading.click();
-    await this.page.waitForURL(/\/envelopes\//, { timeout: 10_000 });
+    // 15s : sous charge (suite complète en parallèle), la navigation client-side
+    // peut être lente — 10s occasionnait des flaky failures.
+    await this.page.waitForURL(/\/envelopes\//, { timeout: 15_000 });
     await this.waitForDataLoaded();
   }
 
