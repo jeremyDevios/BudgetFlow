@@ -1,19 +1,35 @@
 rules_version = '2';
 service cloud.firestore {
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // RÈGLES DU PROJET DE PRODUCTION (budgetflow-vizualy) — SEC-26
+  //
+  // Dérivé de firestore.rules (projet dev) avec UNE différence :
+  // le provider `custom` est retiré de isAuthenticated() — les tokens
+  // custom ne sont mintés que pour les tests E2E, qui ne tournent que
+  // contre le projet dev. Avec la clé Admin en fuite, un custom token
+  // permettrait de se faire passer pour n'importe quel utilisateur.
+  //
+  // ⚠️ TOUTE modification de firestore.rules (dev) doit être répercutée
+  //    ici avant déploiement — et réciproquement.
+  //
+  // Déploiement (manuel, jamais automatisé) :
+  //   firebase deploy --only firestore:rules --project budgetflow-vizualy
+  //     (avec ce fichier temporairement copié comme firestore.rules)
+  // ═════════════════════════════════════════════════════════════════════════
+
   match /databases/{database}/documents {
 
     // ── Auth ─────────────────────────────────────────────────────────────────
 
-    // Require a live Google, Apple Sign-In, or custom token (E2E tests) session.
+    // Require a live Google or Apple Sign-In session.
     // Explicitly checking the provider prevents any accidentally re-enabled
     // auth method (e.g. email/password) from silently granting access.
-    // Custom tokens are allowed for E2E testing — they require the Admin SDK
-    // private key to mint, so they don't weaken production security.
+    // `custom` est volontairement absent : réservé au projet dev (E2E).
     function isAuthenticated() {
       return request.auth != null
         && (request.auth.token.firebase.sign_in_provider == 'google.com'
-            || request.auth.token.firebase.sign_in_provider == 'apple.com'
-            || request.auth.token.firebase.sign_in_provider == 'custom');
+            || request.auth.token.firebase.sign_in_provider == 'apple.com');
     }
 
     function isOwner(userId) {
@@ -232,9 +248,8 @@ service cloud.firestore {
                          // getAfter reads the counter state AFTER the batched writes
                          // (e.g. increment(1) in the same batch).
                          // If the counter document doesn't exist yet (first envelope
-                         // written by a client that doesn't batch the counter), allow
-                         // the creation — the client should still update the counter,
-                         // and the quota won't be enforced server-side until it does.
+                         // written by a client that doesn't batch the counter — iOS
+                         // writes envelopes without counters), allow the creation.
                          && (!existsAfter(
                               /databases/$(database)/documents/counters/$(userId)
                             )
@@ -268,7 +283,7 @@ service cloud.firestore {
                          // date is immutable — prevents history tampering.
                          && request.resource.data.date == resource.data.date;
       }
-}
+    }
 
     // Deny all unmatched paths by default
     match /{document=**} {

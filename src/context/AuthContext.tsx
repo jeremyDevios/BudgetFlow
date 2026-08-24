@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { auth, enableAppCheck } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
 
 interface AuthContextType {
@@ -48,6 +48,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     let unsubscribe: (() => void) | undefined;
 
     const initAuth = async () => {
+      // SEC-22 : App Check (inerte sans NEXT_PUBLIC_APP_CHECK_RECAPTCHA_KEY).
+      await enableAppCheck();
+
       // Bypass E2E : injecte un utilisateur factice depuis localStorage.
       // Si un custom token Admin est présent, on crée une VRAIE session
       // Firebase Auth pour que request.auth ≠ null dans les règles Firestore.

@@ -43,17 +43,24 @@ export function resolveBentoPreset(value: unknown): BentoPreset {
  */
 export function sanitizeSubItems(value: unknown): BudgetSubItem[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((item): item is BudgetSubItem => {
-    if (item === null || typeof item !== "object") return false;
-    const candidate = item as Record<string, unknown>;
-    return (
-      typeof candidate.id === "string" &&
-      candidate.id.length > 0 &&
-      typeof candidate.name === "string" &&
-      typeof candidate.amount === "number" &&
-      candidate.amount >= 0
-    );
-  });
+  return value
+    .slice(0, 100) // SEC-24 : cap aligné sur la limite des règles Firestore —
+    // borne la taille maximale du document settings.
+    .filter((item): item is BudgetSubItem => {
+      if (item === null || typeof item !== "object") return false;
+      const candidate = item as Record<string, unknown>;
+      return (
+        typeof candidate.id === "string" &&
+        candidate.id.length > 0 &&
+        candidate.id.length <= 100 &&
+        typeof candidate.name === "string" &&
+        candidate.name.length <= 100 &&
+        typeof candidate.amount === "number" &&
+        Number.isFinite(candidate.amount) &&
+        candidate.amount >= 0 &&
+        candidate.amount <= 100000000
+      );
+    });
 }
 
 /**

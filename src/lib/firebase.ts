@@ -93,6 +93,36 @@ export const db: Firestore = lazyProxy(_dbRef, () => {
   });
 });
 
+/**
+ * Active App Check (reCAPTCHA v3) — SEC-22.
+ *
+ * Inerte tant que NEXT_PUBLIC_APP_CHECK_RECAPTCHA_KEY n'est pas défini :
+ * déployable sans risque en production. Une fois la clé configurée côté
+ * console (et App Check en mode monitor, puis enforcement progressif),
+ * définir la variable et redéployer.
+ *
+ * Pour tester localement une fois la clé en place :
+ *   self.FIREBASE_APPCHECK_DEBUG_TOKEN = "<token de debug console>"
+ * avant initializeAppCheck (géré par le SDK).
+ */
+export async function enableAppCheck(): Promise<void> {
+  const siteKey = process.env.NEXT_PUBLIC_APP_CHECK_RECAPTCHA_KEY;
+  if (!siteKey || typeof window === "undefined") return;
+
+  try {
+    const { initializeAppCheck, ReCaptchaV3Provider } = await import(
+      "firebase/app-check"
+    );
+    initializeAppCheck(getOrInitApp(), {
+      provider: new ReCaptchaV3Provider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    });
+  } catch {
+    // App Check indisponible (build sans config, environnement hostile) :
+    // l'application continue sans App Check plutôt que de tomber.
+  }
+}
+
 /** Active la persistance offline Firestore (IndexedDB). */
 export async function enableOfflinePersistence(): Promise<void> {
   if (typeof window === "undefined") return;

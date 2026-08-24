@@ -34,6 +34,16 @@ const AUTH_QUOTAS: Record<string, number> = {
   "feedback:vote": 50,
 };
 
+// SEC-29 : quotas durs par IP (24h) pour les actions anonymes, indépendants
+// du device-id — un client ne peut plus réinitialiser son compteur en
+// changeant l'en-tête x-device-id. Les quotas par device restent en dessous
+// pour préserver la granularité (plusieurs appareils derrière un même NAT).
+const ANON_IP_QUOTAS: Record<string, number> = {
+  "feedback:post": 15,
+  "feedback:comment": 25,
+  "feedback:vote": 50,
+};
+
 // Quotas par minute pour les actions sensibles
 const PER_MINUTE_QUOTAS: Record<string, number> = {
   "validate:transaction": 30,   // 30 validations/min
@@ -68,12 +78,20 @@ function cleanup() {
 
 /** Extrait l'IP du client depuis les en-têtes de la requête. */
 function getClientIp(request: Request): string {
+  // SEC-29 : l'en-tête de confiance est configurable — derrière un reverse
+  // proxy, pointer RATE_LIMIT_TRUSTED_IP_HEADER sur l'en-tête que le proxy
+  // écrase lui-même (ex. x-real-ip posé par nginx). Sans proxy, tout
+  // en-tête est falsifiable : c'est le quota dur par IP (ANON_IP_QUOTAS)
+  // qui borne l'abus, pas la fiabilité de l'IP.
+  const trustedHeader =
+    process.env.RATE_LIMIT_TRUSTED_IP_HEADER || "x-real-ip";
+  const trusted = request.headers.get(trustedHeader)?.trim();
+  if (trusted) return trusted;
+
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
     return forwarded.split(",")[0].trim();
   }
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
   return "127.0.0.1";
 }
 
@@ -117,11 +135,57 @@ export function checkRateLimit(
     ? PER_MINUTE_QUOTAS[action]
     : (isAuthenticated ? AUTH_QUOTAS : ANON_QUOTAS)[action] ?? 3;
 
-  const key = `${ip}:${deviceId}:${action}:${isAuthenticated ? "auth" : "anon"}`;
+  const label =
+    action === "validate:transaction" ? "validations" :
+    action === "account:delete" ? "tentatives de suppression" :
+    action === "feedback:vote" ? "votes" :
+    action === "feedback:comment" ? "commentaires" : "posts";
 
   const now = Date.now();
   const windowStart = now - windowMs;
 
+  // SEC-29 : quota dur par IP (24h) pour les actions anonymes — bloque la
+  // rotation de x-device-id. Les actions par minute et les utilisateurs
+  // authentifiés ne sont pas concernés (buckets existants).
+  const ipLimit =
+    !isAuthenticated && !isPerMinute ? ANON_IP_QUOTAS[action] : undefined;
+
+  if (ipLimit !== undefined) {
+    const ipResult = consumeBucket(`${ip}:${action}:ip`, ipLimit, now, windowStart, windowMs);
+    if (!ipResult.allowed) {
+      return {
+        allowed: false,
+        remaining: 0,
+        resetAt: ipResult.resetAt,
+        message: `Limite IP atteinte (${ipLimit} ${label} par 24h). Réessayez après ${new Date(ipResult.resetAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}.`,
+      };
+    }
+  }
+
+  const key = `${ip}:${deviceId}:${action}:${isAuthenticated ? "auth" : "anon"}`;
+  const result = consumeBucket(key, limit, now, windowStart, windowMs);
+
+  if (!result.allowed) {
+    const unit = isPerMinute ? "par minute" : "par 24h";
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: result.resetAt,
+      message: `Limite atteinte (${limit} ${label} ${unit}). Réessayez après ${new Date(result.resetAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}.`,
+    };
+  }
+
+  return { allowed: true, remaining: result.remaining, resetAt: result.resetAt };
+}
+
+/** Consomme un jeton dans le bucket identifié par `key` (fenêtre glissante). */
+function consumeBucket(
+  key: string,
+  limit: number,
+  now: number,
+  windowStart: number,
+  windowMs: number
+): { allowed: boolean; remaining: number; resetAt: number } {
   let bucket = store.get(key);
 
   if (!bucket || bucket.expiresAt < now) {
@@ -133,18 +197,10 @@ export function checkRateLimit(
 
   if (bucket.timestamps.length >= limit) {
     const oldestInWindow = bucket.timestamps[0];
-    const resetAt = oldestInWindow + windowMs;
-    const unit = isPerMinute ? "par minute" : "par 24h";
-    const label =
-      action === "validate:transaction" ? "validations" :
-      action === "account:delete" ? "tentatives de suppression" :
-      action === "feedback:vote" ? "votes" :
-      action === "feedback:comment" ? "commentaires" : "posts";
     return {
       allowed: false,
       remaining: 0,
-      resetAt,
-      message: `Limite atteinte (${limit} ${label} ${unit}). Réessayez après ${new Date(resetAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}.`,
+      resetAt: oldestInWindow + windowMs,
     };
   }
 
@@ -152,10 +208,11 @@ export function checkRateLimit(
   bucket.expiresAt = now + windowMs;
   store.set(key, bucket);
 
-  const remaining = limit - bucket.timestamps.length;
-  const resetAt = bucket.timestamps[0] + windowMs;
-
-  return { allowed: true, remaining, resetAt };
+  return {
+    allowed: true,
+    remaining: limit - bucket.timestamps.length,
+    resetAt: bucket.timestamps[0] + windowMs,
+  };
 }
 
 /** Pour les tests : vide le store. */

@@ -64,7 +64,9 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   devIndicators: process.env.SHOW_DEV_TOOLS === "true" ? undefined : false,
-  allowedDevOrigins: ["budget.zikkis.fr", "*.zikkis.fr", "localhost", "127.0.0.1", "192.168.1.241"],
+  // SEC-12 : le domaine zikkis.fr n'est plus utilisé — seules les origines
+  // de développement locales restent autorisées.
+  allowedDevOrigins: ["localhost", "127.0.0.1", "192.168.1.241"],
   async headers() {
     return [
       {
