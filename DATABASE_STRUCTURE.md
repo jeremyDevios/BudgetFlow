@@ -75,6 +75,9 @@ Single document with fixed ID `general`.
 | `savingsDetailedEnabled` | boolean | `UserSettings.savingsDetailedEnabled` | `false` |
 | `fixedCostsItems` | array\<[FixedCostItem](#fixedcostitem--savingsitem-sub-document-shape)\> | `UserSettings.fixedCostsItems` (SwiftData relational — see below) | `[]` |
 | `savingsItems` | array\<[SavingsItem](#fixedcostitem--savingsitem-sub-document-shape)\> | `UserSettings.savingsItems` (SwiftData relational — see below) | `[]` |
+| `incomeHistory` | array\<[BudgetVersionEntry](#budget-version-history)\> | `UserSettings.incomeHistory` | absent (flat fallback) |
+| `fixedCostsHistory` | array\<[BudgetVersionEntry](#budget-version-history)\> | `UserSettings.fixedCostsHistory` | absent (flat fallback) |
+| `savingsHistory` | array\<[BudgetVersionEntry](#budget-version-history)\> | `UserSettings.savingsHistory` | absent (flat fallback) |
 
 ### `FixedCostItem` / `SavingsItem` — Sub-document shape
 
@@ -93,11 +96,38 @@ Both `fixedCostsItems` and `savingsItems` store an array of objects with the fol
 - **Disabling** detailed mode does **not** delete the items — they are preserved so that re-enabling the mode restores the previous breakdown without data loss.
 - If `fixedCostsItems` (resp. `savingsItems`) is empty, the corresponding `*DetailedEnabled` flag **must** be `false`; the global manual amount is then used instead.
 
+### Budget version history
+
+`incomeHistory`, `fixedCostsHistory` and `savingsHistory` version the three budget axes over time so that each month is calculated with the value that was effective then. **Every** edit of a versioned value asks "effective from when?" (from the beginning / from a date / from today — future dates are allowed and schedule the change).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string (UUID) | Stable identifier for the version |
+| `startDate` | string `YYYY-MM-DD` | First effective day |
+| `endDate` | string `YYYY-MM-DD` \| null | Last effective day; `null` = still active (last entry only) |
+| `amount` | number | Value for `incomeHistory` |
+| `total` | number | Value for `fixedCostsHistory` / `savingsHistory` |
+| `detailedEnabled` | boolean | Detailed-mode flag (fixed-costs/savings histories only) |
+| `items` | array\<[FixedCostItem](#fixedcostitem--savingsitem-sub-document-shape)\> | Full item snapshot (fixed-costs/savings histories only, preserved even when `detailedEnabled` is false) |
+| `updatedAt` | string (ISO 8601) | Last write of the version |
+
+Business rules:
+
+- **Lazy**: an absent/empty history means the flat fields (`monthlyIncome`, `fixedCosts`+items, `monthlySavings`+items) apply to every month — legacy behaviour, no migration. The first dated edit materialises an initial version covering the past (anchored at `settings.createdAt`, sentinel `0001-01-01` otherwise).
+- **Monthly resolution**: the effective value of month `YYYY-MM` is the version active on the **last day** of the month (`startDate ≤ last-day ≤ endDate ?? ∞`). Before the first version, the flat fallback applies.
+- **Invariants** (guaranteed by the iOS `BudgetVersionTimeline` engine, tolerated at read time): sorted by `startDate`; no overlap (`v[i].endDate` = day before `v[i+1].startDate`); `endDate ≥ startDate`; at most 100 entries (SEC-24).
+- **"From the beginning"** replaces every version with a single version anchored at the earliest known date — past months are recalculated (explicit user choice); with an empty history it simply updates the flats (nothing to rewrite). **"From today"** keeps closed months unchanged.
+- **Scheduled (future) changes**: a version with a future `startDate` is preserved (parsing keeps it, resolution ignores it until its date). The flat fields keep mirroring the version active **today** until the scheduled version takes effect.
+- **History editing**: the settings history screen lets the user edit a version's content (amount, or item snapshot for detailed categories) and delete a version — the previous version's content then covers the removed period (or the flat fallback before the first version).
+- **Flat coherence**: the flat fields mirror the active version; new clients keep them in sync. If an old client edits the flats without the history, new clients detect the divergence and ask the user to reconcile ("apply from today" or "ignore").
+- **Disjunction with `monthlyIncomes`**: `incomeHistory` only applies when `isFixedIncome === true`; variable income keeps using the `monthlyIncomes` subcollection.
+- The iOS engine lives in `BudgetVersionTimeline.swift`; the web sanitizer (`sanitizeBudgetVersionHistory`) lives in `src/lib/settingsService.ts` and passes the histories through `saveSettings` so web writes never wipe them.
+
 ### `isFixedIncome` behaviour
 
-- When `true` (default), the global `monthlyIncome` is used for every month.
+- When `true` (default), the fixed income is resolved through `incomeHistory` (absent → global `monthlyIncome` for every month).
 - When `false`, the user can set a per-month income override via the `monthlyIncomes` subcollection.
-- For any given month, the effective income is resolved by `resolveMonthlyIncome()` in `src/lib/monthlyIncomeService.ts`:
+- For any given month, the effective income is resolved by `resolveMonthlyIncome()` in `src/lib/settingsService.ts`:
   1. Explicit entry for that month in `monthlyIncomes` (if exists).
   2. Most recent past month with an entry (if any).
   3. Global `monthlyIncome` fallback.
@@ -140,7 +170,7 @@ One document per month where the user has set a specific income override. Docume
 - Each document represents an explicit override for that month.
 - Documents are created/updated from the dashboard when the user edits their income for a given month.
 - Deleting a document reverts that month to the resolution fallback (most recent past entry or global `monthlyIncome`).
-- The resolution is handled client-side by `resolveMonthlyIncome()` (`src/lib/monthlyIncomeService.ts`) — Firestore does not perform fallback logic.
+- The resolution is handled client-side by `resolveMonthlyIncome()` (`src/lib/settingsService.ts`) — Firestore does not perform fallback logic.
 
 ---
 

@@ -44,7 +44,8 @@ service cloud.firestore {
     // Required: monthlyIncome, fixedCosts, monthlySavings, isOnboarded
     // Optional: currency, bentoPreset, anonymousMode, createdAt, updatedAt,
     //           fixedCostsDetailedEnabled, fixedCostsItems,
-    //           savingsDetailedEnabled, savingsItems
+    //           savingsDetailedEnabled, savingsItems, isFixedIncome,
+    //           incomeHistory, fixedCostsHistory, savingsHistory
     function isValidBudgetSubItems(items) {
       // Firestore Security Rules cannot iterate a list of maps, so the nested
       // item shape is validated client-side in settingsService. Rules still
@@ -53,13 +54,25 @@ service cloud.firestore {
         && items.size() <= 100;
     }
 
+    function isValidBudgetVersionHistory(history) {
+      // Versioned budget values (incomeHistory / fixedCostsHistory /
+      // savingsHistory). Firestore Security Rules cannot iterate a list of
+      // maps, so the nested entry shape (startDate, endDate, amount/total,
+      // items…) is validated client-side (iOS BudgetVersionTimeline / web
+      // settingsService). Rules still cap the list length to bound the
+      // settings document size (SEC-24).
+      return history is list
+        && history.size() <= 100;
+    }
+
     function isValidSettingsData(data) {
       return data.keys().hasOnly([
             'monthlyIncome', 'fixedCosts', 'monthlySavings',
            'currency', 'bentoPreset', 'anonymousMode', 'isOnboarded', 'createdAt', 'updatedAt',
            'fixedCostsDetailedEnabled', 'fixedCostsItems',
            'savingsDetailedEnabled', 'savingsItems',
-           'isFixedIncome'
+           'isFixedIncome',
+           'incomeHistory', 'fixedCostsHistory', 'savingsHistory'
           ])
         && data.monthlyIncome  is number && data.monthlyIncome  >= 0 && data.monthlyIncome  <= 100000000
         && data.fixedCosts     is number && data.fixedCosts     >= 0 && data.fixedCosts     <= 100000000
@@ -75,6 +88,9 @@ service cloud.firestore {
         && (!('fixedCostsItems' in data) || isValidBudgetSubItems(data.fixedCostsItems))
         && (!('savingsItems' in data) || isValidBudgetSubItems(data.savingsItems))
         && (!('isFixedIncome' in data) || data.isFixedIncome is bool)
+        && (!('incomeHistory' in data) || isValidBudgetVersionHistory(data.incomeHistory))
+        && (!('fixedCostsHistory' in data) || isValidBudgetVersionHistory(data.fixedCostsHistory))
+        && (!('savingsHistory' in data) || isValidBudgetVersionHistory(data.savingsHistory))
         && (data.fixedCostsDetailedEnabled != true || (('fixedCostsItems' in data) && data.fixedCostsItems.size() > 0))
         && (data.savingsDetailedEnabled != true || (('savingsItems' in data) && data.savingsItems.size() > 0));
     }

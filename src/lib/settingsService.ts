@@ -16,6 +16,7 @@ import { resolveCurrencyCode } from "@/types/currency";
 import {
   BentoPreset,
   BudgetSubItem,
+  BudgetVersionEntry,
   DEFAULT_USER_SETTINGS,
   UserSettings,
 } from "@/types/settings";
@@ -110,6 +111,80 @@ export function resolveMonthlyIncome(
   return fallbackIncome;
 }
 
+/**
+ * Validates and sanitizes an unknown value into a `BudgetVersionEntry[]`.
+ *
+ * Retrocompatible and tolerant by design: legacy documents without history
+ * keys yield `[]` (the flat fields remain the source of truth for all
+ * months). Malformed entries are dropped rather than throwing, mirroring
+ * `sanitizeSubItems`. The list is capped at 100 entries (SEC-24) and sorted
+ * by `startDate`.
+ *
+ * A valid entry carries an `id` (≤ 100 chars), a `startDate` matching
+ * `YYYY-MM-DD`, an `endDate` that is either `null` or a `YYYY-MM-DD` day
+ * ≥ `startDate`, an `amount` OR `total` in 0..100000000, an optional
+ * `detailedEnabled` boolean, optional `items` (sanitized via
+ * `sanitizeSubItems`) and an `updatedAt` string.
+ */
+export function sanitizeBudgetVersionHistory(value: unknown): BudgetVersionEntry[] {
+  if (!Array.isArray(value)) return [];
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+  const sanitized: BudgetVersionEntry[] = [];
+  for (const raw of value.slice(0, 100)) {
+    if (raw === null || typeof raw !== "object") continue;
+    const candidate = raw as Record<string, unknown>;
+
+    if (typeof candidate.id !== "string" || candidate.id.length === 0 || candidate.id.length > 100) {
+      continue;
+    }
+    if (typeof candidate.startDate !== "string" || !datePattern.test(candidate.startDate)) {
+      continue;
+    }
+    let endDate: string | null;
+    if (candidate.endDate === null) {
+      endDate = null;
+    } else if (typeof candidate.endDate === "string" && datePattern.test(candidate.endDate)) {
+      endDate = candidate.endDate;
+    } else {
+      continue;
+    }
+    // Lexicographic comparison is chronological for zero-padded dates.
+    if (endDate !== null && endDate < candidate.startDate) continue;
+
+    const amount = typeof candidate.amount === "number" ? candidate.amount : undefined;
+    const total = typeof candidate.total === "number" ? candidate.total : undefined;
+    const numeric = amount ?? total;
+    if (
+      numeric === undefined ||
+      !Number.isFinite(numeric) ||
+      numeric < 0 ||
+      numeric > 100000000
+    ) {
+      continue;
+    }
+
+    const items = candidate.items === undefined ? undefined : sanitizeSubItems(candidate.items);
+    const detailedEnabled =
+      typeof candidate.detailedEnabled === "boolean" ? candidate.detailedEnabled : undefined;
+    if (typeof candidate.updatedAt !== "string" || candidate.updatedAt.length > 30) continue;
+
+    const entry: BudgetVersionEntry = {
+      id: candidate.id,
+      startDate: candidate.startDate,
+      endDate,
+      updatedAt: candidate.updatedAt,
+    };
+    if (amount !== undefined) entry.amount = amount;
+    if (total !== undefined) entry.total = total;
+    if (detailedEnabled !== undefined) entry.detailedEnabled = detailedEnabled;
+    if (items !== undefined) entry.items = items;
+    sanitized.push(entry);
+  }
+
+  return sanitized.sort((a, b) => a.startDate.localeCompare(b.startDate));
+}
+
 /** Creates a new empty detailed-budget line with a stable client-side id. */
 export function createEmptyBudgetSubItem(): BudgetSubItem {
   const supportsRandomUuid =
@@ -189,6 +264,12 @@ function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSet
   const fixedCostsItems = sanitizeSubItems(raw.fixedCostsItems);
   const savingsItems = sanitizeSubItems(raw.savingsItems);
 
+  // Version histories: sanitized and passed through so that a settings write
+  // from a legacy web client no longer wipes them (retrocompat with iOS 1.05).
+  const incomeHistory = sanitizeBudgetVersionHistory(raw.incomeHistory);
+  const fixedCostsHistory = sanitizeBudgetVersionHistory(raw.fixedCostsHistory);
+  const savingsHistory = sanitizeBudgetVersionHistory(raw.savingsHistory);
+
   return {
     monthlyIncome: Number(raw.monthlyIncome ?? DEFAULT_USER_SETTINGS.monthlyIncome),
     isFixedIncome: raw.isFixedIncome !== false, // default true for backward compat
@@ -208,6 +289,11 @@ function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSet
     ),
     isOnboarded: raw.isOnboarded !== false,
     currency: resolveCurrencyCode(raw.currency),
+    // History keys are only kept when non-empty: legacy documents keep their
+    // exact shape and empty histories converge with the iOS payload builder.
+    ...(incomeHistory.length > 0 ? { incomeHistory } : {}),
+    ...(fixedCostsHistory.length > 0 ? { fixedCostsHistory } : {}),
+    ...(savingsHistory.length > 0 ? { savingsHistory } : {}),
     ...(typeof raw.createdAt === "string" ? { createdAt: raw.createdAt } : {}),
     ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),
   };
@@ -253,6 +339,9 @@ export async function loadSettings(uid: string): Promise<UserSettings> {
     savingsDetailedEnabled: stored.savingsDetailedEnabled,
     fixedCostsItems: stored.fixedCostsItems,
     savingsItems: stored.savingsItems,
+    ...(stored.incomeHistory?.length ? { incomeHistory: stored.incomeHistory } : {}),
+    ...(stored.fixedCostsHistory?.length ? { fixedCostsHistory: stored.fixedCostsHistory } : {}),
+    ...(stored.savingsHistory?.length ? { savingsHistory: stored.savingsHistory } : {}),
   };
 }
 

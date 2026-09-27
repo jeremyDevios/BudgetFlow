@@ -28,6 +28,58 @@ export interface BudgetSubItem {
 }
 
 // ---------------------------------------------------------------------------
+// Version history (dated budget values)
+// ---------------------------------------------------------------------------
+
+/**
+ * A single line item inside a versioned fixed-costs or savings snapshot.
+ * Mirrors the iOS `BudgetVersionItem` (BudgetVersionTimeline.swift).
+ */
+export interface BudgetVersionItem {
+  /** Stable unique identifier. */
+  id: string;
+  /** Display name. */
+  name: string;
+  /** Monthly amount in the user's currency. Must be ≥ 0. */
+  amount: number;
+  /** Display order within the snapshot. */
+  order?: number;
+}
+
+/**
+ * One dated version of a budget value (income, fixed costs or savings).
+ *
+ * Stored in the settings document under `incomeHistory`,
+ * `fixedCostsHistory` and `savingsHistory`. Absent/empty history means the
+ * flat fields apply to every month (legacy behaviour, no migration).
+ *
+ * Invariants (guaranteed by the iOS `BudgetVersionTimeline` engine, tolerated
+ * at read time by `sanitizeBudgetVersionHistory`):
+ *  - sorted by ascending `startDate`;
+ *  - no overlap (`v[i].endDate` is the day before `v[i+1].startDate`);
+ *  - `endDate` is `null` only on the last entry (the active version);
+ *  - at most 100 entries per history (SEC-24).
+ */
+export interface BudgetVersionEntry {
+  /** Stable unique identifier. */
+  id: string;
+  /** Effective start day, `YYYY-MM-DD`. */
+  startDate: string;
+  /** Last effective day, `YYYY-MM-DD`. `null` = still active. */
+  endDate: string | null;
+  /** Value for `incomeHistory`. */
+  amount?: number;
+  /** Value for `fixedCostsHistory` / `savingsHistory`. */
+  total?: number;
+  /** Detailed-mode flag (fixed-costs/savings histories only). */
+  detailedEnabled?: boolean;
+  /** Full item snapshot (fixed-costs/savings histories only). */
+  items?: BudgetVersionItem[];
+  /** ISO 8601 timestamp of the last write. */
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Derived enums / literals
 // ---------------------------------------------------------------------------
 
@@ -113,6 +165,27 @@ export interface UserSettings {
    * Preserved even when detailed mode is disabled.
    */
   savingsItems: BudgetSubItem[];
+
+  // ── Version history ───────────────────────────────────────────────────────
+
+  /**
+   * Dated versions of the fixed income. Only meaningful when
+   * `isFixedIncome` is true (variable income uses the `monthlyIncomes`
+   * subcollection). Absent → `monthlyIncome` applies to every month.
+   */
+  incomeHistory?: BudgetVersionEntry[];
+
+  /**
+   * Dated versions of the fixed costs. Absent → `fixedCosts` /
+   * `fixedCostsItems` apply to every month.
+   */
+  fixedCostsHistory?: BudgetVersionEntry[];
+
+  /**
+   * Dated versions of the savings target. Absent → `monthlySavings` /
+   * `savingsItems` apply to every month.
+   */
+  savingsHistory?: BudgetVersionEntry[];
 }
 
 // ---------------------------------------------------------------------------

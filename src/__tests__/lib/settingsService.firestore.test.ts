@@ -179,4 +179,125 @@ describe("settingsService Firestore persistence", () => {
       }),
     );
   });
+
+  it("preserves income/fixedCosts/savingsHistory arrays when saving a partial update", async () => {
+    // Regression: the legacy sanitizer rebuilt an explicit object and wiped
+    // unknown keys, so a web write would silently delete the version
+    // histories written by iOS 1.05. They must survive any web save.
+    const incomeHistory = [
+      {
+        id: "inc-1",
+        startDate: "2026-01-01",
+        endDate: "2026-06-30",
+        amount: 3200,
+        updatedAt: "2026-09-23T10:00:00Z",
+      },
+    ];
+    const fixedCostsHistory = [
+      {
+        id: "fix-1",
+        startDate: "2026-01-01",
+        endDate: null,
+        total: 1200,
+        detailedEnabled: true,
+        items: [{ id: "loyer", name: "Loyer", amount: 800, order: 0 }],
+        updatedAt: "2026-09-23T10:00:00Z",
+      },
+    ];
+    const savingsHistory = [
+      {
+        id: "sav-1",
+        startDate: "2026-03-01",
+        endDate: null,
+        total: 500,
+        updatedAt: "2026-09-23T10:00:00Z",
+      },
+    ];
+
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        monthlyIncome: 3200,
+        fixedCosts: 1200,
+        monthlySavings: 500,
+        isOnboarded: true,
+        incomeHistory,
+        fixedCostsHistory,
+        savingsHistory,
+      }),
+    });
+
+    await saveSettings("user-1", {
+      monthlyIncome: 3500,
+    });
+
+    expect(setDocMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        monthlyIncome: 3500,
+        incomeHistory,
+        fixedCostsHistory,
+        savingsHistory,
+      }),
+    );
+  });
+
+  it("drops history keys when the stored histories are empty", async () => {
+    // Legacy documents keep their exact shape (no empty keys written).
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        monthlyIncome: 3200,
+        fixedCosts: 1200,
+        monthlySavings: 500,
+        isOnboarded: true,
+      }),
+    });
+
+    await saveSettings("user-1", {
+      monthlyIncome: 3500,
+    });
+
+    expect(setDocMock.mock.calls[0][1]).not.toHaveProperty("incomeHistory");
+    expect(setDocMock.mock.calls[0][1]).not.toHaveProperty("fixedCostsHistory");
+    expect(setDocMock.mock.calls[0][1]).not.toHaveProperty("savingsHistory");
+  });
+
+  it("loadSettings returns sanitized histories", async () => {
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        monthlyIncome: 3200,
+        fixedCosts: 1200,
+        monthlySavings: 500,
+        isOnboarded: true,
+        incomeHistory: [
+          {
+            id: "inc-1",
+            startDate: "2026-01-01",
+            endDate: "2026-06-30",
+            amount: 3200,
+            updatedAt: "2026-09-23T10:00:00Z",
+          },
+          { id: "bad", startDate: "01/01/2026", amount: 1, updatedAt: "x" },
+        ],
+        fixedCostsHistory: [],
+        savingsHistory: [],
+      }),
+    });
+
+    await expect(loadSettings("user-1")).resolves.toEqual(
+      expect.objectContaining({
+        incomeHistory: [
+          {
+            id: "inc-1",
+            startDate: "2026-01-01",
+            endDate: "2026-06-30",
+            amount: 3200,
+            updatedAt: "2026-09-23T10:00:00Z",
+          },
+        ],
+      }),
+    );
+  });
 });

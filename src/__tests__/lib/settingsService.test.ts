@@ -16,12 +16,13 @@ jest.mock("@/lib/firebase", () => ({
 import {
   resolveBentoPreset,
   sanitizeSubItems,
+  sanitizeBudgetVersionHistory,
   computeDetailedTotal,
   resolveDetailedEnabled,
   normalizeSettingsPayload,
   resolveMonthlyIncome,
 } from "@/lib/settingsService";
-import { BudgetSubItem } from "@/types/settings";
+import { BudgetSubItem, BudgetVersionEntry } from "@/types/settings";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -394,5 +395,120 @@ describe("resolveMonthlyIncome", () => {
   it("returns fallback when monthlyIncomes has no keys before the target month", () => {
     // All entries are AFTER the requested month
     expect(resolveMonthlyIncome("2025-06", incomes, fallback)).toBe(2500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sanitizeBudgetVersionHistory
+// ---------------------------------------------------------------------------
+
+describe("sanitizeBudgetVersionHistory", () => {
+  const validIncomeEntry: BudgetVersionEntry = {
+    id: "v-1",
+    startDate: "2026-01-01",
+    endDate: "2026-06-30",
+    amount: 3200,
+    updatedAt: "2026-09-23T10:00:00Z",
+  };
+
+  it("returns [] for a non-array value", () => {
+    expect(sanitizeBudgetVersionHistory(undefined)).toEqual([]);
+    expect(sanitizeBudgetVersionHistory(null)).toEqual([]);
+    expect(sanitizeBudgetVersionHistory("nope")).toEqual([]);
+    expect(sanitizeBudgetVersionHistory(42)).toEqual([]);
+  });
+
+  it("keeps a valid entry unchanged", () => {
+    expect(sanitizeBudgetVersionHistory([validIncomeEntry])).toEqual([validIncomeEntry]);
+  });
+
+  it("accepts endDate null for the active version", () => {
+    expect(
+      sanitizeBudgetVersionHistory([{ ...validIncomeEntry, endDate: null }]),
+    ).toEqual([{ ...validIncomeEntry, endDate: null }]);
+  });
+
+  it("drops entries with an invalid startDate", () => {
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, startDate: "01/01/2026" }])).toEqual([]);
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, startDate: "2026-13-01" }])).toEqual([]);
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, startDate: 123 }])).toEqual([]);
+  });
+
+  it("drops entries whose endDate precedes startDate", () => {
+    expect(
+      sanitizeBudgetVersionHistory([{ ...validIncomeEntry, endDate: "2025-12-31" }]),
+    ).toEqual([]);
+  });
+
+  it("drops entries without a valid amount or total", () => {
+    const { amount, ...withoutAmount } = validIncomeEntry;
+    expect(sanitizeBudgetVersionHistory([withoutAmount])).toEqual([]);
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, amount: -1 }])).toEqual([]);
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, amount: 200000000 }])).toEqual([]);
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, amount: "3200" as unknown as number }])).toEqual([]);
+  });
+
+  it("accepts total instead of amount", () => {
+    const entry = { ...validIncomeEntry, total: 1200, amount: undefined };
+    delete entry.amount;
+    expect(sanitizeBudgetVersionHistory([entry])).toEqual([
+      {
+        id: "v-1",
+        startDate: "2026-01-01",
+        endDate: "2026-06-30",
+        total: 1200,
+        updatedAt: "2026-09-23T10:00:00Z",
+      },
+    ]);
+  });
+
+  it("drops entries with missing/invalid id or updatedAt", () => {
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, id: "" }])).toEqual([]);
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, updatedAt: 123 }])).toEqual([]);
+    expect(sanitizeBudgetVersionHistory([{ ...validIncomeEntry, updatedAt: "x".repeat(31) }])).toEqual([]);
+  });
+
+  it("sanitizes nested items via sanitizeSubItems and keeps detailedEnabled", () => {
+    const entry: BudgetVersionEntry = {
+      id: "v-1",
+      startDate: "2026-01-01",
+      endDate: null,
+      total: 1000,
+      detailedEnabled: true,
+      items: [
+        { id: "loyer", name: "Loyer", amount: 800, order: 0 },
+        { id: "bad", name: "", amount: -5, order: 1 }, // dropped by sanitizeSubItems
+      ],
+      updatedAt: "2026-09-23T10:00:00Z",
+    };
+    const sanitized = sanitizeBudgetVersionHistory([entry]);
+    expect(sanitized).toEqual([
+      {
+        ...entry,
+        items: [{ id: "loyer", name: "Loyer", amount: 800, order: 0 }],
+      },
+    ]);
+  });
+
+  it("caps the list at 100 entries", () => {
+    const entries = Array.from({ length: 120 }, (_, i) => ({
+      ...validIncomeEntry,
+      id: `v-${i}`,
+      startDate: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
+    }));
+    expect(sanitizeBudgetVersionHistory(entries)).toHaveLength(100);
+  });
+
+  it("sorts entries by ascending startDate", () => {
+    const unsorted = [
+      { ...validIncomeEntry, id: "late", startDate: "2026-07-01", endDate: null },
+      { ...validIncomeEntry, id: "early", startDate: "2025-03-01", endDate: "2025-12-31" },
+    ];
+    const sanitized = sanitizeBudgetVersionHistory(unsorted);
+    expect(sanitized.map((entry) => entry.id)).toEqual(["early", "late"]);
+  });
+
+  it("drops non-object entries", () => {
+    expect(sanitizeBudgetVersionHistory([null, "x", 42, validIncomeEntry])).toEqual([validIncomeEntry]);
   });
 });

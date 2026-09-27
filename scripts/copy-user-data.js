@@ -26,7 +26,7 @@
  * Notes :
  *   - Sans --confirm, le script ne fait qu'afficher ce qu'il ferait.
  *   - Les données copiées sont : document utilisateur, settings/general, enveloppes,
- *     transactions, et dailyActivity.
+ *     transactions, dailyActivity et monthlyIncomes (revenu variable).
  *   - Par défaut, les champs identité du profil cible sont préservés
  *     (email, displayName, photoURL, fcmToken, notificationsEnabled,
  *      lastLogin, lastTokenUpdate).
@@ -216,6 +216,7 @@ async function countUserDocs(userRef) {
     { name: "envelopes", ref: userRef.collection("envelopes") },
     { name: "transactions", ref: userRef.collection("transactions") },
     { name: "dailyActivity", ref: userRef.collection("dailyActivity") },
+    { name: "monthlyIncomes", ref: userRef.collection("monthlyIncomes") },
   ];
 
   const counts = {};
@@ -264,6 +265,7 @@ async function main() {
     { name: "envelopes", label: "Enveloppes" },
     { name: "transactions", label: "Transactions" },
     { name: "dailyActivity", label: "Daily activity" },
+    { name: "monthlyIncomes", label: "Revenus mensuels" },
   ];
 
   const sourceData = {};
@@ -298,6 +300,7 @@ async function main() {
     console.log(`   📁 envelopes : ${targetCounts.envelopes} document(s)`);
     console.log(`   📁 transactions : ${targetCounts.transactions} document(s)`);
     console.log(`   📁 dailyActivity : ${targetCounts.dailyActivity} document(s)`);
+    console.log(`   📁 monthlyIncomes : ${targetCounts.monthlyIncomes} document(s)`);
   } else {
     console.log(`   📄 users/${targetUserId} : n'existe pas encore`);
   }
@@ -337,9 +340,11 @@ async function main() {
 
   const totalSourceDocs =
     (sourceData.settings ? 1 : 0) +
+    1 + // profil utilisateur
     sourceData.envelopes.length +
     sourceData.transactions.length +
-    sourceData.dailyActivity.length;
+    sourceData.dailyActivity.length +
+    sourceData.monthlyIncomes.length;
 
   console.log(`\n📦 Résumé de l'opération :`);
   console.log(`   Documents à copier depuis la source : ${totalSourceDocs}`);
@@ -348,48 +353,52 @@ async function main() {
   console.log(`   - enveloppes           : ${sourceData.envelopes.length}`);
   console.log(`   - transactions         : ${sourceData.transactions.length}`);
   console.log(`   - dailyActivity        : ${sourceData.dailyActivity.length}`);
+  console.log(`   - monthlyIncomes       : ${sourceData.monthlyIncomes.length}`);
 
   if (targetExists) {
     console.log(`\n   🗑️  Suppression préalable des données cible :`);
     console.log(`   - Profil utilisateur   : sera écrasé`);
-    console.log(`   - settings/general     : sera écrasé`);
-    console.log(`   - enveloppes           : suppression + réécriture`);
-    console.log(`   - transactions         : suppression + réécriture`);
-    console.log(`   - dailyActivity        : suppression + réécriture`);
   } else {
-    console.log(`\n   ✨ La cible n'existe pas encore → création pure.`);
+    console.log(`\n   ✨ Le document utilisateur cible n'existe pas → il sera créé.`);
   }
+  console.log(`   - settings/general     : suppression + réécriture`);
+  console.log(`   - enveloppes           : suppression + réécriture`);
+  console.log(`   - transactions         : suppression + réécriture`);
+  console.log(`   - dailyActivity        : suppression + réécriture`);
+  console.log(`   - monthlyIncomes       : suppression + réécriture`);
+  console.log(`   (le nettoyage couvre aussi les documents orphelins d'un ancien compte)`);
 
   console.log("");
 
   // ─── Suppression des données cible ────────────────────────────────────────
+  // Toujours exécutée : un compte Firebase supprimé laisse des sous-collections
+  // orphelines qui fausseraient le miroir (vérification post-copie).
 
-  if (targetExists) {
-    console.log("🗑️  Suppression des données cible…\n");
+  console.log("🗑️  Suppression des données cible…\n");
 
-    // Supprimer les documents des sous-collections
-    const subCollectionsToDelete = [
-      { name: "envelopes", label: "Enveloppes" },
-      { name: "transactions", label: "Transactions" },
-      { name: "dailyActivity", label: "Daily activity" },
-    ];
+  // Supprimer les documents des sous-collections
+  const subCollectionsToDelete = [
+    { name: "envelopes", label: "Enveloppes" },
+    { name: "transactions", label: "Transactions" },
+    { name: "dailyActivity", label: "Daily activity" },
+    { name: "monthlyIncomes", label: "Revenus mensuels" },
+  ];
 
-    for (const { name, label } of subCollectionsToDelete) {
-      const docs = await fetchAll(targetUserRef.collection(name));
-      await deleteInBatches(docs, label);
-    }
-
-    // Supprimer settings/general
-    const targetSettingsRef = targetUserRef.collection("settings").doc("general");
-    const targetSettingsSnap = await targetSettingsRef.get();
-    if (targetSettingsSnap.exists) {
-      await deleteInBatches([targetSettingsSnap], "Settings");
-    } else {
-      console.log("   🧹 Settings : rien à supprimer");
-    }
-
-    console.log("");
+  for (const { name, label } of subCollectionsToDelete) {
+    const docs = await fetchAll(targetUserRef.collection(name));
+    await deleteInBatches(docs, label);
   }
+
+  // Supprimer settings/general
+  const targetSettingsRef = targetUserRef.collection("settings").doc("general");
+  const targetSettingsSnap = await targetSettingsRef.get();
+  if (targetSettingsSnap.exists) {
+    await deleteInBatches([targetSettingsSnap], "Settings");
+  } else {
+    console.log("   🧹 Settings : rien à supprimer");
+  }
+
+  console.log("");
 
   // ─── Écriture des données source vers la cible ────────────────────────────
 
@@ -402,19 +411,31 @@ async function main() {
   );
 
   // 2. Settings
+  // `updatedAt` est rafraîchi pour que la copie GAGNE le merge last-write-wins
+  // des clients : sinon, un appareil possédant des données locales plus
+  // récentes pour le compte cible écraserait le miroir dès la première synchro.
   if (sourceData.settings) {
     const targetSettingsRef = targetUserRef.collection("settings").doc("general");
     await writeInBatches(
-      [{ ref: targetSettingsRef, data: sourceData.settings }],
+      [{
+        ref: targetSettingsRef,
+        data: { ...sourceData.settings, updatedAt: new Date().toISOString() },
+      }],
       "Settings"
     );
   }
 
   // 3. Sous-collections
+  // Même rafraîchissement d'`updatedAt` pour les collections en LWW
+  // (envelopes, transactions, monthlyIncomes) ; dailyActivity est par date,
+  // sans LWW, et reste copié tel quel.
+  const lwwCollections = new Set(["envelopes", "transactions", "monthlyIncomes"]);
   for (const { name, label } of subCollectionsToCopy) {
     const operations = sourceData[name].map((doc) => ({
       ref: targetUserRef.collection(name).doc(doc.id),
-      data: doc.data,
+      data: lwwCollections.has(name)
+        ? { ...doc.data, updatedAt: new Date().toISOString() }
+        : doc.data,
     }));
     await writeInBatches(operations, label);
   }
@@ -441,6 +462,11 @@ async function main() {
         label: "Daily activity",
         expected: sourceData.dailyActivity.length,
         actual: verifyCounts.dailyActivity,
+      },
+      {
+        label: "Revenus mensuels",
+        expected: sourceData.monthlyIncomes.length,
+        actual: verifyCounts.monthlyIncomes,
       },
     ];
 

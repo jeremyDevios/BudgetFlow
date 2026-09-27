@@ -634,6 +634,7 @@ function buildSeedDataset(today) {
     dailyActivity,
     settings: {
       monthlyIncome: 4200,
+      isFixedIncome: true,
       fixedCosts: 1500,
       monthlySavings: 500,
       currency: "EUR",
