@@ -301,3 +301,102 @@ describe("settingsService Firestore persistence", () => {
     );
   });
 });
+
+describe("settingsService custom budget month persistence", () => {
+  beforeEach(() => {
+    getDocMock.mockReset();
+    setDocMock.mockReset();
+    setDocMock.mockResolvedValue(undefined);
+  });
+
+  it("preserves customMonth fields written by iOS when saving a partial update", async () => {
+    // Regression: a web save must never wipe the custom-month fields written
+    // by a newer iOS client (same guarantee as the version histories).
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        monthlyIncome: 3200,
+        fixedCosts: 1200,
+        monthlySavings: 500,
+        isOnboarded: true,
+        customMonthEnabled: true,
+        customMonthStartDay: 25,
+        customMonthStartOverrides: { "2026-10": 5 },
+      }),
+    });
+
+    await saveSettings("user-1", {
+      monthlyIncome: 3500,
+    });
+
+    expect(setDocMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        monthlyIncome: 3500,
+        customMonthEnabled: true,
+        customMonthStartDay: 25,
+        customMonthStartOverrides: { "2026-10": 5 },
+      }),
+    );
+  });
+
+  it("omits customMonth keys for legacy documents (exact shape preserved)", async () => {
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        monthlyIncome: 3200,
+        fixedCosts: 1200,
+        monthlySavings: 500,
+        isOnboarded: true,
+      }),
+    });
+
+    await saveSettings("user-1", { monthlyIncome: 3500 });
+
+    expect(setDocMock.mock.calls[0][1]).not.toHaveProperty("customMonthEnabled");
+    expect(setDocMock.mock.calls[0][1]).not.toHaveProperty("customMonthStartDay");
+    expect(setDocMock.mock.calls[0][1]).not.toHaveProperty("customMonthStartOverrides");
+  });
+
+  it("loadSettings returns sanitized custom-month fields", async () => {
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        monthlyIncome: 3200,
+        fixedCosts: 1200,
+        monthlySavings: 500,
+        isOnboarded: true,
+        customMonthEnabled: true,
+        customMonthStartDay: 25,
+        customMonthStartOverrides: { "2026-10": 5, bad: 9, "2026-11": 31 },
+      }),
+    });
+
+    await expect(loadSettings("user-1")).resolves.toEqual(
+      expect.objectContaining({
+        customMonthEnabled: true,
+        customMonthStartDay: 25,
+        customMonthStartOverrides: { "2026-10": 5 },
+      }),
+    );
+  });
+
+  it("legacy documents load without custom-month fields (defaults apply)", async () => {
+    getDocMock.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        monthlyIncome: 3200,
+        fixedCosts: 1200,
+        monthlySavings: 500,
+        isOnboarded: true,
+      }),
+    });
+
+    await expect(loadSettings("user-1")).resolves.toEqual(
+      expect.objectContaining({
+        monthlyIncome: 3200,
+        fixedCosts: 1200,
+      }),
+    );
+  });
+});

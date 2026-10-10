@@ -1,3 +1,10 @@
+import {
+  budgetMonthKeyForDate,
+  elapsedAndRemainingInBudgetPeriod,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
+
 export interface ForecastTransaction {
   envelopeId: string;
   amount: number;
@@ -50,14 +57,45 @@ function getMonthKey(dateStr: string): string {
   return `${year}-${month}`;
 }
 
-function daysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate();
+/**
+ * Clé du mois budgétaire d'une transaction. Dates valides → moteur
+ * `budgetMonthKeyForDate` (calendaire par défaut) ; dates malformées →
+ * repli historique sur le parsing `Date`.
+ */
+function budgetKeyForTransaction(
+  dateStr: string,
+  config: CustomMonthConfig,
+): string {
+  const dayStr = dateStr.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dayStr)) {
+    return budgetMonthKeyForDate(dayStr, config);
+  }
+  return getMonthKey(dateStr);
 }
 
-function remainingDaysInMonth(today: Date): number {
-  const totalDays = daysInMonth(today.getFullYear(), today.getMonth());
-  const remaining = totalDays - today.getDate() + 1;
-  return Math.max(1, remaining);
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+function localDayKey(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/**
+ * Jours restants de la période courante (aujourd'hui inclus), aligné sur
+ * l'ancienne sémantique `remainingDaysInMonth` (clamp ≥ 1) pour préserver
+ * l'identité calendaire quand l'option est désactivée.
+ */
+function remainingDaysInCurrentPeriod(
+  today: Date,
+  config: CustomMonthConfig,
+): number {
+  const todayKey = localDayKey(today);
+  const currentKey = budgetMonthKeyForDate(todayKey, config);
+  const { elapsed, total } = elapsedAndRemainingInBudgetPeriod(
+    currentKey,
+    todayKey,
+    config,
+  );
+  return Math.max(1, total - elapsed + 1);
 }
 
 export function computeForecast(params: {
@@ -67,6 +105,8 @@ export function computeForecast(params: {
   monthlyBudget: number;
   today: Date;
   pastMonthCount: number;
+  /** Config du mois budgétaire personnalisé (défaut : mois calendaires). */
+  customMonthConfig?: CustomMonthConfig;
 }): {
   globalForecast: GlobalForecast;
   envelopeForecasts: Record<string, EnvelopeForecast>;
@@ -78,6 +118,7 @@ export function computeForecast(params: {
     monthlyBudget,
     today,
     pastMonthCount,
+    customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
   } = params;
 
   if (envelopes.length === 0) {
@@ -104,7 +145,7 @@ export function computeForecast(params: {
     // Skip income transactions — they have no envelope
     if (!tx.envelopeId) continue;
 
-    const monthKey = getMonthKey(tx.date);
+    const monthKey = budgetKeyForTransaction(tx.date, customMonthConfig);
     if (!monthKey) {
       continue;
     }
@@ -139,10 +180,15 @@ export function computeForecast(params: {
     currentSpentByEnvelope[tx.envelopeId] = current + contribution;
   }
 
-  const currentYear = today.getFullYear();
-  const currentMonth = today.getMonth();
-  const currentMonthDays = daysInMonth(currentYear, currentMonth);
-  const remainingDays = remainingDaysInMonth(today);
+  const todayKey = localDayKey(today);
+  const currentMonthKey = budgetMonthKeyForDate(todayKey, customMonthConfig);
+  const currentPeriod = elapsedAndRemainingInBudgetPeriod(
+    currentMonthKey,
+    todayKey,
+    customMonthConfig,
+  );
+  const currentMonthDays = currentPeriod.total;
+  const remainingDays = remainingDaysInCurrentPeriod(today, customMonthConfig);
 
   const envelopeForecasts: Record<string, EnvelopeForecast> = {};
   let projectedTotal = 0;

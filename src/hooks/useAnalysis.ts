@@ -14,6 +14,12 @@ import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
 import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
+import {
+  budgetMonthKeyForDate,
+  getCustomMonthConfig,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 
 interface UseAnalysisParams {
   userId: string | null;
@@ -28,6 +34,8 @@ interface UseAnalysisReturn {
   /** Revenu mensuel résolu (override mensuel inclus) — 0 tant qu'aucun revenu n'est configuré. */
   monthlyIncome: number;
   loading: boolean;
+  /** Config du mois budgétaire personnalisé (pour la navigation de la page). */
+  customMonthConfig: CustomMonthConfig;
 }
 
 /** Local "YYYY-MM-DD" string of a date (Firestore string comparison). */
@@ -36,11 +44,6 @@ const formatDate = (d: Date): string => {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-};
-
-/** Local "YYYY-MM" month key of a date. */
-const monthKey = (d: Date): string => {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 };
 
 /**
@@ -53,6 +56,9 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [chartData, setChartData] = useState<UseAnalysisReturn["spendByEnvelope"]>([]);
   const [monthlyIncome, setMonthlyIncome] = useState(0);
+  const [customMonthConfig, setCustomMonthConfig] = useState<CustomMonthConfig>(
+    DEFAULT_CUSTOM_MONTH_CONFIG,
+  );
   const [loading, setLoading] = useState(false);
 
   const today = useMemo(() => new Date(), []);
@@ -74,6 +80,7 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
       let monthlyIncome = 0;
       let monthlySavings = 0;
       let fixedCosts = 0;
+      let fetchedCustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG;
 
       try {
         const settingsRef = doc(db, "users", userId, "settings", "general");
@@ -83,12 +90,19 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
           monthlyIncome = Number(data.monthlyIncome || 0);
           monthlySavings = Number(data.monthlySavings || 0);
           fixedCosts = Number(data.fixedCosts || 0);
+          fetchedCustomMonthConfig = getCustomMonthConfig(
+            data as Record<string, unknown>,
+          );
 
-          // Revenus variables : override par mois.
+          // Revenus variables : override par mois (clé budgétaire).
           if (data.isFixedIncome === false) {
             try {
               const incomes = await getMonthlyIncomes(userId);
-              monthlyIncome = resolveMonthlyIncome(monthKey(effectiveMonthDate), incomes, monthlyIncome);
+              const referenceKey = budgetMonthKeyForDate(
+                formatDate(effectiveMonthDate),
+                fetchedCustomMonthConfig,
+              );
+              monthlyIncome = resolveMonthlyIncome(referenceKey, incomes, monthlyIncome);
             } catch (e) {
               logger.warn("Monthly incomes read failed (useAnalysis)");
             }
@@ -117,7 +131,7 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
       }
 
       // ── 3. Transactions bornées : période courante + période précédente ──
-      const range = dateRangeFor(period, today, effectiveMonthDate);
+      const range = dateRangeFor(period, today, effectiveMonthDate, fetchedCustomMonthConfig);
       const start = `${formatDate(range.previousStart)}T00:00:00`;
       const end = `${formatDate(range.end)}T23:59:59`;
 
@@ -148,6 +162,7 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
 
       // ── 4. Calcul ──
       setMonthlyIncome(monthlyIncome);
+      setCustomMonthConfig(fetchedCustomMonthConfig);
       const analysis = computeAnalysis({
         transactions,
         envelopes,
@@ -157,11 +172,20 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
         period,
         monthDate: effectiveMonthDate,
         today,
+        customMonthConfig: fetchedCustomMonthConfig,
       });
 
       setResult(analysis);
       setChartData(
-        spendByEnvelope(analysis, envelopes, transactions, period, today, effectiveMonthDate),
+        spendByEnvelope(
+          analysis,
+          envelopes,
+          transactions,
+          period,
+          today,
+          effectiveMonthDate,
+          fetchedCustomMonthConfig,
+        ),
       );
     } catch (e) {
       logger.warn("useAnalysis failed");
@@ -177,5 +201,5 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
     void load();
   }, [load]);
 
-  return { result, spendByEnvelope: chartData, monthlyIncome, loading };
+  return { result, spendByEnvelope: chartData, monthlyIncome, loading, customMonthConfig };
 }

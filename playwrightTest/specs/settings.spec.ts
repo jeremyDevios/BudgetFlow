@@ -128,10 +128,11 @@ test.describe("Paramètres", () => {
 
       const before = await settings.getIncomeTypeText();
       await settings.toggleIncomeType();
-      const after = await settings.getIncomeTypeText();
-
-      // Le texte doit avoir changé après le toggle
-      expect(after).not.toBe(before);
+      // Attendre le re-render React (le clic est optimiste puis sauvegardé) :
+      // lecture immédiate = course sous charge.
+      await expect
+        .poll(async () => settings.getIncomeTypeText(), { timeout: 5_000 })
+        .not.toBe(before);
     });
   });
 
@@ -202,3 +203,45 @@ test.describe("Paramètres", () => {
     });
   });
 });
+
+  test.describe("Mois budgétaire personnalisé", () => {
+    test.beforeEach(async ({ page }) => {
+      const settings = new SettingsPage(page);
+      await settings.goto();
+      await settings.expectSettingsVisible();
+    });
+
+    test("peut activer le mois budgétaire et choisir un jour de paie", async ({ page }) => {
+      const settings = new SettingsPage(page);
+
+      // Attendre que la page soit chargée (le squelette de chargement peut
+      // durer quelques secondes sous charge Firestore).
+      await expect(settings.budgetSection.first()).toBeVisible({ timeout: 20_000 });
+      await settings.customMonthSection.first().scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+
+      const toggle = settings.customMonthToggle;
+      await expect(toggle).toBeVisible({ timeout: 10_000 });
+
+      // Toggle inversé : coché par défaut = « commencer le 1er du mois ».
+      await expect(toggle).toHaveAttribute("aria-checked", "true");
+
+      // Décocher → le mois démarre un jour personnalisé.
+      await toggle.click();
+      await page.waitForTimeout(500);
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
+
+      // Le sélecteur de jour de paie apparaît une fois l'option décochée.
+      await expect(settings.customMonthStartDaySelect).toBeVisible({ timeout: 10_000 });
+
+      // Choisir le 25 et vérifier la persistance (le sélecteur reflète la valeur).
+      await settings.customMonthStartDaySelect.selectOption("25");
+      await page.waitForTimeout(500);
+      await expect(settings.customMonthStartDaySelect).toHaveValue("25");
+
+      // Recocher pour restaurer l'état de base (le test suivant reste déterministe).
+      await toggle.click();
+      await page.waitForTimeout(500);
+      await expect(settings.customMonthStartDaySelect).toBeHidden({ timeout: 10_000 });
+    });
+  });

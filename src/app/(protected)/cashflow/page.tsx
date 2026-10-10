@@ -12,12 +12,16 @@ import { Sankey, Tooltip, ResponsiveContainer, Layer } from 'recharts';
 import { logger } from "@/lib/logger";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
 import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
+import { budgetMonthKeyForDate, getCustomMonthConfig } from "@/lib/budgetMonth";
 
 interface UserSettings {
   monthlyIncome: number;
   fixedCosts: number;
   monthlySavings: number;
   isFixedIncome?: boolean;
+  customMonthEnabled?: boolean;
+  customMonthStartDay?: number;
+  customMonthStartOverrides?: Record<string, number>;
 }
 
 interface Envelope {
@@ -119,7 +123,9 @@ export default function CashFlowPage() {
     if (!settings) return 0;
     if (settings.isFixedIncome !== false) return settings.monthlyIncome;
     const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    // Clé du mois budgétaire courant (calendaire par défaut).
+    const currentMonth = budgetMonthKeyForDate(nowKey, getCustomMonthConfig(settings));
     return resolveMonthlyIncome(currentMonth, monthlyIncomes, settings.monthlyIncome);
   }, [settings, monthlyIncomes]);
 

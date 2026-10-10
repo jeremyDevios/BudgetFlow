@@ -556,6 +556,11 @@ describe("SettingsPage", () => {
           "user-1",
           "env-1",
           txs,
+          expect.objectContaining({
+            enabled: false,
+            startDay: 1,
+            overrides: {},
+          }),
         );
       });
 
@@ -629,5 +634,75 @@ describe("SettingsPage", () => {
       expect(createEnvelopeAndMigrateMock).not.toHaveBeenCalled();
       expect(deleteEnvelopeAndTransactionsMock).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("SettingsPage — mois budgétaire personnalisé", () => {
+  beforeEach(() => {
+    backMock.mockReset();
+    useAuthMock.mockReset();
+    useAnonymousModeMock.mockReset();
+    setAnonymousModeMock.mockReset();
+    loadSettingsMock.mockReset();
+    saveSettingsMock.mockReset();
+    getDocMock.mockReset();
+    getDocsMock.mockReset();
+
+    useAuthMock.mockReturnValue({
+      user: {
+        uid: "user-1",
+        displayName: "Budget User",
+        email: "budget@example.com",
+        photoURL: null,
+      },
+    });
+    useAnonymousModeMock.mockReturnValue({
+      anonymousMode: false,
+      anonymousModeReady: true,
+      setAnonymousMode: setAnonymousModeMock,
+    });
+    loadSettingsMock.mockResolvedValue({ ...DEFAULT_USER_SETTINGS });
+    saveSettingsMock.mockResolvedValue(undefined);
+    getDocMock.mockResolvedValue(createDocSnapshot({ notificationsEnabled: false }));
+    getDocsMock.mockResolvedValue(createCollectionSnapshot([]));
+  });
+
+  it("renders the custom-month section with the inverted toggle checked by default", async () => {
+    loadSettingsMock.mockResolvedValue({ ...DEFAULT_USER_SETTINGS });
+
+    render(<SettingsPage />);
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", { name: /Mois budgétaire/i }),
+      ).toBeInTheDocument(),
+    );
+
+    // Toggle inversé : coché par défaut = « commencer le 1er du mois ».
+    expect(
+      screen.getByRole("switch", { name: /Mois budgétaire personnalisé/i }),
+    ).toHaveAttribute("aria-checked", "true");
+
+    // Les réglages de jour ne sont PAS affichés tant que l'option est cochée.
+    expect(
+      screen.queryByLabelText(/Jour de paie/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("reveals the pay-day controls when the custom-month toggle is unchecked", async () => {
+    loadSettingsMock.mockResolvedValue({ ...DEFAULT_USER_SETTINGS });
+
+    render(<SettingsPage />);
+
+    const toggle = await screen.findByRole("switch", {
+      name: /Mois budgétaire personnalisé/i,
+    });
+    await userEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/Jour de paie/i)).toBeInTheDocument(),
+    );
+
+    expect(toggle).toHaveAttribute("aria-checked", "false");
   });
 });

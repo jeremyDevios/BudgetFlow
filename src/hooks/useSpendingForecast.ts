@@ -9,6 +9,13 @@ import {
   GlobalForecast,
 } from "@/lib/forecasting";
 import { db } from "@/lib/firebase";
+import {
+  addBudgetPeriods,
+  budgetMonthKeyForDate,
+  budgetPeriod,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 
 interface UseSpendingForecastParams {
   userId: string | null;
@@ -17,6 +24,8 @@ interface UseSpendingForecastParams {
   monthlyBudget: number;
   isCurrentMonth: boolean;
   pastMonthCount?: number;
+  /** Config du mois budgétaire personnalisé (défaut : mois calendaires). */
+  customMonthConfig?: CustomMonthConfig;
 }
 
 interface UseSpendingForecastReturn {
@@ -42,6 +51,7 @@ export function useSpendingForecast(
     monthlyBudget,
     isCurrentMonth,
     pastMonthCount = 3,
+    customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
   } = params;
 
   const [globalForecast, setGlobalForecast] = useState<GlobalForecast | null>(
@@ -86,18 +96,24 @@ export function useSpendingForecast(
 
       try {
         const today = new Date();
-        const rangeEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-        const rangeStart = new Date(
-          today.getFullYear(),
-          today.getMonth() - pastMonthCount,
-          1
-        );
+        // Fenêtre historique : les N mois budgétaires précédents, se
+        // terminant la veille du début de la période courante. Identique
+        // aux anciennes bornes calendaires quand l'option est désactivée.
+        const currentKey = budgetMonthKeyForDate(formatDate(today), customMonthConfig);
+        const rangeStart = budgetPeriod(
+          addBudgetPeriods(currentKey, -pastMonthCount, customMonthConfig),
+          customMonthConfig,
+        ).start;
+        const rangeEnd = budgetPeriod(
+          addBudgetPeriods(currentKey, -1, customMonthConfig),
+          customMonthConfig,
+        ).end;
 
         const txRef = collection(db, "users", userId, "transactions");
         const q = query(
           txRef,
-          where("date", ">=", formatDate(rangeStart)),
-          where("date", "<=", `${formatDate(rangeEnd)}T23:59:59`),
+          where("date", ">=", rangeStart),
+          where("date", "<=", rangeEnd),
           limit(5000)
         );
 
@@ -127,6 +143,7 @@ export function useSpendingForecast(
           monthlyBudget,
           today,
           pastMonthCount,
+          customMonthConfig,
         });
 
         setGlobalForecast(result.globalForecast);
@@ -156,6 +173,7 @@ export function useSpendingForecast(
     monthlyBudget,
     envelopeSignature,
     currentMonthTransactionSignature,
+    customMonthConfig,
   ]);
 
   if (!isCurrentMonth || !userId) {

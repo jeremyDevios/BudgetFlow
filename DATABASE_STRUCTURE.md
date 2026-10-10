@@ -78,6 +78,39 @@ Single document with fixed ID `general`.
 | `incomeHistory` | array\<[BudgetVersionEntry](#budget-version-history)\> | `UserSettings.incomeHistory` | absent (flat fallback) |
 | `fixedCostsHistory` | array\<[BudgetVersionEntry](#budget-version-history)\> | `UserSettings.fixedCostsHistory` | absent (flat fallback) |
 | `savingsHistory` | array\<[BudgetVersionEntry](#budget-version-history)\> | `UserSettings.savingsHistory` | absent (flat fallback) |
+| `customMonthEnabled` | boolean | `UserSettings.customMonthEnabled` | absent/false (calendar months) |
+| `customMonthStartDay` | number (1–28) | `UserSettings.customMonthStartDay` | `1` (calendar months) |
+| `customMonthStartOverrides` | map `"YYYY-MM"` → number (1–28), ≤ 100 entries | `UserSettings.customMonthStartOverrides` (array of `MonthDayOverride`) | absent (empty map) |
+
+### Custom budget month (date de tombée du salaire)
+
+When `customMonthEnabled` is `true`, the **budget month** `M` runs from the
+pay day of `M` to the pay day of `M+1`, exclusive. The pay day is
+`customMonthStartDay` for every month, overridable per month by
+`customMonthStartOverrides` (e.g. `{"2026-10": 5}`). With a pay day of `1`
+(or the option disabled) the budget month is strictly identical to the
+calendar month — zero behaviour change for existing users.
+
+- All month-key derivations (`YYYY-MM`) on both platforms go through the
+  shared engine — web `src/lib/budgetMonth.ts`, iOS
+  `BudgetMonthEngine.swift` (mirror, tested by free functions). Month keys
+  remain plain `YYYY-MM` strings everywhere (`monthlyIncomes` doc IDs,
+  `activeMonths`, `tx_YYYY_MM` counters, forecast buckets): **no data
+  migration**, only the date → key derivation changes.
+- A transaction dated before the pay day of its calendar month belongs to
+  the previous budget month (e.g. with pay day 25, `2026-10-24` belongs to
+  budget month `2026-09`).
+- **Calendar-based by design** (unchanged by the option): recurrence series
+  scheduling, `dailyActivity` heatmap/streak, day-level API routes.
+- Payloads from older clients (iOS 1.05 and earlier web) never contain the
+  new keys and keep passing `hasOnly` validation; older clients ignore the
+  unknown keys (iOS settings writes use `merge: true`, so they never wipe
+  them). During the iOS-first rollout, a user with the option enabled sees
+  per-month figures bucketed differently on older platforms — totals over a
+  full cycle are identical.
+- Firestore rules validate the shape only (bool, int 1–28, map ≤ 100
+  entries) — per-entry validation is client-side (`sanitizeCustomMonthConfig`
+  / `BudgetMonthEngine.sanitize`), mirroring the budget-items pattern.
 
 ### `FixedCostItem` / `SavingsItem` — Sub-document shape
 

@@ -11,10 +11,17 @@
  * settings/page.tsx so the two files share a single source of truth.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { getCurrencySymbol } from "@/types/currency";
 import { useCurrency } from "@/context/CurrencyContext";
 import { validateEnvelopeNameWithMessage } from "@/lib/validation";
+import {
+  addBudgetPeriods,
+  budgetMonthKeyForDate,
+  budgetPeriod,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 import {
   AlertTriangle,
   Clock,
@@ -88,27 +95,38 @@ interface Props {
   isEditing: boolean;
   onSave: (values: EnvelopeFormValues) => void;
   onCancel: () => void;
+  /** Config du mois budgétaire personnalisé (défaut : mois calendaires). */
+  customMonthConfig?: CustomMonthConfig;
 }
 
 // ---------------------------------------------------------------------------
 // Month-option helpers
 // ---------------------------------------------------------------------------
 
-/** Returns 12 months: 2 past + current + 9 future (YYYY-MM, French short label). */
-function buildMonthOptions(): { value: string; label: string }[] {
+/**
+ * 12 mois budgétaires (2 passés + courant + 9 futurs) sous forme de clés
+ * `YYYY-MM`. Identique aux mois calendaires quand l'option est désactivée.
+ */
+function buildMonthOptions(
+  customMonthConfig: CustomMonthConfig,
+): { value: string; label: string }[] {
   const now = new Date();
+  const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const currentKey = budgetMonthKeyForDate(nowKey, customMonthConfig);
   const options: { value: string; label: string }[] = [];
   for (let offset = -2; offset < 10; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
-    options.push({ value, label });
+    const key = addBudgetPeriods(currentKey, offset, customMonthConfig);
+    const { start } = budgetPeriod(key, customMonthConfig);
+    const anchor = new Date(
+      Number(start.slice(0, 4)),
+      Number(start.slice(5, 7)) - 1,
+      Number(start.slice(8, 10)),
+    );
+    const label = anchor.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
+    options.push({ value: key, label });
   }
   return options;
 }
-
-// Stable reference — options never change during a browser session.
-const MONTH_OPTIONS = buildMonthOptions();
 
 // ---------------------------------------------------------------------------
 // Component
@@ -120,6 +138,7 @@ export default function TemporaryEnvelopeForm({
   isEditing,
   onSave,
   onCancel,
+  customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
 }: Props) {
   const [name, setName] = useState(initialValues.name);
   const [budget, setBudget] = useState(initialValues.budget);
@@ -128,6 +147,11 @@ export default function TemporaryEnvelopeForm({
   const [isTemporary, setIsTemporary] = useState(initialValues.isTemporary);
   const [activeMonths, setActiveMonths] = useState<string[]>(initialValues.activeMonths);
   const [nameError, setNameError] = useState<string | null>(null);
+
+  const monthOptions = useMemo(
+    () => buildMonthOptions(customMonthConfig),
+    [customMonthConfig],
+  );
 
   const { currency } = useCurrency();
   const symbol = getCurrencySymbol(currency);
@@ -331,7 +355,7 @@ export default function TemporaryEnvelopeForm({
             </p>
 
             <div className="flex flex-wrap gap-2">
-              {MONTH_OPTIONS.map(({ value, label }) => {
+              {monthOptions.map(({ value, label }) => {
                 const selected = activeMonths.includes(value);
                 return (
                   <button

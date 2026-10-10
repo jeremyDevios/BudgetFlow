@@ -10,6 +10,13 @@ import {
   type SpendingInsightEnvelope,
   type SpendingInsightTransaction,
 } from "@/lib/spendingInsights";
+import {
+  addBudgetPeriods,
+  budgetMonthKeyForDate,
+  budgetPeriod,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 
 interface UseSmartSpendingInsightsParams {
   userId: string | null;
@@ -19,6 +26,8 @@ interface UseSmartSpendingInsightsParams {
   isCurrentMonth: boolean;
   analysisMonthCount?: number;
   currency?: string;
+  /** Config du mois budgétaire personnalisé (défaut : mois calendaires). */
+  customMonthConfig?: CustomMonthConfig;
 }
 
 interface UseSmartSpendingInsightsReturn {
@@ -45,6 +54,7 @@ export function useSmartSpendingInsights(
     isCurrentMonth,
     analysisMonthCount = 3,
     currency = "EUR",
+    customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
   } = params;
 
   const [globalNotifications, setGlobalNotifications] = useState<
@@ -104,18 +114,24 @@ export function useSmartSpendingInsights(
       try {
         const today = new Date();
         const previousMonthCount = Math.max(analysisMonthCount - 1, 0);
-        const rangeEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-        const rangeStart = new Date(
-          today.getFullYear(),
-          today.getMonth() - previousMonthCount,
-          1
-        );
+        // Fenêtre historique : les mois budgétaires précédents, se
+        // terminant la veille du début de la période courante. Identique
+        // aux anciennes bornes calendaires quand l'option est désactivée.
+        const currentKey = budgetMonthKeyForDate(formatDate(today), customMonthConfig);
+        const rangeStart = budgetPeriod(
+          addBudgetPeriods(currentKey, -previousMonthCount, customMonthConfig),
+          customMonthConfig,
+        ).start;
+        const rangeEnd = budgetPeriod(
+          addBudgetPeriods(currentKey, -1, customMonthConfig),
+          customMonthConfig,
+        ).end;
 
         const txRef = collection(db, "users", userId, "transactions");
         const pastTransactionsQuery = query(
           txRef,
-          where("date", ">=", formatDate(rangeStart)),
-          where("date", "<=", `${formatDate(rangeEnd)}T23:59:59`),
+          where("date", ">=", rangeStart),
+          where("date", "<=", rangeEnd),
           limit(5000)
         );
 
@@ -148,6 +164,7 @@ export function useSmartSpendingInsights(
           today,
           analysisMonthCount,
           currency,
+          customMonthConfig,
         });
 
         setGlobalNotifications(result.globalNotifications);
@@ -182,6 +199,7 @@ export function useSmartSpendingInsights(
     isCurrentMonth,
     transactionSignature,
     userId,
+    customMonthConfig,
   ]);
 
   if (!isCurrentMonth || !userId || envelopes.length === 0) {

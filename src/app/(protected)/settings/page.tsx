@@ -34,6 +34,13 @@ import {
 } from "@/lib/envelopeService";
 import { type Transaction } from "@/types/transaction";
 import { UserSettings, DEFAULT_USER_SETTINGS, BudgetSubItem } from "@/types/settings";
+import {
+  getCustomMonthConfig,
+  budgetPeriod,
+  budgetMonthKeyForDate,
+  isCustomMonthActive,
+} from "@/lib/budgetMonth";
+import { formatMonthRangeLabel } from "@/lib/dateUtils";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -322,6 +329,80 @@ export default function SettingsPage() {
 
   const [settings, setSettings] = useState<UserSettings>({ ...DEFAULT_USER_SETTINGS });
   const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
+
+  // Config du « mois budgétaire personnalisé » dérivée des réglages.
+  const customMonthConfig = useMemo(() => getCustomMonthConfig(settings), [settings]);
+
+  // ── Mois budgétaire personnalisé ────────────────────────────────────────
+  const [customMonthSaving, setCustomMonthSaving] = useState(false);
+  const [overrideMonthInput, setOverrideMonthInput] = useState("");
+  const [overrideDayInput, setOverrideDayInput] = useState(25);
+
+  const handleToggleCustomMonth = async () => {
+    if (!user || customMonthSaving) return;
+    const previous = settings.customMonthEnabled === true;
+    const next = !previous;
+    setSettings((current) => ({ ...current, customMonthEnabled: next }));
+    setCustomMonthSaving(true);
+    try {
+      await saveSettings(user.uid, { customMonthEnabled: next });
+      logger.info(`settings.handleToggleCustomMonth: customMonthEnabled → ${next}`);
+    } catch (error) {
+      setSettings((current) => ({ ...current, customMonthEnabled: previous }));
+      logger.sanitizedError("Erreur sauvegarde mois budgétaire", error);
+    } finally {
+      setCustomMonthSaving(false);
+    }
+  };
+
+  const handleCustomMonthStartDayChange = async (day: number) => {
+    if (!user || customMonthSaving) return;
+    const previous = settings.customMonthStartDay;
+    setSettings((current) => ({ ...current, customMonthStartDay: day }));
+    setCustomMonthSaving(true);
+    try {
+      await saveSettings(user.uid, { customMonthStartDay: day });
+    } catch (error) {
+      setSettings((current) => ({ ...current, customMonthStartDay: previous }));
+      logger.sanitizedError("Erreur sauvegarde jour de paie", error);
+    } finally {
+      setCustomMonthSaving(false);
+    }
+  };
+
+  const handleCustomMonthOverride = async (monthKey: string, day: number | null) => {
+    if (!user || customMonthSaving) return;
+    const currentOverrides = { ...(settings.customMonthStartOverrides ?? {}) };
+    if (day === null) {
+      delete currentOverrides[monthKey];
+    } else {
+      currentOverrides[monthKey] = day;
+    }
+    setSettings((current) => ({
+      ...current,
+      customMonthStartOverrides: currentOverrides,
+    }));
+    setCustomMonthSaving(true);
+    try {
+      await saveSettings(user.uid, { customMonthStartOverrides: currentOverrides });
+    } catch (error) {
+      setSettings((current) => ({
+        ...current,
+        customMonthStartOverrides: settings.customMonthStartOverrides ?? {},
+      }));
+      logger.sanitizedError("Erreur sauvegarde surcharge de mois", error);
+    } finally {
+      setCustomMonthSaving(false);
+    }
+  };
+
+  const handleAddCustomMonthOverride = () => {
+    const monthKey = overrideMonthInput; // "YYYY-MM" (input type="month")
+    if (!/^\d{4}-\d{2}$/.test(monthKey)) return;
+    const day = Math.min(Math.max(Math.round(overrideDayInput), 1), 28);
+    void handleCustomMonthOverride(monthKey, day);
+    setOverrideMonthInput("");
+  };
   const latestDetailedItemsRef = useRef({
     fixedCostsItems: DEFAULT_USER_SETTINGS.fixedCostsItems,
     savingsItems: DEFAULT_USER_SETTINGS.savingsItems,
@@ -754,7 +835,12 @@ export default function SettingsPage() {
 
   const handleDeleteAllTransactions = async () => {
     if (!user || !deletingEnvelope) return;
-    await deleteEnvelopeAndTransactions(user.uid, deletingEnvelope.id, linkedTransactions);
+    await deleteEnvelopeAndTransactions(
+      user.uid,
+      deletingEnvelope.id,
+      linkedTransactions,
+      customMonthConfig,
+    );
     setEnvelopes((prev) => prev.filter((e) => e.id !== deletingEnvelope.id));
     setShowDeleteEnvelopeModal(false);
     setDeletingEnvelope(null);
@@ -997,6 +1083,167 @@ export default function SettingsPage() {
               </svg>
             </div>
           </div>
+        </section>
+
+        {/* ── Mois budgétaire personnalisé ── */}
+        <section className="bg-app-surface/50 border border-app-border rounded-2xl p-6">
+          <h2 className="text-xl font-bold mb-4">Mois budgétaire</h2>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h3 className="font-medium text-app-text">Commencer le budget le premier jour du mois</h3>
+              <p className="text-sm text-app-text-secondary">
+                Activé par défaut : le mois budgétaire démarre le 1er du mois.
+                Décochez pour le faire démarrer le jour de tombée de votre salaire
+                (le jour est conservé si vous réactivez). Tous les calculs
+                (dashboard, historique, évolution, prévisions) suivent cette période.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="text-sm text-app-text-secondary">
+                {settings.customMonthEnabled ? "Jour personnalisé" : "1er du mois"}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-label="Mois budgétaire personnalisé"
+                aria-checked={!settings.customMonthEnabled}
+                onClick={() => {
+                  void handleToggleCustomMonth();
+                }}
+                disabled={customMonthSaving}
+                className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${
+                  !settings.customMonthEnabled ? "bg-amber-500" : "bg-zinc-700"
+                } ${customMonthSaving ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 rounded-full bg-white transition-transform ${
+                    !settings.customMonthEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {settings.customMonthEnabled && (
+            <div className="mt-4 space-y-4 border-t border-app-border pt-4">
+              {/* Jour de paie commun */}
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="min-w-0">
+                  <h4 className="font-medium text-app-text">Jour de paie (tous les mois)</h4>
+                  <p className="text-sm text-app-text-secondary">
+                    Jour du mois où votre salaire tombe, de 1 à 28.
+                  </p>
+                </div>
+                <select
+                  aria-label="Jour de paie"
+                  value={settings.customMonthStartDay ?? 1}
+                  onChange={(e) => {
+                    void handleCustomMonthStartDayChange(Number(e.target.value));
+                  }}
+                  disabled={customMonthSaving}
+                  className="bg-app-bg border border-app-border rounded-lg px-3 py-2 text-sm text-app-text"
+                >
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                    <option key={day} value={day}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Surcharges par mois */}
+              <div>
+                <h4 className="font-medium text-app-text">Jour spécifique pour un mois</h4>
+                <p className="text-sm text-app-text-secondary mb-2">
+                  Optionnel : forcez un jour différent pour un mois donné.
+                </p>
+                <div className="space-y-2">
+                  {Object.entries(settings.customMonthStartOverrides ?? {})
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([monthKey, day]) => (
+                      <div
+                        key={monthKey}
+                        className="flex items-center justify-between gap-2 bg-app-bg/50 border border-app-border rounded-lg px-3 py-2"
+                      >
+                        <span className="text-sm text-app-text font-mono">{monthKey}</span>
+                        <div className="flex items-center gap-2">
+                          <select
+                            aria-label={`Jour de paie pour ${monthKey}`}
+                            value={day}
+                            onChange={(e) => {
+                              void handleCustomMonthOverride(monthKey, Number(e.target.value));
+                            }}
+                            disabled={customMonthSaving}
+                            className="bg-app-bg border border-app-border rounded-lg px-2 py-1 text-sm text-app-text"
+                          >
+                            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                              <option key={d} value={d}>
+                                {d}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleCustomMonthOverride(monthKey, null);
+                            }}
+                            disabled={customMonthSaving}
+                            className="text-sm text-red-400 hover:text-red-300 px-2 py-1"
+                            aria-label={`Supprimer la surcharge de ${monthKey}`}
+                          >
+                            Supprimer
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <input
+                    type="month"
+                    aria-label="Mois de la surcharge"
+                    value={overrideMonthInput}
+                    onChange={(e) => setOverrideMonthInput(e.target.value)}
+                    className="bg-app-bg border border-app-border rounded-lg px-3 py-2 text-sm text-app-text"
+                  />
+                  <select
+                    aria-label="Jour de la surcharge"
+                    value={overrideDayInput}
+                    onChange={(e) => setOverrideDayInput(Number(e.target.value))}
+                    className="bg-app-bg border border-app-border rounded-lg px-2 py-2 text-sm text-app-text"
+                  >
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                      <option key={day} value={day}>
+                        {day}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleAddCustomMonthOverride}
+                    disabled={customMonthSaving || !/^\d{4}-\d{2}$/.test(overrideMonthInput)}
+                    className="px-3 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    Ajouter
+                  </button>
+                </div>
+              </div>
+
+              {/* Aperçu de la période courante */}
+              {(() => {
+                const now = new Date();
+                const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+                const currentKey = budgetMonthKeyForDate(nowKey, customMonthConfig);
+                const period = budgetPeriod(currentKey, customMonthConfig);
+                return (
+                  <p className="text-xs text-app-text-secondary">
+                    {isCustomMonthActive(customMonthConfig)
+                      ? `Aperçu : votre mois budgétaire en cours s'étend ${formatMonthRangeLabel(period.start, period.end)}.`
+                      : "Aperçu : choisissez un jour de paie différent de 1 pour activer le découpage personnalisé."}
+                  </p>
+                );
+              })()}
+            </div>
+          )}
         </section>
 
         {/* ── Confidentialité ── */}
@@ -1508,6 +1755,7 @@ export default function SettingsPage() {
               isEditing={editingEnvelope !== null}
               onSave={handleSaveEnvelope}
               onCancel={() => setIsModalOpen(false)}
+              customMonthConfig={customMonthConfig}
             />
           </div>
         </div>

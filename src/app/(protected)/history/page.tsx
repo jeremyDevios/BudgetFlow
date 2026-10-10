@@ -13,6 +13,14 @@ import { logger } from "@/lib/logger";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X } from "lucide-react";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
+import {
+  budgetMonthKeyForDate,
+  budgetPeriod,
+  getCustomMonthConfig,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
+import { formatMonthRangeLabel } from "@/lib/dateUtils";
 
 const ICON_MAP: Record<string, LucideIcon> = {
   ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee,
@@ -28,6 +36,9 @@ export default function HistoryPage() {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [envelopes, setEnvelopes] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [customMonthConfig, setCustomMonthConfig] = useState<CustomMonthConfig>(
+    DEFAULT_CUSTOM_MONTH_CONFIG,
+  );
 
   // État pour la modification
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -37,6 +48,16 @@ export default function HistoryPage() {
   const fetchData = async () => {
     if (!user) return;
     try {
+      // 0. Settings (config du mois budgétaire pour les séparateurs)
+      try {
+        const settingsSnap = await getDoc(doc(db, "users", user.uid, "settings", "general"));
+        if (settingsSnap.exists()) {
+          setCustomMonthConfig(getCustomMonthConfig(settingsSnap.data() as Record<string, unknown>));
+        }
+      } catch (e) {
+        logger.warn("History: settings read failed");
+      }
+
       // 1. Charger les enveloppes pour avoir les icônes/couleurs en cache
       const envRef = collection(db, "users", user.uid, "envelopes");
       const envSnap = await getDocs(envRef);
@@ -174,9 +195,28 @@ export default function HistoryPage() {
               const Icon = isIncome ? TrendingUp : (ICON_MAP[env.icon] || ShoppingCart);
               const dateObj = new Date(tx.date);
 
-              // Afficher le mois si c'est le premier item ou si le mois change par rapport au précédent
-              const showMonthDivider = index === 0 || 
-                new Date(filteredTransactions[index - 1].date).getMonth() !== dateObj.getMonth();
+              // Mois budgétaire de la transaction (calendaire par défaut).
+              const txMonthKey = budgetMonthKeyForDate(
+                typeof tx.date === "string" ? tx.date.slice(0, 10) : "",
+                customMonthConfig,
+              );
+              const prevTxMonthKey = index === 0
+                ? ""
+                : budgetMonthKeyForDate(
+                    typeof filteredTransactions[index - 1].date === "string"
+                      ? filteredTransactions[index - 1].date.slice(0, 10)
+                      : "",
+                    customMonthConfig,
+                  );
+
+              // Afficher le mois si c'est le premier item ou si le mois budgétaire change.
+              const showMonthDivider = index === 0 || prevTxMonthKey !== txMonthKey;
+              const dividerPeriod = budgetPeriod(txMonthKey, customMonthConfig);
+              const dividerAnchor = new Date(
+                Number(dividerPeriod.start.slice(0, 4)),
+                Number(dividerPeriod.start.slice(5, 7)) - 1,
+                Number(dividerPeriod.start.slice(8, 10)),
+              );
 
               return (
                 <motion.div
@@ -199,10 +239,15 @@ export default function HistoryPage() {
                 >
                   {/* Month Divider */}
                   {showMonthDivider && (
-                    <div className="absolute -left-[54px] sm:-left-[70px] -top-10 flex items-center mb-6 mt-2">
+                    <div className="absolute -left-[54px] sm:-left-[70px] -top-10 flex flex-col items-start mb-6 mt-2">
                       <span className="text-app-text-secondary text-xs font-bold uppercase tracking-widest bg-app-bg py-1 pr-2">
-                        {dateObj.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                        {dividerAnchor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
                       </span>
+                      {customMonthConfig.enabled && (
+                        <span className="text-[10px] text-app-text-secondary normal-case bg-app-bg pr-2 -mt-2">
+                          {formatMonthRangeLabel(dividerPeriod.start, dividerPeriod.end)}
+                        </span>
+                      )}
                     </div>
                   )}
 
@@ -243,9 +288,10 @@ export default function HistoryPage() {
       <TransactionModal 
         isOpen={isEditModalOpen}
         onClose={closeModal}
-        envelopes={Object.values(envelopes)} 
-        refreshData={fetchData} 
+        envelopes={Object.values(envelopes)}
+        refreshData={fetchData}
         transactionToEdit={transactionToEdit}
+        customMonthConfig={customMonthConfig}
       />
     </div>
   );

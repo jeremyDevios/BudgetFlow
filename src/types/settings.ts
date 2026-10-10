@@ -186,6 +186,31 @@ export interface UserSettings {
    * `savingsItems` apply to every month.
    */
   savingsHistory?: BudgetVersionEntry[];
+
+  // ── Custom budget month (date de tombée du salaire) ──────────────────────
+
+  /**
+   * Opt-in : le mois budgétaire commence le jour de tombée du salaire
+   * (`customMonthStartDay`, surchargé par mois via
+   * `customMonthStartOverrides`). Absent/false → mois calendaires
+   * (comportement historique, aucune migration).
+   */
+  customMonthEnabled?: boolean;
+
+  /**
+   * Jour de paie commun à tous les mois (1..28). Absent → 1 = mois
+   * calendaire. Seules les valeurs 1..28 sont acceptées (29-31 clampés /
+   * rejetés : février n'a pas ces jours).
+   */
+  customMonthStartDay?: number;
+
+  /**
+   * Jour de paie par mois : `"YYYY-MM"` → jour (1..28). Surcharge
+   * `customMonthStartDay` pour les mois listés. Absent → `{}`. Borné à
+   * 100 entrées (SEC-24) ; les valeurs sont validées côté client
+   * (Firestore Security Rules ne peut pas itérer les clés d'une map).
+   */
+  customMonthStartOverrides?: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -211,4 +236,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   savingsDetailedEnabled: false,
   fixedCostsItems: [],
   savingsItems: [],
+  customMonthEnabled: false,
+  customMonthStartDay: 1,
+  customMonthStartOverrides: {},
 };

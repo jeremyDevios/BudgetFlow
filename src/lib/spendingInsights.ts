@@ -1,4 +1,11 @@
 import type { EnvelopeForecast } from "@/lib/forecasting";
+import {
+  addBudgetPeriods,
+  budgetMonthKeyForDate,
+  elapsedAndRemainingInBudgetPeriod,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 
 export interface SpendingInsightTransaction {
   id: string;
@@ -112,27 +119,60 @@ function getMonthKey(dateStr: string): string {
   return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function getRecentMonthKeys(today: Date, count: number): string[] {
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+function localDayKey(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** Clé du mois budgétaire d'une transaction (repli historique si malformée). */
+function budgetKeyForTransaction(
+  dateStr: string,
+  config: CustomMonthConfig,
+): string {
+  const dayStr = dateStr.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dayStr)) {
+    return budgetMonthKeyForDate(dayStr, config);
+  }
+  return getMonthKey(dateStr);
+}
+
+/** Les N derniers mois budgétaires (le courant inclus), plus ancien d'abord. */
+function getRecentMonthKeys(
+  today: Date,
+  count: number,
+  config: CustomMonthConfig,
+): string[] {
+  const currentKey = budgetMonthKeyForDate(localDayKey(today), config);
   const monthKeys: string[] = [];
 
   for (let offset = count - 1; offset >= 0; offset -= 1) {
-    const date = new Date(today.getFullYear(), today.getMonth() - offset, 1);
-    monthKeys.push(
-      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-    );
+    monthKeys.push(addBudgetPeriods(currentKey, -offset, config));
   }
 
   return monthKeys;
 }
 
-function getMonthElapsedRatio(today: Date): number {
-  const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  return totalDays > 0 ? today.getDate() / totalDays : 0;
+function getMonthElapsedRatio(today: Date, config: CustomMonthConfig): number {
+  const todayKey = localDayKey(today);
+  const currentKey = budgetMonthKeyForDate(todayKey, config);
+  const { elapsed, total } = elapsedAndRemainingInBudgetPeriod(
+    currentKey,
+    todayKey,
+    config,
+  );
+  return total > 0 ? elapsed / total : 0;
 }
 
-function getRemainingDaysInMonth(today: Date): number {
-  const totalDays = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  return Math.max(0, totalDays - today.getDate());
+function getRemainingDaysInMonth(today: Date, config: CustomMonthConfig): number {
+  const todayKey = localDayKey(today);
+  const currentKey = budgetMonthKeyForDate(todayKey, config);
+  const { remaining } = elapsedAndRemainingInBudgetPeriod(
+    currentKey,
+    todayKey,
+    config,
+  );
+  return Math.max(0, remaining);
 }
 
 function getEnvelopeNotificationStore(envelopeId: string) {
@@ -203,6 +243,8 @@ export function buildSmartSpendingNotifications(params: {
   today?: Date;
   analysisMonthCount?: number;
   currency?: string;
+  /** Config du mois budgétaire personnalisé (défaut : mois calendaires). */
+  customMonthConfig?: CustomMonthConfig;
 }): SmartSpendingNotificationsResult {
   const {
     transactions,
@@ -211,14 +253,22 @@ export function buildSmartSpendingNotifications(params: {
     today = new Date(),
     analysisMonthCount = DEFAULT_ANALYSIS_MONTH_COUNT,
     currency = "EUR",
+    customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
   } = params;
 
   if (envelopes.length === 0 || analysisMonthCount <= 0) {
     return { globalNotifications: [], envelopeNotifications: {} };
   }
 
-  const currentMonthKey = getMonthKey(today.toISOString());
-  const analysisMonthKeys = getRecentMonthKeys(today, analysisMonthCount);
+  const currentMonthKey = budgetMonthKeyForDate(
+    localDayKey(today),
+    customMonthConfig,
+  );
+  const analysisMonthKeys = getRecentMonthKeys(
+    today,
+    analysisMonthCount,
+    customMonthConfig,
+  );
   const spendByEnvelopeByMonth: Record<string, Record<string, number>> = {};
   const recurringByEnvelope: Record<string, Record<string, RecurringExpenseCandidate>> =
     {};
@@ -232,7 +282,7 @@ export function buildSmartSpendingNotifications(params: {
       continue;
     }
 
-    const monthKey = getMonthKey(transaction.date);
+    const monthKey = budgetKeyForTransaction(transaction.date, customMonthConfig);
     if (!monthKey || !analysisMonthKeys.includes(monthKey)) {
       continue;
     }
@@ -272,7 +322,9 @@ export function buildSmartSpendingNotifications(params: {
   }
 
   const currentMonthTransactions = transactions.filter(
-    (transaction) => getMonthKey(transaction.date) === currentMonthKey
+    (transaction) =>
+      budgetKeyForTransaction(transaction.date, customMonthConfig) ===
+      currentMonthKey
   );
 
   const exceptionalInsight = findExceptionalSpendingInsight({
@@ -315,8 +367,8 @@ export function buildSmartSpendingNotifications(params: {
     });
   }
 
-  const elapsedMonthRatio = getMonthElapsedRatio(today);
-  const remainingDaysInMonth = getRemainingDaysInMonth(today);
+  const elapsedMonthRatio = getMonthElapsedRatio(today, customMonthConfig);
+  const remainingDaysInMonth = getRemainingDaysInMonth(today, customMonthConfig);
 
   for (const envelope of envelopes) {
     if (envelope.budget <= 0) {

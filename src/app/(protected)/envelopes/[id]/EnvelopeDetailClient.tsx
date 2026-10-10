@@ -3,7 +3,14 @@
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
 import { db } from "@/lib/firebase";
-import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
+import { formatMonthYear } from "@/lib/dateUtils";
+import {
+  budgetMonthKeyForDate,
+  budgetPeriod,
+  getCustomMonthConfig,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 import { useSpendingForecast } from "@/hooks/useSpendingForecast";
 import { useSmartSpendingInsights } from "@/hooks/useSmartSpendingInsights";
 import { ForecastTransaction } from "@/lib/forecasting";
@@ -58,6 +65,12 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
   const [envelope, setEnvelope] = useState<Envelope | null>(null);
   const [allEnvelopes, setAllEnvelopes] = useState<Envelope[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [customMonthConfig, setCustomMonthConfig] = useState<CustomMonthConfig>(
+    DEFAULT_CUSTOM_MONTH_CONFIG,
+  );
+
+  const localDayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const [loading, setLoading] = useState(true);
 
   // Edit State
@@ -74,6 +87,27 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
   const fetchData = async () => {
     if (!user || !id) return;
     try {
+      // 0. Settings (config du mois budgétaire pour borner la requête) —
+      //    lue localement car l'état n'est pas encore à jour ci-dessous.
+      let fetchedCustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG;
+      try {
+        const settingsSnap = await getDoc(doc(db, "users", user.uid, "settings", "general"));
+        if (settingsSnap.exists()) {
+          fetchedCustomMonthConfig = getCustomMonthConfig(settingsSnap.data() as Record<string, unknown>);
+          setCustomMonthConfig(fetchedCustomMonthConfig);
+        }
+      } catch (e) {
+        logger.warn("EnvelopeDetail: settings read failed");
+      }
+
+      // Bornes du mois budgétaire contenant la date de contexte.
+      const contextBounds = contextDate
+        ? budgetPeriod(
+            budgetMonthKeyForDate(localDayKey(contextDate), fetchedCustomMonthConfig),
+            fetchedCustomMonthConfig,
+          )
+        : null;
+
       // 1. Info Enveloppe Courante
       const envRef = doc(db, "users", user.uid, "envelopes", id);
       const envSnap = await getDoc(envRef);
@@ -93,8 +127,8 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       });
 
       // Aligner la modale avec le dashboard: le "spent" affiché doit être mensuel.
-      if (contextDate) {
-        const { start, end } = getMonthBounds(contextDate);
+      if (contextBounds) {
+        const { start, end } = contextBounds;
         const monthlyTxRef = collection(db, "users", user.uid, "transactions");
         const monthlyTxQuery = query(
           monthlyTxRef,
@@ -131,9 +165,8 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       let q;
       let dateFilter: { start: string, end: string } | null = null;
 
-      if (contextDate) {
-        const { start, end } = getMonthBounds(contextDate);
-        dateFilter = { start, end };
+      if (contextBounds) {
+        dateFilter = { start: contextBounds.start, end: contextBounds.end };
         q = query(txRef, where("envelopeId", "==", id));
       } else {
         q = query(
@@ -173,13 +206,14 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
 
   // Forecast computation
   const today = new Date();
-  const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const currentMonthKey = budgetMonthKeyForDate(localDayKey(today), customMonthConfig);
   const isCurrentMonth = contextDate
-    ? (contextDate.getFullYear() === today.getFullYear() && contextDate.getMonth() === today.getMonth())
+    ? budgetMonthKeyForDate(localDayKey(contextDate), customMonthConfig) === currentMonthKey
     : true; // No date param = recent history view, show forecast
 
   const currentMonthOnlyTransactions = transactions.filter((transaction) =>
-    typeof transaction.date === "string" && transaction.date.slice(0, 7) === currentMonthKey
+    typeof transaction.date === "string" &&
+    budgetMonthKeyForDate(transaction.date.slice(0, 10), customMonthConfig) === currentMonthKey
   );
   const currentMonthSpent = currentMonthOnlyTransactions.reduce(
     (sum, transaction) =>
@@ -207,6 +241,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
     currentMonthTransactions: forecastTransactions,
     monthlyBudget: envelope?.budget || 0,
     isCurrentMonth,
+    customMonthConfig,
   });
 
   const forecast = envelope ? envelopeForecasts[envelope.id] : null;
@@ -226,6 +261,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       })),
       envelopeForecasts,
       isCurrentMonth,
+      customMonthConfig,
     });
 
   const envelopeInsightNotifications = envelope
@@ -479,6 +515,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
         refreshData={fetchData}
         transactionToEdit={transactionToEdit}
         defaultEnvelopeId={envelope.id}
+        customMonthConfig={customMonthConfig}
       />
     </div>
   );

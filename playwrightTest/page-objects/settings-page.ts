@@ -34,6 +34,13 @@ export class SettingsPage extends BasePage {
   // Confidentialité
   readonly anonymousToggle = this.page.locator('[role="switch"]').first();
 
+  // Mois budgétaire personnalisé
+  readonly customMonthSection = this.page.getByText(/Mois budgétaire/i);
+  readonly customMonthToggle = this.page.getByRole("switch", {
+    name: "Mois budgétaire personnalisé",
+  });
+  readonly customMonthStartDaySelect = this.page.getByLabel("Jour de paie");
+
   // Enveloppes
   readonly newEnvelopeButton = this.page.getByRole("button", {
     name: /Nouvelle|Créer une enveloppe/i,

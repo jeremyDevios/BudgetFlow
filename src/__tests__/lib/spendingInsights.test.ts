@@ -473,3 +473,86 @@ describe("buildSmartSpendingNotifications", () => {
     expect(result.envelopeNotifications).toEqual({});
   });
 });
+
+// ---------------------------------------------------------------------------
+// Mois budgétaire personnalisé
+// ---------------------------------------------------------------------------
+
+describe("buildSmartSpendingNotifications — mois budgétaire personnalisé", () => {
+  const envelopes = [{ id: "e1", name: "E1", budget: 100 }];
+  const customMonthConfig = { enabled: true, startDay: 25, overrides: {} };
+
+  it("attribue une transaction du 24 au mois budgétaire courant (2026-09)", () => {
+    // 2026-10-24 < jour de paie (25) → mois budgétaire 2026-09 = mois courant
+    // (le 05/10 est dans la période 25/09 → 24/10). La dépense exceptionnelle
+    // du mois courant DOIT donc être détectée.
+    const result = buildSmartSpendingNotifications({
+      transactions: [
+        {
+          id: "t1",
+          amount: 150,
+          description: "Gros achat",
+          envelopeId: "e1",
+          date: "2026-10-24",
+        },
+      ],
+      envelopes,
+      today: new Date(2026, 9, 5),
+      analysisMonthCount: 3,
+      customMonthConfig,
+    });
+
+    const exceptional = result.globalNotifications.find(
+      (n) => n.kind === "exceptional_spending",
+    );
+    expect(exceptional).toBeDefined();
+  });
+
+  it("attribue une transaction du 25 au mois budgétaire suivant (hors fenêtre)", () => {
+    const result = buildSmartSpendingNotifications({
+      transactions: [
+        {
+          id: "t1",
+          amount: 150,
+          description: "Gros achat",
+          envelopeId: "e1",
+          date: "2026-10-25",
+        },
+      ],
+      envelopes,
+      today: new Date(2026, 9, 5),
+      analysisMonthCount: 3,
+      customMonthConfig,
+    });
+
+    // 25/10 ≥ jour de paie → mois budgétaire 2026-10, hors des 3 derniers mois
+    // analysés (07-08-09) → pas de notification.
+    const exceptional = result.globalNotifications.find(
+      (n) => n.kind === "exceptional_spending",
+    );
+    expect(exceptional).toBeUndefined();
+  });
+
+  it("identité : config désactivée === comportement historique", () => {
+    const params = {
+      transactions: [
+        {
+          id: "t1",
+          amount: 150,
+          description: "Gros achat",
+          envelopeId: "e1",
+          date: "2026-04-05",
+        },
+      ],
+      envelopes,
+      today: new Date(2026, 3, 10),
+      analysisMonthCount: 3,
+    };
+    const legacy = buildSmartSpendingNotifications(params);
+    const withDisabled = buildSmartSpendingNotifications({
+      ...params,
+      customMonthConfig: { enabled: false, startDay: 1, overrides: {} },
+    });
+    expect(withDisabled).toEqual(legacy);
+  });
+});

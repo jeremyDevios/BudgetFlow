@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase";
 
 import { collection, query, getDocs, where, doc, getDoc, limit } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { format, startOfMonth, endOfMonth, eachMonthOfInterval, subMonths, addMonths, isSameMonth } from "date-fns";
+import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { ChevronLeft, TrendingUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,13 @@ import { isEnvelopeActiveForMonth } from "@/types/envelope";
 import { motion, AnimatePresence } from "framer-motion";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
 import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
+import { formatMonthRangeLabel } from "@/lib/dateUtils";
+import {
+  addBudgetPeriods,
+  budgetMonthKeyForDate,
+  budgetPeriod,
+  getCustomMonthConfig,
+} from "@/lib/budgetMonth";
 
 const MASK_WITH_DECIMALS = "****,**";
 
@@ -24,6 +31,9 @@ interface UserSettings {
   fixedCosts: number;
   monthlySavings: number;
   isFixedIncome?: boolean;
+  customMonthEnabled?: boolean;
+  customMonthStartDay?: number;
+  customMonthStartOverrides?: Record<string, number>;
 }
 
 interface MonthlyData {
@@ -34,6 +44,8 @@ interface MonthlyData {
   savingsObjective: number;
   remaining: number; // calculated: income - fixed - spent
   transactionCount: number;
+  /** Plage de la période quand le mois budgétaire est personnalisé. */
+  rangeLabel?: string;
 }
 
 export default function EvolutionPage() {
@@ -56,6 +68,7 @@ export default function EvolutionPage() {
         let savingsObjective = 0;
         let isFixedIncome = true;
         let monthlyIncomes: Record<string, number> = {};
+        let customMonthConfig = getCustomMonthConfig({});
 
         const settingsRef = doc(db, "users", user.uid, "settings", "general");
         const settingsSnap = await getDoc(settingsRef);
@@ -65,6 +78,7 @@ export default function EvolutionPage() {
             fixedCosts = s.fixedCosts || 0;
             savingsObjective = s.monthlySavings || 0;
             isFixedIncome = s.isFixedIncome !== false;
+            customMonthConfig = getCustomMonthConfig(s);
         }
 
         // 1b. If variable income, fetch per-month overrides.
@@ -93,35 +107,36 @@ export default function EvolutionPage() {
           logger.warn("Envelopes read failed, temporary budgets will be absent");
         }
 
-        // 3. Determine Date Range (Last 6 months)
+        // 3. Déterminer la fenêtre : les 6 derniers mois budgétaires
+        //    (ou calendaires quand l'option est désactivée).
         const today = new Date();
-        const end = endOfMonth(today);
-        const start = startOfMonth(subMonths(today, 5));
-
-        // 4. Get Transactions (date-filtered, last 6 months)
-        const txRef = collection(db, "users", user.uid, "transactions");
         const fmt = (d: Date) => {
           const y = d.getFullYear();
           const m = String(d.getMonth() + 1).padStart(2, "0");
           const day = String(d.getDate()).padStart(2, "0");
           return `${y}-${m}-${day}`;
         };
-        const startStr = fmt(start);
-        const endStr = `${fmt(end)}T23:59:59`;
+        const currentKey = budgetMonthKeyForDate(fmt(today), customMonthConfig);
+        const monthKeys: string[] = [];
+        for (let i = 5; i >= 0; i--) {
+          monthKeys.push(addBudgetPeriods(currentKey, -i, customMonthConfig));
+        }
+        const rangeStart = budgetPeriod(monthKeys[0], customMonthConfig).start;
+        const rangeEnd = budgetPeriod(monthKeys[monthKeys.length - 1], customMonthConfig).end;
+
+        // 4. Get Transactions (date-filtered, last 6 months)
+        const txRef = collection(db, "users", user.uid, "transactions");
         const q = query(
           txRef,
-          where("date", ">=", startStr),
-          where("date", "<=", endStr),
+          where("date", ">=", rangeStart),
+          where("date", "<=", rangeEnd),
           limit(5000)
         );
         const querySnapshot = await getDocs(q);
 
         // 5. Aggregate by Month
-        const months = eachMonthOfInterval({ start, end });
-
-        const monthlyData = months.map(month => {
-            const monthStart = startOfMonth(month);
-            const monthEnd = endOfMonth(month);
+        const monthlyData = monthKeys.map(monthKey => {
+            const { start, end } = budgetPeriod(monthKey, customMonthConfig);
 
             let totalSpent = 0;
             let totalIncome = 0;
@@ -129,15 +144,18 @@ export default function EvolutionPage() {
 
             querySnapshot.forEach((txDoc) => {
                 const data = txDoc.data();
-                // Handle Firestore Timestamp or ISO string
-                let txDate: Date;
+                // Handle Firestore Timestamp or ISO string → chaîne locale.
+                let txDateStr: string;
                 if (data.date && typeof data.date.toDate === 'function') {
-                     txDate = data.date.toDate();
+                     txDateStr = fmt(data.date.toDate());
+                } else if (typeof data.date === 'string') {
+                     txDateStr = data.date;
                 } else {
-                     txDate = new Date(data.date);
+                     txDateStr = "";
                 }
 
-                if (txDate >= monthStart && txDate <= monthEnd) {
+                // Comparaison de chaînes ISO (convention du projet).
+                if (txDateStr >= start && txDateStr <= end) {
                     // Normalize type: "income" → income, everything else → expense
                     // (same normalization as Dashboard for backward compatibility)
                     const txType = data.type === "income" ? "income" : "expense";
@@ -152,27 +170,35 @@ export default function EvolutionPage() {
             });
 
             // Resolve the effective income for this specific month.
-            const monthStr = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}`;
             const resolvedIncome = isFixedIncome
               ? income
-              : resolveMonthlyIncome(monthStr, monthlyIncomes, income);
+              : resolveMonthlyIncome(monthKey, monthlyIncomes, income);
 
             // Logic: Remaining = (Income - FixedCosts - Savings + TemporaryBudget) - Spent + Extra Income
             // Correspond au "Reste disponible" du Dashboard (monthlyTotalAvailable - totalSpent + totalIncome)
             const temporaryBudget = envelopes
-              .filter((env) => isEnvelopeActiveForMonth(env, monthStr))
+              .filter((env) => isEnvelopeActiveForMonth(env, monthKey))
               .filter((env) => env.isTemporary)
               .reduce((sum, env) => sum + env.budget, 0);
             const remaining = (resolvedIncome - fixedCosts - savingsObjective + temporaryBudget) - totalSpent + totalIncome;
 
+            // Ancre de libellé : premier jour de la période (compatible avec
+            // l'affichage date-fns existant).
+            const anchor = new Date(
+              Number(start.slice(0, 4)),
+              Number(start.slice(5, 7)) - 1,
+              Number(start.slice(8, 10)),
+            );
+
             return {
-                date: month,
+                date: anchor,
                 totalSpent,
                 income: resolvedIncome,
                 fixedCosts,
                 savingsObjective,
                 remaining,
                 transactionCount,
+                rangeLabel: formatMonthRangeLabel(start, end),
             };
         });
 
@@ -464,6 +490,9 @@ export default function EvolutionPage() {
                   <div className="flex items-center gap-3">
                       <div className={`w-1 h-8 rounded-full ${d.remaining >= 0 ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                       <span className="capitalize font-medium text-app-text text-lg">{format(d.date, "MMMM yyyy", { locale: fr })}</span>
+                      {d.rangeLabel && (
+                        <span className="block text-xs text-app-text-secondary normal-case">{d.rangeLabel}</span>
+                      )}
                   </div>
 
                   {/* Groupe Dépenses + Économie (Droite) */}

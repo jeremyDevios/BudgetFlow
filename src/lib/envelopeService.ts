@@ -20,8 +20,13 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { getMonthKey } from "@/lib/validation";
+import { getMonthCounterKey } from "@/lib/validation";
 import { type Transaction } from "@/types/transaction";
+import {
+  budgetMonthKeyForDate,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -88,13 +93,16 @@ export async function fetchLinkedTransactions(
 /**
  * Groups transactions by month (YYYY-MM) and returns a sorted list of
  * { month, count } entries. Used by the UI to display the impact summary.
+ * Avec un mois budgétaire personnalisé, les transactions sont regroupées
+ * par clé budgétaire (identité calendaire par défaut).
  */
 export function groupTransactionsByMonth(
   transactions: Transaction[],
+  customMonthConfig: CustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
 ): { month: string; count: number }[] {
   const map = new Map<string, number>();
   for (const tx of transactions) {
-    const month = tx.date.slice(0, 7); // "YYYY-MM"
+    const month = budgetMonthKeyForDate(tx.date, customMonthConfig); // "YYYY-MM"
     map.set(month, (map.get(month) ?? 0) + 1);
   }
   // Sorted chronologically (oldest first)
@@ -246,6 +254,7 @@ export async function deleteEnvelopeAndTransactions(
   userId: string,
   envelopeId: string,
   transactions: Transaction[],
+  customMonthConfig: CustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
 ): Promise<void> {
   const envelopeRef = doc(db, "users", userId, "envelopes", envelopeId);
   const counterRef = doc(db, "counters", userId);
@@ -260,9 +269,12 @@ export async function deleteEnvelopeAndTransactions(
   }
 
   // Aggregate monthly transaction counts for counter update
+  // (clés budgétaires — calendaires par défaut).
   const monthlyCounts: Record<string, number> = {};
   for (const tx of transactions) {
-    const key = getMonthKey(tx.date);
+    const key = getMonthCounterKey(
+      budgetMonthKeyForDate(tx.date, customMonthConfig),
+    );
     monthlyCounts[key] = (monthlyCounts[key] ?? 0) + 1;
   }
 

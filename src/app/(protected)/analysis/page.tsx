@@ -3,6 +3,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { useAnalysis } from "@/hooks/useAnalysis";
+import { budgetMonthKeyForDate } from "@/lib/budgetMonth";
 import { formatMonthYear } from "@/lib/dateUtils";
 import { BarChart3, ChevronLeft, ChevronRight, Loader2, Trophy } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -83,16 +84,19 @@ export default function AnalysisPage() {
   const [period, setPeriod] = useState<AnalysisPeriod>("month");
   const [monthDate, setMonthDate] = useState(() => new Date());
 
-  const { result, spendByEnvelope, monthlyIncome, loading } = useAnalysis({
+  const { result, spendByEnvelope, monthlyIncome, loading, customMonthConfig } = useAnalysis({
     userId: user?.uid ?? null,
     period,
     monthDate,
   });
 
-  // Chevron droit limité au mois courant.
+  // Chevron droit limité au mois courant (comparaison de clés budgétaires).
   const now = new Date();
+  const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const monthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}-${String(monthDate.getDate()).padStart(2, "0")}`;
   const isCurrentMonth =
-    monthDate.getFullYear() === now.getFullYear() && monthDate.getMonth() === now.getMonth();
+    budgetMonthKeyForDate(monthKey, customMonthConfig) ===
+    budgetMonthKeyForDate(nowKey, customMonthConfig);
 
   const changeMonth = (dir: 1 | -1) => {
     setMonthDate(new Date(monthDate.getFullYear(), monthDate.getMonth() + dir, 1));

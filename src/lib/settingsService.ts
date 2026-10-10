@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
+import { sanitizeCustomMonthConfig } from "@/lib/budgetMonth";
 import { resolveCurrencyCode } from "@/types/currency";
 import {
   BentoPreset,
@@ -216,6 +217,43 @@ export function resolveDetailedEnabled(
 }
 
 /**
+ * Sanitizes the custom-month fields of a partial settings payload before
+ * writing to Firestore. Invalid values are dropped rather than written
+ * (the read-time sanitizer in `sanitizeStoredSettingsDocument` covers the
+ * case of malformed documents already in Firestore).
+ */
+export function normalizeCustomMonthFields(
+  partial: Partial<UserSettings>,
+): Partial<UserSettings> {
+  const result: Partial<UserSettings> = { ...partial };
+
+  if (
+    "customMonthEnabled" in result &&
+    typeof result.customMonthEnabled !== "boolean"
+  ) {
+    delete result.customMonthEnabled;
+  }
+  if ("customMonthStartDay" in result) {
+    const day = result.customMonthStartDay;
+    if (typeof day !== "number" || !Number.isInteger(day) || day < 1 || day > 28) {
+      delete result.customMonthStartDay;
+    }
+  }
+  if ("customMonthStartOverrides" in result) {
+    const cleaned = sanitizeCustomMonthConfig({
+      customMonthStartOverrides: result.customMonthStartOverrides,
+    }).overrides;
+    if (Object.keys(cleaned).length > 0) {
+      result.customMonthStartOverrides = cleaned;
+    } else {
+      delete result.customMonthStartOverrides;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Normalizes a partial settings payload before writing to Firestore.
  *
  * Rules applied at save time (mirrors the read-time invariant in `loadSettings`):
@@ -224,6 +262,7 @@ export function resolveDetailedEnabled(
  *    forced to `false` to satisfy the invariant "flag is false when no items exist".
  *  - Items are NEVER deleted when the flag is `false`; they are preserved so the
  *    user can re-enable detailed mode without data loss.
+ *  - Custom-month fields are sanitized via `normalizeCustomMonthFields`.
  *
  * Callers that only update the flag (without touching the items list) are not
  * affected by this normalization — the read-time enforcement in `loadSettings`
@@ -232,7 +271,7 @@ export function resolveDetailedEnabled(
 export function normalizeSettingsPayload(
   partial: Partial<UserSettings>,
 ): Partial<UserSettings> {
-  const result: Partial<UserSettings> = { ...partial };
+  let result: Partial<UserSettings> = { ...partial };
 
   if ("fixedCostsItems" in result) {
     const items = sanitizeSubItems(result.fixedCostsItems);
@@ -250,6 +289,8 @@ export function normalizeSettingsPayload(
       result.savingsDetailedEnabled = false;
     }
   }
+
+  result = normalizeCustomMonthFields(result);
 
   return result;
 }
@@ -269,6 +310,14 @@ function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSet
   const incomeHistory = sanitizeBudgetVersionHistory(raw.incomeHistory);
   const fixedCostsHistory = sanitizeBudgetVersionHistory(raw.fixedCostsHistory);
   const savingsHistory = sanitizeBudgetVersionHistory(raw.savingsHistory);
+
+  // Custom budget month: sanitized and passed through for the same reason —
+  // a settings write from any client must never wipe iOS-written fields.
+  const customMonth = sanitizeCustomMonthConfig(raw);
+  const hasCustomMonth =
+    customMonth.enabled ||
+    customMonth.startDay !== 1 ||
+    Object.keys(customMonth.overrides).length > 0;
 
   return {
     monthlyIncome: Number(raw.monthlyIncome ?? DEFAULT_USER_SETTINGS.monthlyIncome),
@@ -294,6 +343,14 @@ function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSet
     ...(incomeHistory.length > 0 ? { incomeHistory } : {}),
     ...(fixedCostsHistory.length > 0 ? { fixedCostsHistory } : {}),
     ...(savingsHistory.length > 0 ? { savingsHistory } : {}),
+    // Custom-month keys follow the same rule: absent unless non-default.
+    ...(hasCustomMonth
+      ? {
+          customMonthEnabled: customMonth.enabled,
+          customMonthStartDay: customMonth.startDay,
+          customMonthStartOverrides: customMonth.overrides,
+        }
+      : {}),
     ...(typeof raw.createdAt === "string" ? { createdAt: raw.createdAt } : {}),
     ...(typeof raw.updatedAt === "string" ? { updatedAt: raw.updatedAt } : {}),
   };
@@ -342,6 +399,14 @@ export async function loadSettings(uid: string): Promise<UserSettings> {
     ...(stored.incomeHistory?.length ? { incomeHistory: stored.incomeHistory } : {}),
     ...(stored.fixedCostsHistory?.length ? { fixedCostsHistory: stored.fixedCostsHistory } : {}),
     ...(stored.savingsHistory?.length ? { savingsHistory: stored.savingsHistory } : {}),
+    ...(stored.customMonthEnabled ? { customMonthEnabled: stored.customMonthEnabled } : {}),
+    ...(stored.customMonthStartDay && stored.customMonthStartDay !== 1
+      ? { customMonthStartDay: stored.customMonthStartDay }
+      : {}),
+    ...(stored.customMonthStartOverrides &&
+    Object.keys(stored.customMonthStartOverrides).length > 0
+      ? { customMonthStartOverrides: stored.customMonthStartOverrides }
+      : {}),
   };
 }
 

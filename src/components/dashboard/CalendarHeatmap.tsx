@@ -3,6 +3,13 @@
 import type { CSSProperties } from "react";
 
 import { computeSpendSeverity, computeSpendSeverityFromEnvelopes, type EnvelopeSpendEntry, type SpendSeverity } from "@/lib/calendarSeverity";
+import {
+  addBudgetPeriods,
+  budgetMonthKeyForDate,
+  budgetPeriod,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 
 // "inactive" and "future" are structural states; the four active states come from severity.
 type ActiveState = SpendSeverity; // "login-only" | "low-spend" | "moderate-spend" | "heavy-spend"
@@ -21,6 +28,10 @@ interface CalendarHeatmapProps {
   title?: string;
   className?: string;
   embedded?: boolean;
+  /** Config du mois budgétaire personnalisé : quand l'option est active, la
+   *  grille couvre la période budgétaire (ex. du 5 sept. au 2 oct.) au lieu
+   *  du mois calendaire (identité par défaut). */
+  customMonthConfig?: CustomMonthConfig;
 }
 
 interface DayCell {
@@ -146,45 +157,38 @@ const hasActivity = (
   loginDates: Set<string>
 ): boolean => (dailySpend.get(dateStr) ?? 0) > 0 || loginDates.has(dateStr);
 
+// ─── Streaks sur une liste ordonnée de jours de la période affichée ─────────
+
 function computeCurrentStreak(
   loginDates: Set<string>,
   dailySpend: Map<string, number>,
-  year: number,
-  monthIndex: number,
-  daysInMonth: number
+  dayKeys: string[]
 ): number {
-  const today = new Date();
-  const todayStr = getLocalDateString(today);
-  const firstOfMonth = getLocalDateString(new Date(year, monthIndex, 1));
-  if (firstOfMonth > todayStr) return 0;
-  const endDay =
-    today.getFullYear() === year && today.getMonth() === monthIndex
-      ? today.getDate()
-      : daysInMonth;
+  const todayStr = getLocalDateString(new Date());
   let streak = 0;
-  for (let day = endDay; day >= 1; day--) {
-    const dateStr = getLocalDateString(new Date(year, monthIndex, day));
+  let started = false;
+  for (let i = dayKeys.length - 1; i >= 0; i--) {
+    const dateStr = dayKeys[i];
+    if (dateStr > todayStr) continue;
+    started = true;
     if (hasActivity(dateStr, dailySpend, loginDates)) {
       streak++;
     } else {
       break;
     }
   }
-  return streak;
+  return started ? streak : 0;
 }
 
 function computeMaxStreak(
   loginDates: Set<string>,
   dailySpend: Map<string, number>,
-  year: number,
-  monthIndex: number,
-  daysInMonth: number,
+  dayKeys: string[],
   todayString: string
 ): number {
   let max = 0;
   let run = 0;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = getLocalDateString(new Date(year, monthIndex, day));
+  for (const dateStr of dayKeys) {
     if (dateStr > todayString) break;
     if (hasActivity(dateStr, dailySpend, loginDates)) {
       run++;
@@ -199,20 +203,59 @@ function computeMaxStreak(
 function computeFullMonthProgress(
   loginDates: Set<string>,
   dailySpend: Map<string, number>,
-  year: number,
-  monthIndex: number,
-  daysInMonth: number,
+  dayKeys: string[],
   todayString: string
 ): { activeDays: number; totalDays: number } {
   let activeDays = 0;
   let totalDays = 0;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = getLocalDateString(new Date(year, monthIndex, day));
+  for (const dateStr of dayKeys) {
     if (dateStr > todayString) break;
     totalDays++;
     if (hasActivity(dateStr, dailySpend, loginDates)) activeDays++;
   }
   return { activeDays, totalDays };
+}
+
+/**
+ * Cellules de la grille : jours de la période budgétaire quand l'option est
+ * active. La grille démarre au jour de paie du mois affiché et se termine
+ * le jour de paie du mois suivant INCLUS (ex. 5 sept. → 2 oct. : 28 cellules,
+ * le 2 oct. apparaît aussi comme premier jour de la grille d'octobre — choix
+ * produit assumé, le rattachement comptable reste exclusif). Option
+ * désactivée → jours du mois calendaire (identité stricte).
+ */
+function buildDayCells(month: Date, config: CustomMonthConfig): DayCell[] {
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+
+  if (config.enabled) {
+    const dayKey = getLocalDateString(month);
+    const periodKey = budgetMonthKeyForDate(dayKey, config);
+    const { start } = budgetPeriod(periodKey, config);
+    const nextStart = budgetPeriod(
+      addBudgetPeriods(periodKey, 1, config),
+      config,
+    ).start;
+    const cells: DayCell[] = [];
+    let cursor = start;
+    let guard = 0;
+    while (cursor <= nextStart && guard < 33) {
+      const y = Number(cursor.slice(0, 4));
+      const m = Number(cursor.slice(5, 7));
+      const d = Number(cursor.slice(8, 10));
+      cells.push({ dateStr: cursor, day: d });
+      cursor = getLocalDateString(new Date(y, m - 1, d + 1));
+      guard++;
+    }
+    if (cells.length > 0) return cells;
+  }
+
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const cells: DayCell[] = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    cells.push({ dateStr: getLocalDateString(new Date(year, monthIndex, day)), day });
+  }
+  return cells;
 }
 
 // ─── SVG dot-ring progress badge ─────────────────────────────────────────────
@@ -366,22 +409,20 @@ export default function CalendarHeatmap({
   title = "Votre Parcours Fidélité",
   className = "",
   embedded = false,
+  customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
 }: CalendarHeatmapProps) {
-  const year = month.getFullYear();
-  const monthIndex = month.getMonth();
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const todayString = getLocalDateString(new Date());
-  const columns = Math.ceil(daysInMonth / 3);
+
+  const cells = buildDayCells(month, customMonthConfig);
+  const dayKeys = cells.map((cell) => cell.dateStr);
+  const displayDaysCount = cells.length;
+  const columns = Math.ceil(displayDaysCount / 3);
   const maxGridWidth = columns * 22 + (columns - 1) * 4;
 
-  const currentStreak = computeCurrentStreak(
-    loginDates, dailySpend, year, monthIndex, daysInMonth
-  );
-  const maxStreak = computeMaxStreak(
-    loginDates, dailySpend, year, monthIndex, daysInMonth, todayString
-  );
+  const currentStreak = computeCurrentStreak(loginDates, dailySpend, dayKeys);
+  const maxStreak = computeMaxStreak(loginDates, dailySpend, dayKeys, todayString);
   const { activeDays, totalDays } = computeFullMonthProgress(
-    loginDates, dailySpend, year, monthIndex, daysInMonth, todayString
+    loginDates, dailySpend, dayKeys, todayString
   );
 
   // ── Milestone states ──────────────────────────────────────────────────────
@@ -404,8 +445,8 @@ export default function CalendarHeatmap({
       : "next";
   const s2Filled = s2Achieved ? 14 : Math.min(maxStreak, 14);
 
-  // Mois Complet: every day of the full month must have activity
-  const monthAchieved = totalDays === daysInMonth && activeDays === daysInMonth;
+  // Mois Complet: every day of the full period must have activity
+  const monthAchieved = totalDays === displayDaysCount && activeDays === displayDaysCount;
   const monthState: MilestoneState = monthAchieved
     ? "achieved"
     : activeDays > 0
@@ -414,7 +455,7 @@ export default function CalendarHeatmap({
   const monthTotalDots = 10;
   const monthFilled = monthAchieved
     ? monthTotalDots
-    : Math.round((activeDays / daysInMonth) * monthTotalDots);
+    : Math.round((activeDays / Math.max(displayDaysCount, 1)) * monthTotalDots);
 
   const Outer = embedded ? "div" : "section";
   const outerProps = embedded
@@ -423,12 +464,6 @@ export default function CalendarHeatmap({
         className: `hm-section border border-app-border rounded-[20px] overflow-hidden ${className}`,
         style: { background: "var(--hm-section-bg)", padding: "16px" } as CSSProperties,
       };
-
-  const cells: DayCell[] = [];
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = getLocalDateString(new Date(year, monthIndex, day));
-    cells.push({ dateStr, day });
-  }
 
   if (loading) {
     return (
@@ -446,7 +481,7 @@ export default function CalendarHeatmap({
                 gap: "4px",
               }}
             >
-              {Array.from({ length: daysInMonth }).map((_, i) => (
+              {Array.from({ length: displayDaysCount }).map((_, i) => (
                 <div key={i} className="w-full aspect-square rounded-md bg-black/5 dark:bg-white/5" />
               ))}
             </div>

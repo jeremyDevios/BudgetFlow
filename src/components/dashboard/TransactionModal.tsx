@@ -19,8 +19,13 @@ import {
   validateAmountWithMessage,
   validateDescriptionWithMessage,
   checkTransactionQuota,
-  getMonthKey,
+  getMonthCounterKey,
 } from "@/lib/validation";
+import {
+  budgetMonthKeyForDate,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
 import {
   MATERIALIZED_MONTHS_AHEAD,
   monthKey,
@@ -278,9 +283,11 @@ interface TransactionModalProps {
   defaultEnvelopeId?: string;
   /** Nombre de transactions déjà créées ce mois (pour vérification du quota). */
   currentMonthTransactionCount?: number;
+  /** Config du mois budgétaire personnalisé (défaut : mois calendaires). */
+  customMonthConfig?: CustomMonthConfig;
 }
 
-export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId, currentMonthTransactionCount = 0 }: TransactionModalProps) {
+export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId, currentMonthTransactionCount = 0, customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG }: TransactionModalProps) {
   const { user } = useAuth();
   const { formatAmount, symbol } = useCurrencyFormatting();
   const [loading, setLoading] = useState(false);
@@ -345,8 +352,11 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         ? "border-amber-500/40 bg-amber-500/10 text-amber-400"
         : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400";
 
-  // Derive the YYYY-MM month of the currently selected expense date.
-  const selectedDateMonth = date ? date.substring(0, 7) : "";
+  // Derive the YYYY-MM month of the currently selected expense date
+  // (mois budgétaire quand l'option est activée).
+  const selectedDateMonth = date
+    ? budgetMonthKeyForDate(date, customMonthConfig)
+    : "";
 
   // Validation: temporary envelopes only accept dates within their activeMonths.
   const isDateInvalidForTemp =
@@ -538,8 +548,10 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
           });
         }
 
-        // 3. Incrémenter le compteur de transactions du mois
-        const initialMonth = getMonthKey(date);
+        // 3. Incrémenter le compteur de transactions du mois budgétaire
+        const initialMonth = getMonthCounterKey(
+          budgetMonthKeyForDate(date, customMonthConfig),
+        );
         const counterRef = doc(db, "counters", user.uid);
         try {
           await updateDoc(counterRef, {
@@ -618,8 +630,10 @@ const handleDelete = async () => {
             });
           }
 
-          // 3. Décrémenter le compteur de transactions du mois
-          const delMonth = getMonthKey(transactionToEdit.date);
+          // 3. Décrémenter le compteur de transactions du mois budgétaire
+          const delMonth = getMonthCounterKey(
+            budgetMonthKeyForDate(transactionToEdit.date, customMonthConfig),
+          );
           const counterRef = doc(db, "counters", user.uid);
           await updateDoc(counterRef, {
             [delMonth]: increment(-1),

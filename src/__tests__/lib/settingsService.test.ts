@@ -20,6 +20,7 @@ import {
   computeDetailedTotal,
   resolveDetailedEnabled,
   normalizeSettingsPayload,
+  normalizeCustomMonthFields,
   resolveMonthlyIncome,
 } from "@/lib/settingsService";
 import { BudgetSubItem, BudgetVersionEntry } from "@/types/settings";
@@ -510,5 +511,71 @@ describe("sanitizeBudgetVersionHistory", () => {
 
   it("drops non-object entries", () => {
     expect(sanitizeBudgetVersionHistory([null, "x", 42, validIncomeEntry])).toEqual([validIncomeEntry]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Custom budget month (date de tombée du salaire)
+// ---------------------------------------------------------------------------
+
+describe("normalizeCustomMonthFields", () => {
+
+  it("keeps a valid payload unchanged", () => {
+    expect(
+      normalizeCustomMonthFields({
+        customMonthEnabled: true,
+        customMonthStartDay: 25,
+        customMonthStartOverrides: { "2026-10": 5 },
+      }),
+    ).toEqual({
+      customMonthEnabled: true,
+      customMonthStartDay: 25,
+      customMonthStartOverrides: { "2026-10": 5 },
+    });
+  });
+
+  it("drops a non-boolean enabled flag", () => {
+    // Cast volontaire : un payload Firestore corrompu peut contenir n'importe quoi.
+    const result = normalizeCustomMonthFields({
+      customMonthEnabled: "oui",
+    } as unknown as Partial<import("@/types/settings").UserSettings>);
+    expect("customMonthEnabled" in result).toBe(false);
+  });
+
+  it("drops an out-of-range start day (29-31 are never valid)", () => {
+    expect(normalizeCustomMonthFields({ customMonthStartDay: 31 })).toEqual({});
+    expect(normalizeCustomMonthFields({ customMonthStartDay: 0 })).toEqual({});
+    expect(normalizeCustomMonthFields({ customMonthStartDay: 1.5 })).toEqual({});
+  });
+
+  it("drops malformed overrides entries, keeps valid ones", () => {
+    const result = normalizeCustomMonthFields({
+      customMonthStartOverrides: {
+        "2026-10": 5,
+        "2026-11": 31,
+        "bad": 5,
+        "2026-12": "25",
+      },
+    } as unknown as Partial<import("@/types/settings").UserSettings>);
+    expect(result).toEqual({ customMonthStartOverrides: { "2026-10": 5 } });
+  });
+
+  it("removes the overrides key when nothing valid remains", () => {
+    const result = normalizeCustomMonthFields({
+      customMonthStartOverrides: { "bad": 5 },
+    });
+    expect("customMonthStartOverrides" in result).toBe(false);
+  });
+
+  it("normalizeSettingsPayload sanitizes custom-month fields alongside items", () => {
+    const result = normalizeSettingsPayload({
+      customMonthEnabled: true,
+      customMonthStartDay: 31,
+      customMonthStartOverrides: { "2026-10": 5, "bad": 7 },
+    });
+    expect(result).toEqual({
+      customMonthEnabled: true,
+      customMonthStartOverrides: { "2026-10": 5 },
+    });
   });
 });

@@ -1,4 +1,4 @@
-import { getMonthBounds, formatMonthYear } from '@/lib/dateUtils';
+import { getMonthBounds, formatMonthYear, formatMonthRangeLabel } from '@/lib/dateUtils';
 
 describe('getMonthBounds', () => {
   it('returns correct start for a mid-month date', () => {
@@ -73,5 +73,23 @@ describe('formatMonthYear', () => {
   it('returns a non-empty string', () => {
     const result = formatMonthYear(new Date());
     expect(result.length).toBeGreaterThan(0);
+  });
+});
+
+describe('formatMonthRangeLabel', () => {
+  it('formats a same-year range in French', () => {
+    expect(formatMonthRangeLabel('2026-09-25', '2026-10-24T23:59:59')).toBe(
+      'du 25 sept. au 24 oct.'
+    );
+  });
+
+  it('adds the year when the range crosses years', () => {
+    expect(formatMonthRangeLabel('2026-12-25', '2027-01-24T23:59:59')).toBe(
+      'du 25 déc. au 24 janv. 2027'
+    );
+  });
+
+  it('returns empty string for malformed input', () => {
+    expect(formatMonthRangeLabel('bad', '2026-10-24T23:59:59')).toBe('');
   });
 });

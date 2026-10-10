@@ -9,7 +9,14 @@ import { collection, query, getDocs, doc, getDoc, where, writeBatch, updateDoc, 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { getMonthBounds, formatMonthYear } from "@/lib/dateUtils";
+import { formatMonthYear, formatMonthRangeLabel } from "@/lib/dateUtils";
+import {
+  budgetPeriod,
+  budgetMonthKeyForDate,
+  addBudgetPeriods,
+  getCustomMonthConfig,
+  isCustomMonthActive,
+} from "@/lib/budgetMonth";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
 import { getMonthlyIncomes, saveMonthlyIncome } from "@/lib/monthlyIncomeService";
 import {
@@ -99,6 +106,9 @@ interface UserSettings {
   monthlySavings: number;
   bentoPreset?: BentoPreset;
   isFixedIncome?: boolean;
+  customMonthEnabled?: boolean;
+  customMonthStartDay?: number;
+  customMonthStartOverrides?: Record<string, number>;
 }
 
 interface Envelope {
@@ -406,9 +416,17 @@ export default function DashboardPage() {
   // Gestion de la date sélectionnée (Mois)
   const [currentDate, setCurrentDate] = useState(new Date());
     const [toastMessage, setToastMessage] = useState<string | null>(null);
+  // Config du « mois budgétaire personnalisé » (date de tombée du salaire).
+  // Désactivée → strictement les mois calendaires (comportement historique).
+  const customMonthConfig = useMemo(
+    () => getCustomMonthConfig(settings ?? {}),
+    [settings],
+  );
+
   const { loginDates, loading: heatmapLoading } = useCalendarHeatmap(
     user?.uid ?? null,
-    currentDate
+    currentDate,
+    customMonthConfig,
   );
 
   // Sum all expense transaction amounts per calendar day ("YYYY-MM-DD") for heatmap severity.
@@ -424,7 +442,16 @@ export default function DashboardPage() {
   }, [transactions]);
 
   // YYYY-MM string for the currently viewed month — used by the temporary-envelope filter.
-  const selectedMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`;
+  const selectedMonth = useMemo(() => {
+    const day = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
+    return budgetMonthKeyForDate(day, customMonthConfig);
+  }, [currentDate, customMonthConfig]);
+
+  // Bornes de la période affichée (mois budgétaire ou calendaire).
+  const selectedPeriod = useMemo(
+    () => budgetPeriod(selectedMonth, customMonthConfig),
+    [selectedMonth, customMonthConfig],
+  );
 
   // Envelopes visible for the selected month:
   //  - All permanent envelopes are always included.
@@ -583,9 +610,9 @@ export default function DashboardPage() {
       : 0;
 
   const today = new Date();
+  const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   const isCurrentMonth =
-    currentDate.getFullYear() === today.getFullYear() &&
-    currentDate.getMonth() === today.getMonth();
+    budgetMonthKeyForDate(todayKey, customMonthConfig) === selectedMonth;
 
   const forecastTransactions: ForecastTransaction[] = transactions
     .filter(tx => tx.type !== "income" && tx.envelopeId)
@@ -602,6 +629,7 @@ export default function DashboardPage() {
     currentMonthTransactions: forecastTransactions,
     monthlyBudget: monthlyTotalAvailable,
     isCurrentMonth,
+    customMonthConfig,
   });
 
   const { globalNotifications, loading: smartInsightsLoading } =
@@ -625,6 +653,7 @@ export default function DashboardPage() {
       envelopeForecasts,
       isCurrentMonth,
       currency,
+      customMonthConfig,
     });
 
   const visibleGlobalNotifications = anonymousMode
@@ -680,12 +709,17 @@ export default function DashboardPage() {
       // ... (local storage sync, pas d'appel firestore) ...
 
       // 1. Settings (Statique)
+      //    La config custom-month lue ici sert à borner la requête de
+      //    transactions DANS cette exécution (l'état `settings` n'est pas
+      //    encore à jour au moment de la requête ci-dessous).
+      let fetchedCustomMonthConfig = getCustomMonthConfig({});
       try {
           const settingsRef = doc(db, "users", user.uid, "settings", "general");
           const settingsSnap = await getDoc(settingsRef);
           if (settingsSnap.exists()) {
               const data = settingsSnap.data() as UserSettings;
               setSettings(data);
+              fetchedCustomMonthConfig = getCustomMonthConfig(data ?? {});
               // 1b. If variable income, also fetch per-month income overrides.
               if (data.isFixedIncome === false) {
                 try {
@@ -717,8 +751,10 @@ export default function DashboardPage() {
           envList.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
       } catch(e) { logger.warn("Envelopes read failed"); }
 
-      // 3. Transactions du mois sélectionné
-      const { start, end } = getMonthBounds(currentDate);
+      // 3. Transactions du mois sélectionné (période budgétaire ou calendaire)
+      const currentDayKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
+      const fetchedMonthKey = budgetMonthKeyForDate(currentDayKey, fetchedCustomMonthConfig);
+      const { start, end } = budgetPeriod(fetchedMonthKey, fetchedCustomMonthConfig);
       const txList: Transaction[] = [];
       
       try {
@@ -859,9 +895,13 @@ export default function DashboardPage() {
   const changeMonth = (offset: number) => {
     // Close any inline income edit on month change.
     setIsEditingIncome(false);
-    const newDate = new Date(currentDate);
-    newDate.setMonth(newDate.getMonth() + offset);
-    setCurrentDate(newDate);
+    // Navigation par mois budgétaire : l'ancre devient le premier jour de
+    // la période cible (équivalent à l'ancien comportement calendaire
+    // quand l'option est désactivée).
+    const nextKey = addBudgetPeriods(selectedMonth, offset, customMonthConfig);
+    const { start } = budgetPeriod(nextKey, customMonthConfig);
+    const [y, m, d] = start.split("-").map(Number);
+    setCurrentDate(new Date(y, m - 1, d));
   };
 
   const handleStartEditIncome = () => {
@@ -951,8 +991,13 @@ export default function DashboardPage() {
                         >
                             <ChevronLeft className="h-5 w-5" />
                         </button>
-                        <span className="text-sm font-semibold capitalize w-28 sm:w-32 text-center select-none">
-                            {formatMonthYear(currentDate)}
+                        <span className="text-sm font-semibold capitalize w-28 sm:w-32 text-center select-none flex flex-col items-center">
+                            <span>{formatMonthYear(currentDate)}</span>
+                            {isCustomMonthActive(customMonthConfig) && (
+                                <span className="text-[10px] font-normal normal-case text-app-text-secondary">
+                                    {formatMonthRangeLabel(selectedPeriod.start, selectedPeriod.end)}
+                                </span>
+                            )}
                         </span>
                         <button
                             onClick={() => changeMonth(1)}
@@ -1185,6 +1230,7 @@ export default function DashboardPage() {
                             monthlyBudget={totalBudgetEnvelopes}
                             loading={heatmapLoading}
                             embedded
+                            customMonthConfig={customMonthConfig}
                         />
                         {/* Forecast Estimation */}
                         {isCurrentMonth && (
@@ -1410,8 +1456,8 @@ export default function DashboardPage() {
       )}
 
       {/* Modale d'ajout transaction */}
-      <TransactionModal 
-        isOpen={isTxModalOpen} 
+      <TransactionModal
+        isOpen={isTxModalOpen}
         onClose={() => {
             setIsTxModalOpen(false);
             setDefaultEnvelopeId(undefined);
@@ -1419,6 +1465,7 @@ export default function DashboardPage() {
         envelopes={envelopes}
                 refreshData={() => { fetchData(); showToast("Dépense ajoutée !"); }}
         defaultEnvelopeId={defaultEnvelopeId}
+        customMonthConfig={customMonthConfig}
       />
 
             {/* Toast notification */}

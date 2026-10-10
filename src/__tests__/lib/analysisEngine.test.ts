@@ -372,3 +372,48 @@ describe("spendByEnvelope", () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Mois budgétaire personnalisé
+// ---------------------------------------------------------------------------
+
+describe("dateRangeFor — mois budgétaire personnalisé (jour de paie le 25)", () => {
+  const customMonthConfig = { enabled: true, startDay: 25, overrides: {} };
+
+  it("la période « month » suit les bornes budgétaires", () => {
+    const range = dateRangeFor(
+      "month",
+      new Date(2026, 9, 5),
+      new Date(2026, 9, 5),
+      customMonthConfig,
+    );
+    // Le 05/10 appartient au mois budgétaire 2026-09 (25/09 → 24/10).
+    expect(range.start).toEqual(new Date(2026, 8, 25));
+    expect(range.end).toEqual(new Date(2026, 9, 24, 23, 59, 59, 999));
+    // Période précédente : 25/08 → 24/09.
+    expect(range.previousStart).toEqual(new Date(2026, 7, 25));
+    expect(range.previousEnd).toEqual(new Date(2026, 8, 24, 23, 59, 59, 999));
+  });
+
+  it("identité : config désactivée === période calendaire historique", () => {
+    const legacy = dateRangeFor("month", new Date(2026, 2, 5), new Date(2026, 2, 13));
+    const withDisabled = dateRangeFor(
+      "month",
+      new Date(2026, 2, 5),
+      new Date(2026, 2, 13),
+      { enabled: false, startDay: 1, overrides: {} },
+    );
+    expect(withDisabled).toEqual(legacy);
+  });
+
+  it("les périodes relatives restent inchangées avec la config activée", () => {
+    const legacy = dateRangeFor("last30Days", new Date(2026, 2, 10), new Date(2026, 2, 10));
+    const withCustom = dateRangeFor(
+      "last30Days",
+      new Date(2026, 2, 10),
+      new Date(2026, 2, 10),
+      customMonthConfig,
+    );
+    expect(withCustom).toEqual(legacy);
+  });
+});

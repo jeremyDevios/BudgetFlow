@@ -66,7 +66,9 @@ describe("useCalendarHeatmap", () => {
 
     expect(documentIdMock).toHaveBeenCalledTimes(2);
     expect(whereMock).toHaveBeenNthCalledWith(1, "__name__", ">=", "2026-04-01");
-    expect(whereMock).toHaveBeenNthCalledWith(2, "__name__", "<=", "2026-04-31");
+    // Borne haute = vrai dernier jour de la période (plus précis que l'ancien
+    // « -31 » codé en dur, sémantiquement identique pour les doc IDs).
+    expect(whereMock).toHaveBeenNthCalledWith(2, "__name__", "<=", "2026-04-30");
 
     unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);

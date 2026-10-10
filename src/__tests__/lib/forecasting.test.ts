@@ -173,3 +173,55 @@ describe("computeForecast", () => {
     expect(result.globalForecast.willExceed).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Mois budgétaire personnalisé
+// ---------------------------------------------------------------------------
+
+describe("computeForecast — mois budgétaire personnalisé (jour de paie le 25)", () => {
+  const customMonthConfig = { enabled: true, startDay: 25, overrides: {} };
+
+  it("buckete les transactions passées par mois budgétaire", () => {
+    // Le 2026-10-05 appartient au mois budgétaire 2026-09 (25/09 → 24/10).
+    const result = computeForecast({
+      envelopes: [{ id: "e1", budget: 100, name: "E1" }],
+      pastTransactions: [
+        { envelopeId: "e1", amount: 30, date: "2026-10-05T12:00:00" },
+        { envelopeId: "e1", amount: 20, date: "2026-10-25T12:00:00" },
+      ],
+      currentMonthTransactions: [],
+      monthlyBudget: 100,
+      today: new Date(2026, 10, 5),
+      pastMonthCount: 1,
+      customMonthConfig,
+    });
+
+    // Fenêtre = dernier mois observé (2026-10, la tx du 25) → 20 de dépense passée.
+    const forecast = result.envelopeForecasts.e1;
+    expect(forecast.monthsWithData).toBe(1);
+    // projectedSpend = currentSpent(0) + (20 / 31 jours) × jours restants.
+    expect(forecast.projectedSpend).toBeGreaterThan(0);
+    expect(forecast.projectedSpend).toBeLessThan(20);
+  });
+
+  it("identité : config désactivée === comportement historique", () => {
+    const params = {
+      envelopes: [{ id: "e1", budget: 100, name: "E1" }],
+      pastTransactions: [
+        { envelopeId: "e1", amount: 30, date: "2026-01-05T12:00:00" },
+      ],
+      currentMonthTransactions: [
+        { envelopeId: "e1", amount: 10, date: "2026-04-05T12:00:00" },
+      ],
+      monthlyBudget: 100,
+      today: new Date(2026, 3, 10),
+      pastMonthCount: 1,
+    };
+    const legacy = computeForecast(params);
+    const withDisabled = computeForecast({
+      ...params,
+      customMonthConfig: { enabled: false, startDay: 1, overrides: {} },
+    });
+    expect(withDisabled).toEqual(legacy);
+  });
+});

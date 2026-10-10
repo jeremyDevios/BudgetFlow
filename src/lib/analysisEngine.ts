@@ -9,6 +9,14 @@
  * five signals, exactly like the iOS `computeBilanScore`.
  */
 
+import {
+  addBudgetPeriods,
+  budgetMonthKeyForDate,
+  budgetPeriod,
+  CustomMonthConfig,
+  DEFAULT_CUSTOM_MONTH_CONFIG,
+} from "@/lib/budgetMonth";
+
 export type AnalysisPeriod = "month" | "last7Days" | "last30Days" | "last3Months" | "last6Months";
 
 export interface AnalysisTransaction {
@@ -119,15 +127,38 @@ function effectiveAmount(tx: AnalysisTransaction): number {
 
 /**
  * Returns the date range (and previous equivalent range) for the given
- * period. `monthDate` is used when `period === "month"`.
+ * period. `monthDate` is used when `period === "month"`. Quand le mois
+ * budgétaire est personnalisé, la période « month » suit les bornes du
+ * moteur `budgetMonth` (identité calendaire par défaut).
  */
 export function dateRangeFor(
   period: AnalysisPeriod,
   today: Date,
   monthDate: Date = today,
+  customMonthConfig: CustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
 ): DateRange {
   switch (period) {
     case "month": {
+      if (customMonthConfig.enabled) {
+        const key = budgetMonthKeyForDate(dayKey(monthDate), customMonthConfig);
+        const current = budgetPeriod(key, customMonthConfig);
+        const previous = budgetPeriod(
+          addBudgetPeriods(key, -1, customMonthConfig),
+          customMonthConfig,
+        );
+        const parse = (s: string): Date =>
+          new Date(
+            Number(s.slice(0, 4)),
+            Number(s.slice(5, 7)) - 1,
+            Number(s.slice(8, 10)),
+          );
+        return {
+          start: parse(current.start),
+          end: endOfDay(parse(current.end.slice(0, 10))),
+          previousStart: parse(previous.start),
+          previousEnd: endOfDay(parse(previous.end.slice(0, 10))),
+        };
+      }
       const start = startOfMonth(monthDate);
       const end = endOfMonth(monthDate);
       const prevDate = new Date(monthDate.getFullYear(), monthDate.getMonth() - 1, 1);
@@ -182,6 +213,8 @@ export interface AnalysisInput {
   /** Mois de référence quand `period === "month"`. */
   monthDate?: Date;
   today?: Date;
+  /** Config du mois budgétaire personnalisé (défaut : mois calendaires). */
+  customMonthConfig?: CustomMonthConfig;
 }
 
 export function computeAnalysis(input: AnalysisInput): AnalysisResult {
@@ -195,9 +228,10 @@ export function computeAnalysis(input: AnalysisInput): AnalysisResult {
     period,
     monthDate,
     today = new Date(),
+    customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
   } = input;
 
-  const range = dateRangeFor(period, today, monthDate ?? today);
+  const range = dateRangeFor(period, today, monthDate ?? today, customMonthConfig);
 
   // ── Filter transactions for the current / previous period ──
   const periodTransactions = transactions.filter(
@@ -475,8 +509,9 @@ export function spendByEnvelope(
   period: AnalysisPeriod,
   today: Date,
   monthDate?: Date,
+  customMonthConfig: CustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
 ): { envelopeId: string; name: string; color: string; value: number }[] {
-  const range = dateRangeFor(period, today, monthDate ?? today);
+  const range = dateRangeFor(period, today, monthDate ?? today, customMonthConfig);
   const envById = new Map(envelopes.map((env) => [env.id, env]));
   const totals = new Map<string, number>();
 

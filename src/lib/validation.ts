@@ -186,6 +186,14 @@ export function getMonthKey(dateStr: string): string {
   return "tx_" + dateStr.slice(0, 7).replace("-", "_");
 }
 
+/**
+ * Construit la clé de mois du compteur à partir d'une clé budgétaire
+ * `"YYYY-MM"` (mois calendaire par défaut — voir `budgetMonthKeyForDate`).
+ */
+export function getMonthCounterKey(monthKey: string): string {
+  return "tx_" + monthKey.replace("-", "_");
+}
+
 // ── Validation des revenus supplémentaires ──
 
 /**
