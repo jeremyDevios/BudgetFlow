@@ -11,6 +11,8 @@ import { ChevronLeft, Workflow, Loader2 } from "lucide-react";
 import { Sankey, Tooltip, ResponsiveContainer, Layer } from 'recharts';
 import { logger } from "@/lib/logger";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
+import { resolveVersionAmount } from "@/lib/budgetVersion";
+import type { BudgetVersionEntry } from "@/types/settings";
 import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
 import { budgetMonthKeyForDate, getCustomMonthConfig } from "@/lib/budgetMonth";
 
@@ -22,6 +24,9 @@ interface UserSettings {
   customMonthEnabled?: boolean;
   customMonthStartDay?: number;
   customMonthStartOverrides?: Record<string, number>;
+  incomeHistory?: BudgetVersionEntry[];
+  fixedCostsHistory?: BudgetVersionEntry[];
+  savingsHistory?: BudgetVersionEntry[];
 }
 
 interface Envelope {
@@ -116,18 +121,44 @@ export default function CashFlowPage() {
     fetchData();
   }, [user]);
 
+  // Clé du mois budgétaire courant (calendaire par défaut), partagée par les
+  // résolutions ci-dessous.
+  const currentBudgetMonth = useMemo(() => {
+    if (!settings) return null;
+    const now = new Date();
+    const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    return budgetMonthKeyForDate(nowKey, getCustomMonthConfig(settings));
+  }, [settings]);
+
   // Resolve the effective income for the current month.
   // IMPORTANT: all hooks must be called before any conditional return
   // (Rules of Hooks). This useMemo safely handles settings === null.
   const resolvedIncome = useMemo(() => {
-    if (!settings) return 0;
-    if (settings.isFixedIncome !== false) return settings.monthlyIncome;
-    const now = new Date();
-    const nowKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-    // Clé du mois budgétaire courant (calendaire par défaut).
-    const currentMonth = budgetMonthKeyForDate(nowKey, getCustomMonthConfig(settings));
-    return resolveMonthlyIncome(currentMonth, monthlyIncomes, settings.monthlyIncome);
-  }, [settings, monthlyIncomes]);
+    if (!settings || !currentBudgetMonth) return 0;
+    if (settings.isFixedIncome !== false) {
+      return resolveVersionAmount(settings.incomeHistory, settings.monthlyIncome, currentBudgetMonth);
+    }
+    return resolveMonthlyIncome(currentBudgetMonth, monthlyIncomes, settings.monthlyIncome);
+  }, [settings, monthlyIncomes, currentBudgetMonth]);
+
+  // Charges fixes et épargne du mois courant, résolues depuis les historiques
+  // datés (parité iOS) : un montant modifié « à partir d'octobre » vaut pour
+  // octobre et après, pas pour les mois affichés auparavant.
+  const resolvedBudgetValues = useMemo(() => {
+    if (!settings || !currentBudgetMonth) return { fixedCosts: 0, monthlySavings: 0 };
+    return {
+      fixedCosts: resolveVersionAmount(
+        settings.fixedCostsHistory,
+        settings.fixedCosts,
+        currentBudgetMonth,
+      ),
+      monthlySavings: resolveVersionAmount(
+        settings.savingsHistory,
+        settings.monthlySavings,
+        currentBudgetMonth,
+      ),
+    };
+  }, [settings, currentBudgetMonth]);
 
   // --- Sankey Data Construction ---
   // Build nodes and links together to avoid orphan nodes (nodes with zero links).
@@ -148,17 +179,17 @@ export default function CashFlowPage() {
     nodes.push({ name: "Revenu", color: "#10b981" }); // Emerald 500
 
     // Épargne — only if the user has savings
-    if (settings.monthlySavings > 0) {
+    if (resolvedBudgetValues.monthlySavings > 0) {
       const idx = nextIndex++;
       nodes.push({ name: "Épargne", color: "#3b82f6" }); // Blue 500
-      links.push({ source: revenuIndex, target: idx, value: settings.monthlySavings });
+      links.push({ source: revenuIndex, target: idx, value: resolvedBudgetValues.monthlySavings });
     }
 
     // Frais Fixes — only if the user has fixed costs
-    if (settings.fixedCosts > 0) {
+    if (resolvedBudgetValues.fixedCosts > 0) {
       const idx = nextIndex++;
       nodes.push({ name: "Frais Fixes", color: "#ef4444" }); // Red 500
-      links.push({ source: revenuIndex, target: idx, value: settings.fixedCosts });
+      links.push({ source: revenuIndex, target: idx, value: resolvedBudgetValues.fixedCosts });
     }
 
     // Envelopes — only those with a positive budget
@@ -172,8 +203,8 @@ export default function CashFlowPage() {
 
     // Calculate Unallocated
     totalAllocated =
-      (settings.monthlySavings || 0) +
-      (settings.fixedCosts || 0) +
+      (resolvedBudgetValues.monthlySavings || 0) +
+      (resolvedBudgetValues.fixedCosts || 0) +
       envelopes.reduce((acc, curr) => acc + curr.budget, 0);
     const unallocated = resolvedIncome - totalAllocated;
 

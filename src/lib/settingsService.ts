@@ -13,6 +13,16 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
 import { sanitizeCustomMonthConfig } from "@/lib/budgetMonth";
+import {
+  applyBudgetOperationToTimeline,
+  dayFromTimestamp,
+  flatBudgetStateFrom,
+  settingsPatchFromMutation,
+  timelineFor,
+  todayDayString,
+  type BudgetCategory,
+  type BudgetTimelineOperation,
+} from "@/lib/budgetVersion";
 import { resolveCurrencyCode } from "@/types/currency";
 import {
   BentoPreset,
@@ -366,24 +376,10 @@ function settingsDocRef(uid: string) {
 }
 
 /**
- * Loads the user's settings from Firestore and merges defaults for any
- * missing fields.
- *
- * Retrocompatible: documents that pre-date the detailed-mode feature will
- * transparently default to `fixedCostsDetailedEnabled = false`, empty arrays,
- * etc., preserving existing aggregate-only behaviour.
- *
- * @throws Re-throws Firestore errors so callers can surface them to the user.
+ * Projects a sanitized stored document onto the public `UserSettings` shape,
+ * applying the read-time defaults for every optional field.
  */
-export async function loadSettings(uid: string): Promise<UserSettings> {
-  const snap = await getDoc(settingsDocRef(uid));
-
-  if (!snap.exists()) {
-    logger.info(`settingsService.loadSettings: document absent, returning defaults for uid ${uid}`);
-    return { ...DEFAULT_USER_SETTINGS };
-  }
-
-  const stored = sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>);
+function userSettingsFromStored(stored: StoredSettingsDocument): UserSettings {
   return {
     isFixedIncome: stored.isFixedIncome,
     monthlyIncome: stored.monthlyIncome,
@@ -408,6 +404,29 @@ export async function loadSettings(uid: string): Promise<UserSettings> {
       ? { customMonthStartOverrides: stored.customMonthStartOverrides }
       : {}),
   };
+}
+
+/**
+ * Loads the user's settings from Firestore and merges defaults for any
+ * missing fields.
+ *
+ * Retrocompatible: documents that pre-date the detailed-mode feature will
+ * transparently default to `fixedCostsDetailedEnabled = false`, empty arrays,
+ * etc., preserving existing aggregate-only behaviour.
+ *
+ * @throws Re-throws Firestore errors so callers can surface them to the user.
+ */
+export async function loadSettings(uid: string): Promise<UserSettings> {
+  const snap = await getDoc(settingsDocRef(uid));
+
+  if (!snap.exists()) {
+    logger.info(`settingsService.loadSettings: document absent, returning defaults for uid ${uid}`);
+    return { ...DEFAULT_USER_SETTINGS };
+  }
+
+  return userSettingsFromStored(
+    sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>),
+  );
 }
 
 /**
@@ -439,4 +458,57 @@ export async function saveSettings(
   };
 
   await setDoc(ref, nextDocument);
+}
+
+/**
+ * Applies a dated budget operation (change of salary / fixed costs / savings)
+ * from the **freshest stored settings** and persists the outcome.
+ *
+ * Reading the document first matters: the histories are the resolution source
+ * for every dated view, so the operation must be spliced into the timeline that
+ * is actually in Firestore — not into a possibly stale React state copy
+ * (another device, or iOS, may have written since the page loaded).
+ *
+ * @returns The persisted patch, or `null` when the operation is a no-op
+ *          (nothing written — mirrors the iOS `mutation.isNoOp` contract).
+ *
+ * @throws Re-throws Firestore errors so callers can surface them to the user.
+ */
+export async function saveBudgetOperation(
+  uid: string,
+  category: BudgetCategory,
+  operation: BudgetTimelineOperation,
+  effectiveDay: string = todayDayString(),
+  today: string = todayDayString(),
+): Promise<Partial<UserSettings> | null> {
+  const ref = settingsDocRef(uid);
+  const snap = await getDoc(ref);
+  const stored = snap.exists()
+    ? sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>)
+    : { ...DEFAULT_USER_SETTINGS, isOnboarded: true };
+
+  const settings = userSettingsFromStored(stored);
+  const mutation = applyBudgetOperationToTimeline(
+    operation,
+    category,
+    effectiveDay,
+    timelineFor(category, settings),
+    // `createdAt` anchors the initial materialised version, like iOS
+    // (`BudgetVersionMutationService.flatState`). Absent → the sentinel day.
+    flatBudgetStateFrom(settings, dayFromTimestamp(stored.createdAt)),
+    today,
+  );
+  if (mutation.isNoOp) {
+    logger.info(
+      `settingsService.saveBudgetOperation: no-op for ${category} (uid ${uid})`,
+    );
+    return null;
+  }
+
+  const patch = settingsPatchFromMutation(mutation, category);
+  await saveSettings(uid, patch);
+  logger.info(
+    `settingsService.saveBudgetOperation: ${category} updated from ${effectiveDay} for uid ${uid}`,
+  );
+  return patch;
 }

@@ -11,6 +11,7 @@ const useAnonymousModeMock = jest.fn();
 const setAnonymousModeMock = jest.fn();
 const loadSettingsMock = jest.fn();
 const saveSettingsMock = jest.fn();
+const saveBudgetOperationMock = jest.fn();
 const getDocMock = jest.fn();
 const getDocsMock = jest.fn();
 
@@ -45,6 +46,9 @@ jest.mock("@/lib/settingsService", () => {
     ...actual,
     loadSettings: (...args: unknown[]) => loadSettingsMock(...args),
     saveSettings: (...args: unknown[]) => saveSettingsMock(...args),
+    // Les écritures versionnées passent par ce helper (il lit puis réécrit le
+    // document) : le mocker évite d'appeler le vrai `saveSettings` en interne.
+    saveBudgetOperation: (...args: unknown[]) => saveBudgetOperationMock(...args),
   };
 });
 
@@ -260,6 +264,8 @@ describe("SettingsPage", () => {
     setAnonymousModeMock.mockReset();
     loadSettingsMock.mockReset();
     saveSettingsMock.mockReset();
+    saveBudgetOperationMock.mockReset();
+    saveBudgetOperationMock.mockResolvedValue(null);
     getDocMock.mockReset();
     getDocsMock.mockReset();
     fetchLinkedTransactionsMock.mockReset();
@@ -316,21 +322,30 @@ describe("SettingsPage", () => {
       screen.getByRole("button", { name: /Détails des frais fixes/i }),
     );
 
-    await waitFor(() => expect(saveSettingsMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(saveBudgetOperationMock).toHaveBeenCalledTimes(1));
 
     expect(screen.getByTestId("budget-detail-fixedCosts")).toHaveAttribute(
       "data-enabled",
       "true",
     );
-    expect(saveSettingsMock).toHaveBeenNthCalledWith(1, "user-1", {
-      fixedCostsDetailedEnabled: true,
-      fixedCostsItems: [
-        expect.objectContaining({
-          name: "",
-          amount: 0,
-        }),
-      ],
-    });
+    // Le contenu détaillé est versionné à partir d'aujourd'hui (parité iOS) :
+    // la version « avant » est matérialisée par le moteur, pas par la page.
+    expect(saveBudgetOperationMock).toHaveBeenNthCalledWith(
+      1,
+      "user-1",
+      "fixedCosts",
+      {
+        kind: "replaceContent",
+        total: 0,
+        detailedEnabled: true,
+        items: [
+          expect.objectContaining({
+            name: "",
+            amount: 0,
+          }),
+        ],
+      },
+    );
   });
 
   it("renders the confidentiality section with persisted anonymous mode state", async () => {
@@ -645,6 +660,8 @@ describe("SettingsPage — mois budgétaire personnalisé", () => {
     setAnonymousModeMock.mockReset();
     loadSettingsMock.mockReset();
     saveSettingsMock.mockReset();
+    saveBudgetOperationMock.mockReset();
+    saveBudgetOperationMock.mockResolvedValue(null);
     getDocMock.mockReset();
     getDocsMock.mockReset();
 

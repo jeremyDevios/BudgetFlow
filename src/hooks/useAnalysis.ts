@@ -14,6 +14,7 @@ import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
 import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
+import { resolveVersionAmount } from "@/lib/budgetVersion";
 import {
   budgetMonthKeyForDate,
   getCustomMonthConfig,
@@ -106,6 +107,21 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
             } catch (e) {
               logger.warn("Monthly incomes read failed (useAnalysis)");
             }
+          } else {
+            // Revenu fixe + charges + épargne : valeurs du mois de référence,
+            // résolues depuis les historiques datés (parité iOS). Sans cela, un
+            // montant modifié « à partir d'octobre » réécrivait les mois passés.
+            const referenceKey = budgetMonthKeyForDate(
+              formatDate(effectiveMonthDate),
+              fetchedCustomMonthConfig,
+            );
+            monthlyIncome = resolveVersionAmount(data.incomeHistory, monthlyIncome, referenceKey);
+            fixedCosts = resolveVersionAmount(data.fixedCostsHistory, fixedCosts, referenceKey);
+            monthlySavings = resolveVersionAmount(
+              data.savingsHistory,
+              monthlySavings,
+              referenceKey,
+            );
           }
         }
       } catch (e) {

@@ -17,7 +17,7 @@ describe("CalendarHeatmap — mois budgétaire personnalisé", () => {
     overrides: { "2026-09": 5 },
   };
 
-  it("la grille démarre le 5 septembre et finit le 2 octobre (inclus)", () => {
+  it("la grille démarre le 5 septembre et finit le 1er octobre (veille du jour de paie suivant)", () => {
     const { container } = render(
       <CalendarHeatmap
         month={new Date(2026, 8, 25)} // ancre dans la période 2026-09
@@ -30,12 +30,14 @@ describe("CalendarHeatmap — mois budgétaire personnalisé", () => {
     );
 
     const cells = extractDayCells(container);
-    // 5→30 sept. (26 jours) + 1er→2 oct. (2 jours) = 28 cellules.
-    expect(cells).toHaveLength(28);
+    // 5→30 sept. (26 jours) + 1er oct. (1 jour) = 27 cellules.
+    expect(cells).toHaveLength(27);
     expect(cells[0]).toBe("2026-09-05");
-    expect(cells[cells.length - 1]).toBe("2026-10-02");
-    // Les jours calendaires avant le jour de paie n'apparaissent pas.
+    expect(cells[cells.length - 1]).toBe("2026-10-01");
+    // Les jours calendaires avant le jour de paie n'apparaissent pas…
     expect(cells).not.toContain("2026-09-04");
+    // …et le début de la période suivante est exclu (il ouvre la grille d'octobre).
+    expect(cells).not.toContain("2026-10-02");
   });
 
   it("octobre 2026 : la grille démarre le 2 octobre (jour global)", () => {
@@ -51,10 +53,30 @@ describe("CalendarHeatmap — mois budgétaire personnalisé", () => {
     );
 
     const cells = extractDayCells(container);
-    // 2 oct. → 2 nov. inclus = 32 jours (octobre a 31 jours).
-    expect(cells).toHaveLength(32);
+    // 2 oct. → 1er nov. = 31 jours (octobre a 31 jours).
+    expect(cells).toHaveLength(31);
     expect(cells[0]).toBe("2026-10-02");
-    expect(cells[cells.length - 1]).toBe("2026-11-02");
+    expect(cells[cells.length - 1]).toBe("2026-11-01");
+  });
+
+  it("option désactivée avec jour de paie résiduel : identité calendaire", () => {
+    // Régression : l'option décochée conservait le jour 5 stocké et découpait
+    // quand même les périodes du 5 au 4.
+    const { container } = render(
+      <CalendarHeatmap
+        month={new Date(2026, 8, 25)}
+        dailySpend={new Map()}
+        loginDates={new Set()}
+        monthlyBudget={100}
+        embedded
+        customMonthConfig={{ enabled: false, startDay: 5, overrides: {} }}
+      />
+    );
+
+    const cells = extractDayCells(container);
+    expect(cells).toHaveLength(30); // septembre complet
+    expect(cells[0]).toBe("2026-09-01");
+    expect(cells[cells.length - 1]).toBe("2026-09-30");
   });
 
   it("identité : sans option, la grille reste le mois calendaire complet", () => {

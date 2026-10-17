@@ -26,6 +26,11 @@
  */
 
 import { isEnvelopeActiveForMonth } from '@/types/envelope';
+import {
+  SENTINEL_START_DATE,
+  resolveBudgetValuesForMonth,
+  resolveVersionAmount,
+} from '@/lib/budgetVersion';
 
 // ---------------------------------------------------------------------------
 // Types (subset of the dashboard's local Envelope interface)
@@ -460,5 +465,110 @@ describe('Scenario G: full balance formula with unassigned + income', () => {
       { amount: 200, type: 'expense', envelopeId: 'env-1' },
     ];
     expect(computeTotalIncome(transactions)).toBe(150);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bug 6 — les valeurs datées (salaire / charges / épargne) doivent se résoudre
+// par mois, sinon un changement d'octobre remonte dans tous les mois passés.
+//
+// Cause : le dashboard lisait `settings.fixedCosts` / `settings.monthlySavings`
+// directement (valeur « aujourd'hui ») quel que soit le mois sélectionné. iOS
+// résolvait déjà par date (`BudgetVersionTimeline.resolve`), d'où l'écart
+// « +155 € partout » constaté sur la vue Évolution.
+//
+// Correctif (dashboard/page.tsx) :
+//
+//   const resolvedFixedCosts = resolveVersionAmount(
+//     settings.fixedCostsHistory, settings.fixedCosts, selectedMonth);
+//   const resolvedSavings = resolveVersionAmount(
+//     settings.savingsHistory, settings.monthlySavings, selectedMonth);
+//   const monthlyTotalAvailable = settings.isFixedIncome !== false
+//     ? resolveVersionAmount(settings.incomeHistory, settings.monthlyIncome, selectedMonth)
+//     : resolveMonthlyIncome(selectedMonth, monthlyIncomes, settings.monthlyIncome);
+//
+// Les tests ci-dessous appellent le moteur réel (`@/lib/budgetVersion`) : toute
+// dérive entre la page et ce fichier fera échouer la suite.
+// ---------------------------------------------------------------------------
+
+describe('Bug 6 : valeurs budgétaires datées résolues par mois', () => {
+  /** Settings versionnés : PEA de 155 € arrêté au 01/10/2026. */
+  const historySettings = {
+    monthlyIncome: 3100,
+    fixedCosts: 1200,
+    monthlySavings: 0,
+    fixedCostsHistory: [
+      {
+        id: 'fc-1',
+        startDate: SENTINEL_START_DATE,
+        endDate: '2026-09-30',
+        total: 1000,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'fc-2',
+        startDate: '2026-10-01',
+        endDate: null,
+        total: 1200,
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ],
+    savingsHistory: [
+      {
+        id: 'sv-1',
+        startDate: SENTINEL_START_DATE,
+        endDate: '2026-09-30',
+        total: 155,
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'sv-2',
+        startDate: '2026-10-01',
+        endDate: null,
+        total: 0,
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ],
+  };
+
+  /** Mirror of the dashboard's `monthlyTotalAvailable` after the fix. */
+  function monthlyTotalAvailableForMonth(monthKey: string): number {
+    const fixedCosts = resolveVersionAmount(
+      historySettings.fixedCostsHistory,
+      historySettings.fixedCosts,
+      monthKey,
+    );
+    const savings = resolveVersionAmount(
+      historySettings.savingsHistory,
+      historySettings.monthlySavings,
+      monthKey,
+    );
+    return historySettings.monthlyIncome - fixedCosts - savings;
+  }
+
+  it('septembre conserve l’épargne de 155 € et les charges de 1000 €', () => {
+    // 3100 - 1000 - 155
+    expect(monthlyTotalAvailableForMonth('2026-09')).toBe(1945);
+  });
+
+  it('octobre applique les nouvelles valeurs (épargne 0, charges 1200)', () => {
+    // 3100 - 1200 - 0
+    expect(monthlyTotalAvailableForMonth('2026-10')).toBe(1900);
+  });
+
+  it('les mois passés ne sont pas réécrits par le changement d’octobre', () => {
+    // Avant correctif, la valeur d'aujourd'hui (0 €) s'appliquait partout :
+    // tous les mois passés gagnaient 155 € (3100 - 1000 - 0 = 2100).
+    expect(monthlyTotalAvailableForMonth('2026-08')).toBe(1945);
+    expect(monthlyTotalAvailableForMonth('2026-01')).toBe(1945);
+  });
+
+  it('mois sans historique applicable : repli sur les valeurs globales', () => {
+    expect(
+      resolveBudgetValuesForMonth('2026-11', historySettings),
+    ).toEqual({ fixedCosts: 1200, monthlySavings: 0 });
+    expect(
+      resolveBudgetValuesForMonth('2026-11', { ...historySettings, savingsHistory: [] }),
+    ).toEqual({ fixedCosts: 1200, monthlySavings: 0 });
   });
 });

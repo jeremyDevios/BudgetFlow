@@ -15,6 +15,8 @@ import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { isEnvelopeActiveForMonth } from "@/types/envelope";
 import { motion, AnimatePresence } from "framer-motion";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
+import { resolveVersionAmountOnDay } from "@/lib/budgetVersion";
+import type { BudgetVersionEntry } from "@/types/settings";
 import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
 import { formatMonthRangeLabel } from "@/lib/dateUtils";
 import {
@@ -34,6 +36,9 @@ interface UserSettings {
   customMonthEnabled?: boolean;
   customMonthStartDay?: number;
   customMonthStartOverrides?: Record<string, number>;
+  incomeHistory?: BudgetVersionEntry[];
+  fixedCostsHistory?: BudgetVersionEntry[];
+  savingsHistory?: BudgetVersionEntry[];
 }
 
 interface MonthlyData {
@@ -69,6 +74,13 @@ export default function EvolutionPage() {
         let isFixedIncome = true;
         let monthlyIncomes: Record<string, number> = {};
         let customMonthConfig = getCustomMonthConfig({});
+        // Histories versionnées (écrites par iOS/web) : chaque mois doit
+        // résoudre ses propres valeurs, sinon un changement daté d'octobre
+        // s'applique rétroactivement aux mois précédents.
+        let budgetHistories: Pick<
+          UserSettings,
+          "incomeHistory" | "fixedCostsHistory" | "savingsHistory"
+        > = {};
 
         const settingsRef = doc(db, "users", user.uid, "settings", "general");
         const settingsSnap = await getDoc(settingsRef);
@@ -79,6 +91,7 @@ export default function EvolutionPage() {
             savingsObjective = s.monthlySavings || 0;
             isFixedIncome = s.isFixedIncome !== false;
             customMonthConfig = getCustomMonthConfig(s);
+            budgetHistories = s;
         }
 
         // 1b. If variable income, fetch per-month overrides.
@@ -169,10 +182,27 @@ export default function EvolutionPage() {
                 }
             });
 
-            // Resolve the effective income for this specific month.
+            // Resolve the effective values for this specific month from the
+            // dated histories (iOS parity). La résolution se fait sur le
+            // dernier jour de la PÉRIODE (mois budgétaire personnalisé : la
+            // période « 2026-09 » va du 05/09 au 04/10, un changement daté du
+            // 01/10 lui appartient donc), pas sur le dernier jour calendaire.
+            // Un mois qu'aucune version ne couvre prend la version connue la
+            // plus proche, jamais les flats (qui reflètent la valeur du jour).
+            const periodEndDay = end.slice(0, 10);
             const resolvedIncome = isFixedIncome
-              ? income
+              ? resolveVersionAmountOnDay(budgetHistories.incomeHistory, income, periodEndDay)
               : resolveMonthlyIncome(monthKey, monthlyIncomes, income);
+            const effectiveFixedCosts = resolveVersionAmountOnDay(
+              budgetHistories.fixedCostsHistory,
+              fixedCosts,
+              periodEndDay,
+            );
+            const effectiveSavings = resolveVersionAmountOnDay(
+              budgetHistories.savingsHistory,
+              savingsObjective,
+              periodEndDay,
+            );
 
             // Logic: Remaining = (Income - FixedCosts - Savings + TemporaryBudget) - Spent + Extra Income
             // Correspond au "Reste disponible" du Dashboard (monthlyTotalAvailable - totalSpent + totalIncome)
@@ -180,7 +210,7 @@ export default function EvolutionPage() {
               .filter((env) => isEnvelopeActiveForMonth(env, monthKey))
               .filter((env) => env.isTemporary)
               .reduce((sum, env) => sum + env.budget, 0);
-            const remaining = (resolvedIncome - fixedCosts - savingsObjective + temporaryBudget) - totalSpent + totalIncome;
+            const remaining = (resolvedIncome - effectiveFixedCosts - effectiveSavings + temporaryBudget) - totalSpent + totalIncome;
 
             // Ancre de libellé : premier jour de la période (compatible avec
             // l'affichage date-fns existant).
@@ -194,8 +224,8 @@ export default function EvolutionPage() {
                 date: anchor,
                 totalSpent,
                 income: resolvedIncome,
-                fixedCosts,
-                savingsObjective,
+                fixedCosts: effectiveFixedCosts,
+                savingsObjective: effectiveSavings,
                 remaining,
                 transactionCount,
                 rangeLabel: formatMonthRangeLabel(start, end),

@@ -1,4 +1,4 @@
-import { loadSettings, saveSettings } from "@/lib/settingsService";
+import { loadSettings, saveBudgetOperation, saveSettings } from "@/lib/settingsService";
 import { DEFAULT_USER_SETTINGS } from "@/types/settings";
 
 const getDocMock = jest.fn();
@@ -398,5 +398,143 @@ describe("settingsService custom budget month persistence", () => {
         fixedCosts: 1200,
       }),
     );
+  });
+});
+
+describe("settingsService.saveBudgetOperation — écriture versionnée", () => {
+  beforeEach(() => {
+    getDocMock.mockReset();
+    setDocMock.mockReset();
+    setDocMock.mockResolvedValue(undefined);
+  });
+
+  /** Stored document of a user whose savings used to include a 155 € PEA. */
+  const storedSavings = (overrides: Record<string, unknown> = {}) => ({
+    exists: () => true,
+    data: () => ({
+      monthlyIncome: 3060,
+      fixedCosts: 1200,
+      monthlySavings: 155,
+      isOnboarded: true,
+      createdAt: "2026-01-10T10:00:00.000Z",
+      ...overrides,
+    }),
+  });
+
+  it("arrêter une épargne fige l'ancienne valeur pour les mois passés", async () => {
+    getDocMock.mockResolvedValue(storedSavings());
+
+    const patch = await saveBudgetOperation("user-1", "savings", {
+      kind: "setAmount",
+      value: 0,
+    }, "2026-10-01", "2026-10-11");
+
+    expect(patch).not.toBeNull();
+    const written = setDocMock.mock.calls[0][1];
+    expect(written.monthlySavings).toBe(0);
+    expect(written.savingsHistory).toEqual([
+      // La valeur « avant » démarre à la création du compte (createdAt),
+      // comme sur iOS, et s'arrête la veille du changement.
+      expect.objectContaining({ startDate: "2026-01-10", endDate: "2026-09-30", total: 155 }),
+      expect.objectContaining({ startDate: "2026-10-01", endDate: null, total: 0 }),
+    ]);
+  });
+
+  it("les autres champs du document sont préservés", async () => {
+    getDocMock.mockResolvedValue(storedSavings({ customMonthStartDay: 25 }));
+
+    await saveBudgetOperation(
+      "user-1", "savings", { kind: "setAmount", value: 0 }, "2026-10-01", "2026-10-11",
+    );
+
+    expect(setDocMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        monthlyIncome: 3060,
+        fixedCosts: 1200,
+        isOnboarded: true,
+        createdAt: "2026-01-10T10:00:00.000Z",
+        customMonthStartDay: 25,
+      }),
+    );
+  });
+
+  it("aucune écriture quand la valeur est déjà celle qui s'applique", async () => {
+    getDocMock.mockResolvedValue(storedSavings());
+
+    await expect(
+      saveBudgetOperation(
+        "user-1", "savings", { kind: "setAmount", value: 155 }, "2026-10-01", "2026-10-11",
+      ),
+    ).resolves.toBeNull();
+
+    expect(setDocMock).not.toHaveBeenCalled();
+  });
+
+  it("splice le changement dans l'historique déjà présent", async () => {
+    getDocMock.mockResolvedValue(
+      storedSavings({
+        monthlySavings: 0,
+        savingsHistory: [
+          {
+            id: "v1",
+            startDate: "2026-01-10",
+            endDate: "2026-09-30",
+            total: 155,
+            updatedAt: "2026-01-10T10:00:00.000Z",
+          },
+          {
+            id: "v2",
+            startDate: "2026-10-01",
+            endDate: null,
+            total: 0,
+            updatedAt: "2026-10-01T10:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    const patch = await saveBudgetOperation("user-1", "savings", {
+      kind: "setAmount",
+      value: 200,
+    }, "2026-11-15", "2026-10-11");
+
+    expect(setDocMock.mock.calls[0][1].savingsHistory).toEqual([
+      expect.objectContaining({ startDate: "2026-01-10", endDate: "2026-09-30", total: 155 }),
+      expect.objectContaining({ startDate: "2026-10-01", endDate: "2026-11-14", total: 0 }),
+      expect.objectContaining({ startDate: "2026-11-15", endDate: null, total: 200 }),
+    ]);
+    // Changement futur : le flat reste la valeur active aujourd'hui (0),
+    // contrat iOS — un `updatedAt` de version ne réécrit pas le présent.
+    expect(patch?.monthlySavings).toBe(0);
+  });
+
+  it("jour d'effet invalide → aucune écriture", async () => {
+    getDocMock.mockResolvedValue(storedSavings());
+
+    await expect(
+      saveBudgetOperation(
+        "user-1", "savings", { kind: "setAmount", value: 0 }, "2026-02-30", "2026-10-11",
+      ),
+    ).resolves.toBeNull();
+
+    expect(setDocMock).not.toHaveBeenCalled();
+  });
+
+  it("document absent : les valeurs par défaut servent de référence", async () => {
+    getDocMock.mockResolvedValue({ exists: () => false });
+
+    await saveBudgetOperation(
+      "user-1", "income", { kind: "setAmount", value: 3100 }, "2026-10-11", "2026-10-11",
+    );
+
+    const written = setDocMock.mock.calls[0][1];
+    expect(written.monthlyIncome).toBe(3100);
+    expect(written.isOnboarded).toBe(true);
+    // Aucun `createdAt` : l'ancre est le sentinelle, comme iOS sans date connue.
+    expect(written.incomeHistory).toEqual([
+      expect.objectContaining({ startDate: "0001-01-01", endDate: "2026-10-10", amount: 0 }),
+      expect.objectContaining({ startDate: "2026-10-11", endDate: null, amount: 3100 }),
+    ]);
   });
 });

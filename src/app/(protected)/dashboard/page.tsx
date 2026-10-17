@@ -18,6 +18,8 @@ import {
   isCustomMonthActive,
 } from "@/lib/budgetMonth";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
+import { resolveVersionAmount } from "@/lib/budgetVersion";
+import type { BudgetVersionEntry } from "@/types/settings";
 import { getMonthlyIncomes, saveMonthlyIncome } from "@/lib/monthlyIncomeService";
 import {
   LogOut, 
@@ -109,6 +111,10 @@ interface UserSettings {
   customMonthEnabled?: boolean;
   customMonthStartDay?: number;
   customMonthStartOverrides?: Record<string, number>;
+  /** Historiques versionnés (parité iOS) : résolus par mois sélectionné. */
+  incomeHistory?: BudgetVersionEntry[];
+  fixedCostsHistory?: BudgetVersionEntry[];
+  savingsHistory?: BudgetVersionEntry[];
 }
 
 interface Envelope {
@@ -578,11 +584,24 @@ export default function DashboardPage() {
   //   1. Explicit entry for selectedMonth
   //   2. Most recent past month with an entry
   //   3. Global monthlyIncome fallback
+  // When it is true, the dated income history is used instead (iOS parity):
+  // an amount changed "from a given day" must not rewrite past months.
   const resolvedIncome = useMemo(() => {
     if (!settings) return 0;
-    if (settings.isFixedIncome !== false) return settings.monthlyIncome;
+    if (settings.isFixedIncome !== false) {
+      return resolveVersionAmount(settings.incomeHistory, settings.monthlyIncome, selectedMonth);
+    }
     return resolveMonthlyIncome(selectedMonth, monthlyIncomes, settings.monthlyIncome);
   }, [settings, selectedMonth, monthlyIncomes]);
+
+  // Charges fixes et épargne résolues sur le mois sélectionné : même règle
+  // que le revenu ci-dessus (l'historique daté prime, sinon valeur globale).
+  const resolvedFixedCosts = settings
+    ? resolveVersionAmount(settings.fixedCostsHistory, settings.fixedCosts, selectedMonth)
+    : 0;
+  const resolvedSavings = settings
+    ? resolveVersionAmount(settings.savingsHistory, settings.monthlySavings, selectedMonth)
+    : 0;
 
   // Dépenses sans enveloppe assignée (transactions orphelines ou avec envelopeId invalide).
   // Elles ne sont pas comptabilisées dans totalSpentEnvelopes (qui ne somme que les
@@ -600,7 +619,7 @@ export default function DashboardPage() {
   // Logic: (Income - Fixed - Savings) + active-temporary-envelope budgets = Total Available for Month
   // Current Balance = Total Available - Total Spent (envelopes + unassigned) + Extra Income
   const monthlyTotalAvailable = settings
-    ? resolvedIncome - settings.fixedCosts - settings.monthlySavings + temporaryEnvelopesBudget
+    ? resolvedIncome - resolvedFixedCosts - resolvedSavings + temporaryEnvelopesBudget
     : 0;
   const currentMonthBalance = monthlyTotalAvailable - totalSpentEnvelopes - unassignedSpent + totalIncomeForMonth;
   

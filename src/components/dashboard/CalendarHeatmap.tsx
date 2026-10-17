@@ -4,9 +4,8 @@ import type { CSSProperties } from "react";
 
 import { computeSpendSeverity, computeSpendSeverityFromEnvelopes, type EnvelopeSpendEntry, type SpendSeverity } from "@/lib/calendarSeverity";
 import {
-  addBudgetPeriods,
   budgetMonthKeyForDate,
-  budgetPeriod,
+  displayDayKeys,
   CustomMonthConfig,
   DEFAULT_CUSTOM_MONTH_CONFIG,
 } from "@/lib/budgetMonth";
@@ -29,7 +28,7 @@ interface CalendarHeatmapProps {
   className?: string;
   embedded?: boolean;
   /** Config du mois budgétaire personnalisé : quand l'option est active, la
-   *  grille couvre la période budgétaire (ex. du 5 sept. au 2 oct.) au lieu
+   *  grille couvre la période budgétaire (ex. du 5 sept. au 1er oct.) au lieu
    *  du mois calendaire (identité par défaut). */
   customMonthConfig?: CustomMonthConfig;
 }
@@ -218,38 +217,23 @@ function computeFullMonthProgress(
 
 /**
  * Cellules de la grille : jours de la période budgétaire quand l'option est
- * active. La grille démarre au jour de paie du mois affiché et se termine
- * le jour de paie du mois suivant INCLUS (ex. 5 sept. → 2 oct. : 28 cellules,
- * le 2 oct. apparaît aussi comme premier jour de la grille d'octobre — choix
- * produit assumé, le rattachement comptable reste exclusif). Option
- * désactivée → jours du mois calendaire (identité stricte).
+ * active. La grille démarre au jour de paie du mois affiché et se termine la
+ * VEILLE du jour de paie du mois suivant (ex. 5 sept. → 1er oct. : 27 cellules
+ * — choix produit assumé, le jour de paie suivant appartient à la période
+ * suivante). Option désactivée → jours du mois calendaire (identité stricte).
  */
 function buildDayCells(month: Date, config: CustomMonthConfig): DayCell[] {
-  const year = month.getFullYear();
-  const monthIndex = month.getMonth();
-
-  if (config.enabled) {
-    const dayKey = getLocalDateString(month);
-    const periodKey = budgetMonthKeyForDate(dayKey, config);
-    const { start } = budgetPeriod(periodKey, config);
-    const nextStart = budgetPeriod(
-      addBudgetPeriods(periodKey, 1, config),
-      config,
-    ).start;
-    const cells: DayCell[] = [];
-    let cursor = start;
-    let guard = 0;
-    while (cursor <= nextStart && guard < 33) {
-      const y = Number(cursor.slice(0, 4));
-      const m = Number(cursor.slice(5, 7));
-      const d = Number(cursor.slice(8, 10));
-      cells.push({ dateStr: cursor, day: d });
-      cursor = getLocalDateString(new Date(y, m - 1, d + 1));
-      guard++;
-    }
-    if (cells.length > 0) return cells;
+  const periodKey = budgetMonthKeyForDate(getLocalDateString(month), config);
+  const periodKeys = displayDayKeys(periodKey, config);
+  if (periodKeys.length > 0) {
+    return periodKeys.map((dateStr) => ({
+      dateStr,
+      day: Number(dateStr.slice(8, 10)),
+    }));
   }
 
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const cells: DayCell[] = [];
   for (let day = 1; day <= daysInMonth; day++) {

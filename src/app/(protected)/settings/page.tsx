@@ -22,10 +22,12 @@ import {
 import {
   loadSettings,
   saveSettings,
+  saveBudgetOperation,
   resolveDetailedEnabled,
   computeDetailedTotal,
   createEmptyBudgetSubItem,
 } from "@/lib/settingsService";
+import type { BudgetCategory, BudgetTimelineOperation } from "@/lib/budgetVersion";
 import {
   fetchLinkedTransactions,
   migrateTransactionsToExisting,
@@ -117,6 +119,18 @@ function formatMonth(ym: string): string {
   const [y, m] = ym.split("-");
   const d = new Date(parseInt(y), parseInt(m) - 1, 1);
   return d.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
+}
+
+/** Maps a detailed-mode flag to the budget axis it belongs to. */
+function detailedCategoryFor(
+  field: "fixedCostsDetailedEnabled" | "savingsDetailedEnabled",
+): BudgetCategory {
+  return field === "fixedCostsDetailedEnabled" ? "fixedCosts" : "savings";
+}
+
+/** Maps a sub-items list field to the budget axis it belongs to. */
+function itemsCategoryFor(field: "fixedCostsItems" | "savingsItems"): BudgetCategory {
+  return field === "fixedCostsItems" ? "fixedCosts" : "savings";
 }
 
 // ---------------------------------------------------------------------------
@@ -507,15 +521,47 @@ export default function SettingsPage() {
   // Settings handlers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Applies a dated budget edit through the version engine (iOS parity).
+   *
+   * The web has no "à partir de" picker, so an edit takes effect **today** —
+   * the iOS default. The engine materialises the previous value as the
+   * "before" version, so past months keep it instead of picking up the new
+   * amount retroactively (the `+155 €` drift on every month before October).
+   */
+  const applyDatedBudgetEdit = async (
+    category: BudgetCategory,
+    operation: BudgetTimelineOperation,
+  ) => {
+    if (!user) return;
+    try {
+      const patch = await saveBudgetOperation(user.uid, category, operation);
+      if (patch) {
+        logger.info(`settings.applyDatedBudgetEdit: ${category} à partir d'aujourd'hui`);
+      }
+    } catch (error) {
+      logger.sanitizedError(`Erreur mise à jour ${category}`, error);
+    }
+  };
+
   const handleUpdateNumericSetting = async (
     field: "monthlyIncome" | "fixedCosts" | "monthlySavings",
     value: string,
   ) => {
     const numValue = parseFloat(value) || 0;
     setSettings((s) => ({ ...s, [field]: numValue }));
-    if (user) {
-      await saveSettings(user.uid, { [field]: numValue });
+    if (!user) return;
+
+    // Revenu variable : les overrides mensuels vivent dans une sous-collection
+    // dédiée — chemin plat historique, jamais versionné (contrat iOS).
+    if (field === "monthlyIncome" && !settings.isFixedIncome) {
+      await saveSettings(user.uid, { monthlyIncome: numValue });
+      return;
     }
+
+    const category: BudgetCategory =
+      field === "monthlyIncome" ? "income" : field === "fixedCosts" ? "fixedCosts" : "savings";
+    await applyDatedBudgetEdit(category, { kind: "setAmount", value: numValue });
   };
 
   const handleToggleAnonymousMode = async () => {
@@ -596,12 +642,25 @@ export default function SettingsPage() {
     const resolvedValue = resolveDetailedEnabled(value, latestItems);
     logger.info(`settings.handleUpdateDetailedEnabled: ${field} → ${resolvedValue}`);
     setSettings((s) => ({ ...s, [field]: resolvedValue }));
-    if (user) {
-      const payload: Partial<UserSettings> = resolvedValue
-        ? ({ [field]: resolvedValue, [itemsField]: latestItems } as Partial<UserSettings>)
-        : ({ [field]: resolvedValue } as Partial<UserSettings>);
-      await saveSettings(user.uid, payload);
+    if (!user) return;
+
+    // Le drapeau et les lignes forment un tout versionné : activer fige le
+    // total = somme des lignes, désactiver fige l'état « avant » sur la
+    // timeline (aucune perte de lignes dans les deux sens).
+    if (resolvedValue) {
+      await applyDatedBudgetEdit(detailedCategoryFor(field), {
+        kind: "replaceContent",
+        total: computeDetailedTotal(latestItems),
+        detailedEnabled: true,
+        items: latestItems,
+      });
+      return;
     }
+
+    await applyDatedBudgetEdit(detailedCategoryFor(field), {
+      kind: "setDetailedEnabled",
+      enabled: false,
+    });
   };
 
   const handleToggleDetailedBudget = async (
@@ -631,19 +690,22 @@ export default function SettingsPage() {
     }));
 
     if (user) {
-      await saveSettings(user.uid, {
-        [itemsField]: nextItems,
-        [field]: nextEnabled,
-      } as Partial<UserSettings>);
+      await applyDatedBudgetEdit(detailedCategoryFor(field), {
+        kind: "replaceContent",
+        total: computeDetailedTotal(nextItems),
+        detailedEnabled: nextEnabled,
+        items: nextItems,
+      });
     }
   };
 
   /**
    * Replaces a sub-items list and persists it.
    *
-   * Saving an empty list automatically forces the corresponding flag to `false`
-   * (enforced by `saveSettings` → `normalizeSettingsPayload`). The local state
-   * is updated optimistically with the same invariant so the UI stays consistent.
+   * The list is the category's new content from today: the previous breakdown
+   * stays attached to the "before" version, so past months keep it. Saving an
+   * empty list forces the detailed flag to `false` (engine + write-time
+   * invariant) and the local state mirrors that rule.
    */
   const handleUpdateSubItems = async (
     field: "fixedCostsItems" | "savingsItems",
@@ -658,6 +720,7 @@ export default function SettingsPage() {
     logger.info(
       `settings.handleUpdateSubItems: ${field} updated (${items.length} items)`,
     );
+    const detailedEnabled = items.length > 0 ? settings[flagField] : false;
     setSettings((s) => ({
       ...s,
       [field]: items,
@@ -665,10 +728,12 @@ export default function SettingsPage() {
       [flagField]: items.length > 0 ? s[flagField] : false,
     }));
     if (user) {
-      const payload: Partial<UserSettings> = items.length === 0
-        ? ({ [field]: items, [flagField]: false } as Partial<UserSettings>)
-        : ({ [field]: items } as Partial<UserSettings>);
-      await saveSettings(user.uid, payload);
+      await applyDatedBudgetEdit(itemsCategoryFor(field), {
+        kind: "replaceContent",
+        total: computeDetailedTotal(items),
+        detailedEnabled,
+        items,
+      });
     }
   };
 

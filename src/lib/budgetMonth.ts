@@ -190,8 +190,13 @@ export function isCustomMonthActive(config: CustomMonthConfig): boolean {
  * Jour de début effectif du mois budgétaire `monthKey` :
  * surcharge du mois, sinon jour global, clampé au dernier jour du mois
  * (défensif — les valeurs valides 1..28 existent dans tous les mois).
+ *
+ * Option désactivée → 1 (mois calendaire), même si `startDay`/`overrides`
+ * restent stockés : ils sont conservés mais inopérants tant que l'option
+ * n'est pas réactivée.
  */
 export function effectiveStartDay(monthKey: string, config: CustomMonthConfig): number {
+  if (!config.enabled) return 1;
   const parsed = parseMonthKey(monthKey);
   if (!parsed) return 1;
   const day = config.overrides[monthKey] ?? config.startDay;
@@ -267,6 +272,45 @@ export function addBudgetPeriods(
   config: CustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
 ): string {
   return addMonthsToKey(monthKey, offset);
+}
+
+// ---------------------------------------------------------------------------
+// Grille d'affichage (heatmap dashboard + widget)
+// ---------------------------------------------------------------------------
+
+/**
+ * Clés `YYYY-MM-DD` des jours affichés par les grilles (heatmap du dashboard
+ * et widget) pour le mois budgétaire `monthKey` : du premier jour de la
+ * période à la VEILLE du début de la période suivante, exclu (ex. jour de
+ * paie au 5 : 5 sept. → 1er oct.). L'intervalle est donc
+ * `[jour de paie, jour de paie suivant)` — choix produit assumé, le jour de
+ * paie suivant appartient à la période suivante.
+ *
+ * Retourne `[]` quand l'option est inactive (désactivée, ou `startDay` 1 sans
+ * surcharge) : chaque appelant garde son repli sur le mois calendaire.
+ *
+ * Miroir de `BudgetMonthEngine.displayDayKeys` (iOS, `BudgetMonthEngine.swift`).
+ */
+export function displayDayKeys(
+  monthKey: string,
+  config: CustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
+): string[] {
+  if (!isCustomMonthActive(config)) return [];
+
+  const start = periodStartKey(monthKey, config);
+  const nextStart = periodStartKey(addMonthsToKey(monthKey, 1), config);
+  if (!DAY_KEY_PATTERN.test(start) || !DAY_KEY_PATTERN.test(nextStart)) return [];
+
+  const keys: string[] = [];
+  let cursor = start;
+  let safety = 0;
+  // Comparaison lexicographique = chronologique (clés `YYYY-MM-DD` paddées).
+  while (cursor < nextStart && safety < 33) {
+    keys.push(cursor);
+    cursor = addDaysToKey(cursor, 1);
+    safety += 1;
+  }
+  return keys;
 }
 
 // ---------------------------------------------------------------------------

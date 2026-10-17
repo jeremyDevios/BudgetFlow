@@ -7,6 +7,7 @@ import {
   budgetPeriod,
   budgetPeriodForDate,
   daysInBudgetPeriod,
+  displayDayKeys,
   effectiveStartDay,
   elapsedAndRemainingInBudgetPeriod,
   getCustomMonthConfig,
@@ -54,6 +55,55 @@ describe('identité avec le comportement historique (option désactivée)', () =
     expect(daysInBudgetPeriod('2024-02')).toBe(29);
     expect(daysInBudgetPeriod('2026-03')).toBe(31);
     expect(daysInBudgetPeriod('2026-04')).toBe(30);
+  });
+
+  it('désactivé avec jour de paie résiduel : identité calendaire stricte', () => {
+    // Régression : l'option décochée conservait le jour 5 stocké et découpait
+    // quand même les périodes du 5 au 4 (heatmap grise + dépenses du 2-3 hors
+    // dashboard après re-cochage).
+    const config = { enabled: false, startDay: 5, overrides: {} };
+    expect(budgetPeriod('2026-10', config)).toEqual(getMonthBounds(new Date(2026, 9, 15)));
+    expect(budgetPeriod('2026-02', config)).toEqual(getMonthBounds(new Date(2026, 1, 10)));
+    expect(budgetPeriod('2026-12', config)).toEqual(getMonthBounds(new Date(2026, 11, 20)));
+    expect(effectiveStartDay('2026-10', config)).toBe(1);
+    expect(budgetMonthKeyForDate('2026-10-02', config)).toBe('2026-10');
+  });
+
+  it('désactivé avec surcharge résiduelle : la surcharge aussi est inopérante', () => {
+    const config = { enabled: false, startDay: 5, overrides: { '2026-10': 7 } };
+    expect(effectiveStartDay('2026-10', config)).toBe(1);
+    expect(budgetMonthKeyForDate('2026-10-02', config)).toBe('2026-10');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Grille d'affichage (heatmap dashboard + widget)
+// ---------------------------------------------------------------------------
+
+describe('displayDayKeys', () => {
+  it('jour de paie au 5 : 05/09 → 01/10, période suivante exclue', () => {
+    const config = { enabled: true, startDay: 2, overrides: { '2026-09': 5 } };
+    const keys = displayDayKeys('2026-09', config);
+    expect(keys).toHaveLength(27); // 26 jours de sept. + le 1er oct.
+    expect(keys[0]).toBe('2026-09-05');
+    expect(keys[keys.length - 1]).toBe('2026-10-01');
+    expect(keys).not.toContain('2026-10-02'); // ouvre la grille d'octobre
+    expect(keys).not.toContain('2026-09-04'); // veille du jour de paie
+  });
+
+  it('mois calendaire (jour global 1) : mois complet', () => {
+    const config = { enabled: true, startDay: 1, overrides: { '2026-09': 5 } };
+    const october = displayDayKeys('2026-10', config);
+    expect(october).toHaveLength(31);
+    expect(october[0]).toBe('2026-10-01');
+    expect(october[october.length - 1]).toBe('2026-10-31');
+    expect(displayDayKeys('2026-02', config)).toHaveLength(28);
+  });
+
+  it('option inactive ou jour 1 : [] (repli calendaire chez l’appelant)', () => {
+    expect(displayDayKeys('2026-09')).toEqual([]);
+    expect(displayDayKeys('2026-09', { enabled: false, startDay: 5, overrides: {} })).toEqual([]);
+    expect(displayDayKeys('2026-09', { enabled: true, startDay: 1, overrides: {} })).toEqual([]);
   });
 });
 
