@@ -250,12 +250,45 @@ async function main() {
 
   const sourceUserSnap = await sourceUserRef.get();
 
-  if (!sourceUserSnap.exists) {
-    console.error(`❌ L'utilisateur source ${sourceUserId} n'existe pas dans Firestore.`);
-    process.exit(1);
-  }
+  let sourceUserData = null;
 
-  const sourceUserData = sourceUserSnap.data();
+  if (!sourceUserSnap.exists) {
+    // Les comptes 100 % iOS n'écrivent jamais le document `users/{uid}`
+    // (l'app iOS n'écrit que les sous-collections). Leurs données vivent
+    // quand même dans les sous-collections — on synthétise alors le profil
+    // depuis Firebase Auth au lieu d'avorter.
+    let orphanCount = 0;
+    for (const coll of ["envelopes", "transactions", "dailyActivity", "settings"]) {
+      const probe = await sourceUserRef.collection(coll).limit(1).get();
+      orphanCount += probe.size;
+    }
+
+    if (orphanCount === 0) {
+      console.error(`❌ L'utilisateur source ${sourceUserId} n'existe pas dans Firestore.`);
+      process.exit(1);
+    }
+
+    try {
+      const authUser = await admin.auth().getUser(sourceUserId);
+      sourceUserData = {
+        email: authUser.email || "",
+        displayName: authUser.displayName || "",
+        photoURL: authUser.photoURL || "",
+      };
+      console.log(
+        `⚠️  users/${sourceUserId} n'a pas de document profil (compte 100 % iOS) — ` +
+          `profil synthétisé depuis Auth (${authUser.email || "sans email"}).`
+      );
+    } catch {
+      console.error(
+        `❌ L'utilisateur source ${sourceUserId} a des données Firestore mais n'existe pas dans Auth — ` +
+          `impossible de synthétiser le profil.`
+      );
+      process.exit(1);
+    }
+  } else {
+    sourceUserData = sourceUserSnap.data();
+  }
 
   // ─── Lecture de la source ─────────────────────────────────────────────────
 
