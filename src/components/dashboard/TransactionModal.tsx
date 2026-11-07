@@ -11,6 +11,13 @@ import {
 import { collection, addDoc, doc, updateDoc, deleteDoc, deleteField, increment, setDoc, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { useBudget } from "@/context/BudgetContext";
+import {
+  envelopeDocRef,
+  transactionDocRef,
+  transactionsCollectionRef,
+} from "@/lib/budgetService";
+import { DEFAULT_BUDGET_ID, type BudgetId } from "@/types/budget";
 import { logger } from "@/lib/logger";
 import { type Envelope, isEnvelopeActiveForMonth } from "@/types/envelope";
 import { type Transaction, INCOME_SOURCES } from "@/types/transaction";
@@ -58,9 +65,13 @@ function transactionImpact(amount: number, isReimbursement?: boolean): number {
 }
 
 /** Toutes les occurrences de la série partageant le même recurrenceId. */
-async function fetchSeries(userId: string, recurrenceId: string): Promise<Transaction[]> {
+async function fetchSeries(
+  userId: string,
+  recurrenceId: string,
+  budgetId: BudgetId = DEFAULT_BUDGET_ID,
+): Promise<Transaction[]> {
   const q = query(
-    collection(db, "users", userId, "transactions"),
+    transactionsCollectionRef(userId, budgetId),
     where("recurrenceId", "==", recurrenceId),
   );
   const snap = await getDocs(q);
@@ -101,6 +112,7 @@ async function updateCounters(userId: string, deltas: Record<string, number>): P
  */
 async function materializeSeries(
   userId: string,
+  budgetId: BudgetId,
   opts: {
     recurrenceId: string;
     anchorDay: number;
@@ -117,7 +129,7 @@ async function materializeSeries(
   const counterDeltas: Record<string, number> = {};
   const nowISO = new Date().toISOString();
   for (const m of missing) {
-    await setDoc(doc(db, "users", userId, "transactions", firestoreDocumentId(opts.recurrenceId, m)), {
+    await setDoc(transactionDocRef(userId, budgetId, firestoreDocumentId(opts.recurrenceId, m)), {
       amount: opts.amount,
       description: opts.description,
       date: occurrenceDate(opts.anchorDay, m),
@@ -129,7 +141,7 @@ async function materializeSeries(
       recurrenceId: opts.recurrenceId,
       recurrenceAnchorDay: opts.anchorDay,
     });
-    await updateDoc(doc(db, "users", userId, "envelopes", opts.envelopeId), {
+    await updateDoc(envelopeDocRef(userId, budgetId, opts.envelopeId), {
       spent: increment(transactionImpact(opts.amount, opts.isReimbursement)),
     });
     counterDeltas[m] = (counterDeltas[m] ?? 0) + 1;
@@ -147,13 +159,14 @@ async function materializeSeries(
  */
 async function propagateSeriesEdit(
   userId: string,
+  budgetId: BudgetId,
   edited: Transaction,
   opts: { newDateISO: string; newAmount: number; newDescription: string },
 ): Promise<void> {
   const rid = edited.recurrenceId!;
   const newMonth = monthKey(opts.newDateISO);
   const newAnchorDay = nominalAnchorDay(opts.newDateISO);
-  const series = await fetchSeries(userId, rid);
+  const series = await fetchSeries(userId, rid, budgetId);
   const counterDeltas: Record<string, number> = {};
   const nowISO = new Date().toISOString();
 
@@ -163,11 +176,11 @@ async function propagateSeriesEdit(
     if (txMonth === newMonth) {
       // Collision : l'occurrence de la série occupant déjà le mois cible.
       if (tx.envelopeId) {
-        await updateDoc(doc(db, "users", userId, "envelopes", tx.envelopeId), {
+        await updateDoc(envelopeDocRef(userId, budgetId, tx.envelopeId), {
           spent: increment(-transactionImpact(tx.amount, tx.isReimbursement)),
         });
       }
-      await deleteDoc(doc(db, "users", userId, "transactions", tx.id));
+      await deleteDoc(transactionDocRef(userId, budgetId, tx.id));
       counterDeltas[txMonth] = (counterDeltas[txMonth] ?? 0) - 1;
     } else if (txMonth > newMonth) {
       // Mois suivants : nouveau montant/note, date re-clampsée sur le nouvel
@@ -177,12 +190,12 @@ async function propagateSeriesEdit(
           transactionImpact(opts.newAmount, tx.isReimbursement) -
           transactionImpact(tx.amount, tx.isReimbursement);
         if (delta !== 0) {
-          await updateDoc(doc(db, "users", userId, "envelopes", tx.envelopeId), {
+          await updateDoc(envelopeDocRef(userId, budgetId, tx.envelopeId), {
             spent: increment(delta),
           });
         }
       }
-      await updateDoc(doc(db, "users", userId, "transactions", tx.id), {
+      await updateDoc(transactionDocRef(userId, budgetId, tx.id), {
         amount: opts.newAmount,
         description: opts.newDescription,
         date: occurrenceDate(newAnchorDay, txMonth),
@@ -201,10 +214,10 @@ async function propagateSeriesEdit(
  * occurrences passées sont marquées avec `recurrenceEndDate` à la fin du
  * mois précédent.
  */
-async function stopSeriesAt(userId: string, edited: Transaction, newDateISO: string): Promise<void> {
+async function stopSeriesAt(userId: string, budgetId: BudgetId, edited: Transaction, newDateISO: string): Promise<void> {
   const rid = edited.recurrenceId!;
   const stopMonth = monthKey(newDateISO);
-  const series = await fetchSeries(userId, rid);
+  const series = await fetchSeries(userId, rid, budgetId);
   const counterDeltas: Record<string, number> = {};
   const nowISO = new Date().toISOString();
   const endDate = endOfMonthIso(previousMonthKey(stopMonth));
@@ -214,14 +227,14 @@ async function stopSeriesAt(userId: string, edited: Transaction, newDateISO: str
     const txMonth = monthKey(tx.date);
     if (txMonth > stopMonth) {
       if (tx.envelopeId) {
-        await updateDoc(doc(db, "users", userId, "envelopes", tx.envelopeId), {
+        await updateDoc(envelopeDocRef(userId, budgetId, tx.envelopeId), {
           spent: increment(-transactionImpact(tx.amount, tx.isReimbursement)),
         });
       }
-      await deleteDoc(doc(db, "users", userId, "transactions", tx.id));
+      await deleteDoc(transactionDocRef(userId, budgetId, tx.id));
       counterDeltas[txMonth] = (counterDeltas[txMonth] ?? 0) - 1;
     } else if (txMonth < stopMonth) {
-      await updateDoc(doc(db, "users", userId, "transactions", tx.id), {
+      await updateDoc(transactionDocRef(userId, budgetId, tx.id), {
         recurrenceEndDate: endDate,
         updatedAt: nowISO,
       });
@@ -229,7 +242,7 @@ async function stopSeriesAt(userId: string, edited: Transaction, newDateISO: str
   }
 
   // L'occurrence éditée devient une transaction simple.
-  await updateDoc(doc(db, "users", userId, "transactions", edited.id), {
+  await updateDoc(transactionDocRef(userId, budgetId, edited.id), {
     recurrenceId: deleteField(),
     recurrenceAnchorDay: deleteField(),
     recurrenceEndDate: deleteField(),
@@ -246,10 +259,10 @@ async function stopSeriesAt(userId: string, edited: Transaction, newDateISO: str
  * mensuels sont ajustés. Appelée après la popup de confirmation — les
  * occurrences passées n'atteignent jamais ce chemin.
  */
-async function deleteSeriesFromMonth(userId: string, edited: Transaction): Promise<void> {
+async function deleteSeriesFromMonth(userId: string, budgetId: BudgetId, edited: Transaction): Promise<void> {
   const rid = edited.recurrenceId!;
   const deleteKey = monthKey(edited.date);
-  const series = await fetchSeries(userId, rid);
+  const series = await fetchSeries(userId, rid, budgetId);
   const counterDeltas: Record<string, number> = {};
   const nowISO = new Date().toISOString();
   const endDate = endOfMonthIso(previousMonthKey(deleteKey));
@@ -258,14 +271,14 @@ async function deleteSeriesFromMonth(userId: string, edited: Transaction): Promi
     const txMonth = monthKey(tx.date);
     if (txMonth >= deleteKey) {
       if (tx.envelopeId) {
-        await updateDoc(doc(db, "users", userId, "envelopes", tx.envelopeId), {
+        await updateDoc(envelopeDocRef(userId, budgetId, tx.envelopeId), {
           spent: increment(-transactionImpact(tx.amount, tx.isReimbursement)),
         });
       }
-      await deleteDoc(doc(db, "users", userId, "transactions", tx.id));
+      await deleteDoc(transactionDocRef(userId, budgetId, tx.id));
       counterDeltas[txMonth] = (counterDeltas[txMonth] ?? 0) - 1;
     } else {
-      await updateDoc(doc(db, "users", userId, "transactions", tx.id), {
+      await updateDoc(transactionDocRef(userId, budgetId, tx.id), {
         recurrenceEndDate: endDate,
         updatedAt: nowISO,
       });
@@ -289,6 +302,7 @@ interface TransactionModalProps {
 
 export default function TransactionModal({ isOpen, onClose, envelopes, refreshData, transactionToEdit, defaultEnvelopeId, currentMonthTransactionCount = 0, customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG }: TransactionModalProps) {
   const { user } = useAuth();
+  const { currentBudgetId } = useBudget();
   const { formatAmount, symbol } = useCurrencyFormatting();
   const [loading, setLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -419,7 +433,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         const newAnchorDay = nominalAnchorDay(newDateISO);
 
         // 1. Update Transaction
-        const txRef = doc(db, "users", user.uid, "transactions", oldTx.id);
+        const txRef = transactionDocRef(user.uid, currentBudgetId, oldTx.id);
         const updateData: Record<string, unknown> = {
           amount: numAmount,
           description,
@@ -454,7 +468,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             isReimbursement: oldTx.isReimbursement,
           });
           await updateDoc(
-            doc(db, "users", user.uid, "envelopes", oldTx.envelopeId!),
+            envelopeDocRef(user.uid, currentBudgetId, oldTx.envelopeId!),
             { spent: increment(-oldImpact) }
           );
         }
@@ -466,7 +480,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             isReimbursement,
           });
           await updateDoc(
-            doc(db, "users", user.uid, "envelopes", selectedEnvelopeId),
+            envelopeDocRef(user.uid, currentBudgetId, selectedEnvelopeId),
             { spent: increment(newImpact) }
           );
         }
@@ -475,18 +489,18 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
         if (wasRecurring && isExpense) {
           if (isRecurring) {
             // L'utilisateur garde la récurrence → propagation aux mois suivants.
-            await propagateSeriesEdit(user.uid, oldTx, {
+            await propagateSeriesEdit(user.uid, currentBudgetId, oldTx, {
               newDateISO,
               newAmount: numAmount,
               newDescription: description,
             });
           } else {
             // Décocher → la série s'arrête à ce mois (règle 5).
-            await stopSeriesAt(user.uid, oldTx, newDateISO);
+            await stopSeriesAt(user.uid, currentBudgetId, oldTx, newDateISO);
           }
         } else if (wasRecurring && !isExpense) {
           // Passage à un revenu → la série s'arrête proprement.
-          await stopSeriesAt(user.uid, oldTx, newDateISO);
+          await stopSeriesAt(user.uid, currentBudgetId, oldTx, newDateISO);
         } else if (!wasRecurring && isExpense && isRecurring) {
           // Activation de la récurrence en édition → démarrage de la série.
           const recurrenceId = crypto.randomUUID();
@@ -496,7 +510,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
             recurrenceEndDate: deleteField(),
             updatedAt: new Date().toISOString(),
           });
-          await materializeSeries(user.uid, {
+          await materializeSeries(user.uid, currentBudgetId, {
             recurrenceId,
             anchorDay: newAnchorDay,
             amount: numAmount,
@@ -537,11 +551,11 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
           }
         }
 
-        await addDoc(collection(db, "users", user.uid, "transactions"), txData);
+        await addDoc(transactionsCollectionRef(user.uid, currentBudgetId), txData);
 
         // 2. Mettre à jour le 'spent' de l'enveloppe (dépenses uniquement)
         if (!isIncome) {
-          const envRef = doc(db, "users", user.uid, "envelopes", selectedEnvelopeId);
+          const envRef = envelopeDocRef(user.uid, currentBudgetId, selectedEnvelopeId);
           const spentImpact = isReimbursement ? -numAmount : numAmount;
           await updateDoc(envRef, {
             spent: increment(spentImpact)
@@ -567,7 +581,7 @@ export default function TransactionModal({ isOpen, onClose, envelopes, refreshDa
 
         // 4. Matérialiser les occurrences futures de la série (mois courant + 3)
         if (isSeries && recurrenceId) {
-          await materializeSeries(user.uid, {
+          await materializeSeries(user.uid, currentBudgetId, {
             recurrenceId,
             anchorDay: nominalAnchorDay(date),
             amount: numAmount,
@@ -614,14 +628,14 @@ const handleDelete = async () => {
     try {
         if (deletingSeries) {
           // Suppression de la série entière à partir de ce mois.
-          await deleteSeriesFromMonth(user.uid, transactionToEdit);
+          await deleteSeriesFromMonth(user.uid, currentBudgetId, transactionToEdit);
         } else {
           // 1. Supprimer la transaction
-          await deleteDoc(doc(db, "users", user.uid, "transactions", transactionToEdit.id));
+          await deleteDoc(transactionDocRef(user.uid, currentBudgetId, transactionToEdit.id));
 
           // 2. Mettre à jour l'enveloppe (dépenses uniquement)
           if (!isIncome && transactionToEdit.envelopeId) {
-            const envRef = doc(db, "users", user.uid, "envelopes", transactionToEdit.envelopeId);
+            const envRef = envelopeDocRef(user.uid, currentBudgetId, transactionToEdit.envelopeId);
             const impactToReverse = transactionToEdit.isReimbursement
               ? transactionToEdit.amount
               : -transactionToEdit.amount;

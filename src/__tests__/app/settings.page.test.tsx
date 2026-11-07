@@ -46,9 +46,12 @@ jest.mock("@/lib/settingsService", () => {
     ...actual,
     loadSettings: (...args: unknown[]) => loadSettingsMock(...args),
     saveSettings: (...args: unknown[]) => saveSettingsMock(...args),
+    loadSettingsForBudget: (...args: unknown[]) => loadSettingsMock(...args),
+    saveSettingsForBudget: (...args: unknown[]) => saveSettingsMock(...args),
     // Les écritures versionnées passent par ce helper (il lit puis réécrit le
     // document) : le mocker évite d'appeler le vrai `saveSettings` en interne.
     saveBudgetOperation: (...args: unknown[]) => saveBudgetOperationMock(...args),
+    saveBudgetOperationForBudget: (...args: unknown[]) => saveBudgetOperationMock(...args),
   };
 });
 
@@ -333,6 +336,7 @@ describe("SettingsPage", () => {
     expect(saveBudgetOperationMock).toHaveBeenNthCalledWith(
       1,
       "user-1",
+      "default",
       "fixedCosts",
       {
         kind: "replaceContent",
@@ -450,6 +454,7 @@ describe("SettingsPage", () => {
       expect(fetchLinkedTransactionsMock).toHaveBeenCalledWith(
         "user-1",
         "env-1",
+        "default",
       );
     });
 
@@ -482,6 +487,7 @@ describe("SettingsPage", () => {
           "user-1",
           "env-1",
           "env-2",
+          "default",
         );
       });
 
@@ -525,6 +531,7 @@ describe("SettingsPage", () => {
             icon: "ShoppingCart",
             color: "bg-amber-500",
           },
+          "default",
         );
       });
 
@@ -576,6 +583,7 @@ describe("SettingsPage", () => {
             startDay: 1,
             overrides: {},
           }),
+          "default",
         );
       });
 
@@ -604,6 +612,7 @@ describe("SettingsPage", () => {
         expect(fetchLinkedTransactionsMock).toHaveBeenCalledWith(
           "user-1",
           "env-1",
+          "default",
         ),
       );
 

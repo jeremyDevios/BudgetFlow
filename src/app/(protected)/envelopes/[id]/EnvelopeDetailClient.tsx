@@ -2,7 +2,15 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { useBudget } from "@/context/BudgetContext";
 import { db } from "@/lib/firebase";
+import {
+  budgetSettingsDocRef,
+  envelopeDocRef,
+  envelopesCollectionRef,
+  transactionDocRef,
+  transactionsCollectionRef,
+} from "@/lib/budgetService";
 import { formatMonthYear } from "@/lib/dateUtils";
 import {
   budgetMonthKeyForDate,
@@ -56,6 +64,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 export default function EnvelopeDetailClient({ params }: { params: Promise<{ id: string }> }) {
   const { user } = useAuth();
+  const { currentBudgetId } = useBudget();
   const { anonymousMode } = useAnonymousMode();
   const { formatAmount, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
@@ -91,7 +100,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       //    lue localement car l'état n'est pas encore à jour ci-dessous.
       let fetchedCustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG;
       try {
-        const settingsSnap = await getDoc(doc(db, "users", user.uid, "settings", "general"));
+        const settingsSnap = await getDoc(budgetSettingsDocRef(user.uid, currentBudgetId));
         if (settingsSnap.exists()) {
           fetchedCustomMonthConfig = getCustomMonthConfig(settingsSnap.data() as Record<string, unknown>);
           setCustomMonthConfig(fetchedCustomMonthConfig);
@@ -109,7 +118,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
         : null;
 
       // 1. Info Enveloppe Courante
-      const envRef = doc(db, "users", user.uid, "envelopes", id);
+      const envRef = envelopeDocRef(user.uid, currentBudgetId, id);
       const envSnap = await getDoc(envRef);
       if (envSnap.exists()) {
         setEnvelope({ id: envSnap.id, ...envSnap.data() } as Envelope);
@@ -119,7 +128,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       }
 
       // 1b. Charger TOUTES les enveloppes (pour la modale d'édition)
-      const allEnvRef = collection(db, "users", user.uid, "envelopes");
+      const allEnvRef = envelopesCollectionRef(user.uid, currentBudgetId);
       const allEnvSnap = await getDocs(allEnvRef);
       const allEnvList: Envelope[] = [];
       allEnvSnap.forEach(doc => {
@@ -129,7 +138,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       // Aligner la modale avec le dashboard: le "spent" affiché doit être mensuel.
       if (contextBounds) {
         const { start, end } = contextBounds;
-        const monthlyTxRef = collection(db, "users", user.uid, "transactions");
+        const monthlyTxRef = transactionsCollectionRef(user.uid, currentBudgetId);
         const monthlyTxQuery = query(
           monthlyTxRef,
           where("date", ">=", start),
@@ -161,7 +170,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       }
 
       // 2. Transactions
-      const txRef = collection(db, "users", user.uid, "transactions");
+      const txRef = transactionsCollectionRef(user.uid, currentBudgetId);
       let q;
       let dateFilter: { start: string, end: string } | null = null;
 
@@ -202,7 +211,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
 
   useEffect(() => {
     fetchData();
-  }, [user, id, dateParam]);
+  }, [user, id, dateParam, currentBudgetId]);
 
   // Forecast computation
   const today = new Date();
@@ -242,6 +251,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
     monthlyBudget: envelope?.budget || 0,
     isCurrentMonth,
     customMonthConfig,
+    budgetId: currentBudgetId,
   });
 
   const forecast = envelope ? envelopeForecasts[envelope.id] : null;
@@ -262,6 +272,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
       envelopeForecasts,
       isCurrentMonth,
       customMonthConfig,
+      budgetId: currentBudgetId,
     });
 
   const envelopeInsightNotifications = envelope
@@ -280,7 +291,7 @@ export default function EnvelopeDetailClient({ params }: { params: Promise<{ id:
     if (!confirm("Supprimer cette dépense ?")) return;
     if (!user) return;
     try {
-      await deleteDoc(doc(db, "users", user.uid, "transactions", txId));
+      await deleteDoc(transactionDocRef(user.uid, currentBudgetId, txId));
       setTransactions(transactions.filter(t => t.id !== txId));
     } catch (error) {
       logger.sanitizedError("Erreur suppression", error);

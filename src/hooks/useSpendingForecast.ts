@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, query, where, limit } from "firebase/firestore";
+import { getDocs, query, where, limit } from "firebase/firestore";
 
 import {
   computeForecast,
@@ -8,7 +8,8 @@ import {
   ForecastTransaction,
   GlobalForecast,
 } from "@/lib/forecasting";
-import { db } from "@/lib/firebase";
+import { transactionsCollectionRef } from "@/lib/budgetService";
+import { DEFAULT_BUDGET_ID, type BudgetId } from "@/types/budget";
 import {
   addBudgetPeriods,
   budgetMonthKeyForDate,
@@ -26,6 +27,8 @@ interface UseSpendingForecastParams {
   pastMonthCount?: number;
   /** Config du mois budgétaire personnalisé (défaut : mois calendaires). */
   customMonthConfig?: CustomMonthConfig;
+  /** Budget concerné ('default' = collections legacy). */
+  budgetId?: BudgetId;
 }
 
 interface UseSpendingForecastReturn {
@@ -52,6 +55,7 @@ export function useSpendingForecast(
     isCurrentMonth,
     pastMonthCount = 3,
     customMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
+    budgetId = DEFAULT_BUDGET_ID,
   } = params;
 
   const [globalForecast, setGlobalForecast] = useState<GlobalForecast | null>(
@@ -109,7 +113,7 @@ export function useSpendingForecast(
           customMonthConfig,
         ).end;
 
-        const txRef = collection(db, "users", userId, "transactions");
+        const txRef = transactionsCollectionRef(userId, budgetId);
         const q = query(
           txRef,
           where("date", ">=", rangeStart),
@@ -168,6 +172,7 @@ export function useSpendingForecast(
     };
   }, [
     userId,
+    budgetId,
     isCurrentMonth,
     pastMonthCount,
     monthlyBudget,

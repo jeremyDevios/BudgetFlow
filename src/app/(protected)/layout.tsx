@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { AnonymousModeProvider } from "@/context/AnonymousModeContext";
+import { BudgetProvider } from "@/context/BudgetContext";
 import { CurrencyProvider } from "@/context/CurrencyContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -105,7 +106,9 @@ export default function ProtectedLayout({
 
   return (
     <CurrencyProvider>
-      <AnonymousModeProvider>{children}</AnonymousModeProvider>
+      <AnonymousModeProvider>
+        <BudgetProvider>{children}</BudgetProvider>
+      </AnonymousModeProvider>
     </CurrencyProvider>
   );
 }

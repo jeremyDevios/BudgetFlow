@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
+import { useBudget } from "@/context/BudgetContext";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import { budgetMonthKeyForDate } from "@/lib/budgetMonth";
@@ -78,6 +79,7 @@ function SignalBars({ value, max }: { value: number; max: number }) {
 
 export default function AnalysisPage() {
   const { user } = useAuth();
+  const { currentBudgetId } = useBudget();
   const { formatAmount } = useCurrencyFormatting();
   const router = useRouter();
 
@@ -88,6 +90,7 @@ export default function AnalysisPage() {
     userId: user?.uid ?? null,
     period,
     monthDate,
+    budgetId: currentBudgetId,
   });
 
   // Chevron droit limité au mois courant (comparaison de clés budgétaires).

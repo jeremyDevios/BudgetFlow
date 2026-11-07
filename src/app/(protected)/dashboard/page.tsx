@@ -2,9 +2,16 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { useBudget } from "@/context/BudgetContext";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { getCurrencySymbol, getCurrencyLocale } from "@/types/currency";
 import { db, auth } from "@/lib/firebase";
+import {
+  budgetSettingsDocRef,
+  envelopeDocRef,
+  envelopesCollectionRef,
+  transactionsCollectionRef,
+} from "@/lib/budgetService";
 import { collection, query, getDocs, doc, getDoc, where, writeBatch, updateDoc, limit } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
@@ -70,6 +77,7 @@ import { logger } from "@/lib/logger";
 import { maskAmount } from "@/lib/maskAmount";
 import { motion, AnimatePresence } from "framer-motion";
 import SearchDropdown from "@/components/dashboard/SearchDropdown";
+import BudgetSwitcher from "@/components/dashboard/BudgetSwitcher";
 import CalendarHeatmap from "@/components/dashboard/CalendarHeatmap";
 import RotatingSmartInsight from "@/components/dashboard/RotatingSmartInsight";
 import { useCalendarHeatmap } from "@/hooks/useCalendarHeatmap";
@@ -396,6 +404,7 @@ function SortableEnvelopeTile({
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { currentBudgetId } = useBudget();
   const { anonymousMode } = useAnonymousMode();
   const { formatAmount, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
@@ -649,6 +658,7 @@ export default function DashboardPage() {
     monthlyBudget: monthlyTotalAvailable,
     isCurrentMonth,
     customMonthConfig,
+    budgetId: currentBudgetId,
   });
 
   const { globalNotifications, loading: smartInsightsLoading } =
@@ -673,6 +683,7 @@ export default function DashboardPage() {
       isCurrentMonth,
       currency,
       customMonthConfig,
+      budgetId: currentBudgetId,
     });
 
   const visibleGlobalNotifications = anonymousMode
@@ -733,7 +744,7 @@ export default function DashboardPage() {
       //    encore à jour au moment de la requête ci-dessous).
       let fetchedCustomMonthConfig = getCustomMonthConfig({});
       try {
-          const settingsRef = doc(db, "users", user.uid, "settings", "general");
+          const settingsRef = budgetSettingsDocRef(user.uid, currentBudgetId);
           const settingsSnap = await getDoc(settingsRef);
           if (settingsSnap.exists()) {
               const data = settingsSnap.data() as UserSettings;
@@ -742,7 +753,7 @@ export default function DashboardPage() {
               // 1b. If variable income, also fetch per-month income overrides.
               if (data.isFixedIncome === false) {
                 try {
-                  const incomes = await getMonthlyIncomes(user.uid);
+                  const incomes = await getMonthlyIncomes(user.uid, currentBudgetId);
                   setMonthlyIncomes(incomes);
                 } catch (e) {
                   logger.warn("Monthly incomes read failed");
@@ -754,7 +765,7 @@ export default function DashboardPage() {
       // 2. Enveloppes
       let envList: Envelope[] = [];
       try {
-          const envRef = collection(db, "users", user.uid, "envelopes");
+          const envRef = envelopesCollectionRef(user.uid, currentBudgetId);
           const envSnap = await getDocs(envRef);
           envSnap.forEach((doc) => {
             const data = doc.data();
@@ -777,7 +788,7 @@ export default function DashboardPage() {
       const txList: Transaction[] = [];
       
       try {
-          const txRef = collection(db, "users", user.uid, "transactions");
+          const txRef = transactionsCollectionRef(user.uid, currentBudgetId);
           const q = query(
             txRef,
             where("date", ">=", start),
@@ -832,7 +843,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchData();
-  }, [user, currentDate]); // Recharger quand l'utilisateur OU la date change
+  }, [user, currentDate, currentBudgetId]); // Recharger quand l'utilisateur, la date OU le budget change
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -866,7 +877,7 @@ export default function DashboardPage() {
       if (user) {
         const batch = writeBatch(db);
         reordered.forEach((env) => {
-          batch.update(doc(db, "users", user.uid, "envelopes", env.id), { order: env.order });
+          batch.update(envelopeDocRef(user.uid, currentBudgetId, env.id), { order: env.order });
         });
         batch.commit().catch(() => logger.warn("Envelope order save failed"));
       }
@@ -891,7 +902,7 @@ export default function DashboardPage() {
     );
 
     try {
-      await updateDoc(doc(db, "users", user.uid, "envelopes", envelopeId), { tileSize: nextSize, updatedAt: new Date().toISOString() });
+      await updateDoc(envelopeDocRef(user.uid, currentBudgetId, envelopeId), { tileSize: nextSize, updatedAt: new Date().toISOString() });
     } catch {
       logger.warn("Envelope tile size save failed");
     } finally {
@@ -945,7 +956,7 @@ export default function DashboardPage() {
     setIsEditingIncome(false);
 
     try {
-      await saveMonthlyIncome(user.uid, selectedMonth, amount);
+      await saveMonthlyIncome(user.uid, selectedMonth, amount, currentBudgetId);
     } catch (error) {
       // Rollback on failure
       setMonthlyIncomes(previous);
@@ -1130,7 +1141,8 @@ export default function DashboardPage() {
             </header>
 
       <main className="relative z-10 max-w-5xl mx-auto p-4 space-y-8">
-        
+        <BudgetSwitcher />
+
         {/* Résumé du Mois (Card Principale) */}
         <section className="glass-panel-strong rounded-3xl p-5 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-32 bg-amber-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>

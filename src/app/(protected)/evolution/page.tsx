@@ -2,7 +2,13 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { useBudget } from "@/context/BudgetContext";
 import { db } from "@/lib/firebase";
+import {
+  budgetSettingsDocRef,
+  envelopesCollectionRef,
+  transactionsCollectionRef,
+} from "@/lib/budgetService";
 
 import { collection, query, getDocs, where, doc, getDoc, limit } from "firebase/firestore";
 import { useEffect, useState } from "react";
@@ -55,6 +61,7 @@ interface MonthlyData {
 
 export default function EvolutionPage() {
   const { user } = useAuth();
+  const { currentBudgetId } = useBudget();
   const { anonymousMode } = useAnonymousMode();
   const { formatAmount, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
@@ -82,7 +89,7 @@ export default function EvolutionPage() {
           "incomeHistory" | "fixedCostsHistory" | "savingsHistory"
         > = {};
 
-        const settingsRef = doc(db, "users", user.uid, "settings", "general");
+        const settingsRef = budgetSettingsDocRef(user.uid, currentBudgetId);
         const settingsSnap = await getDoc(settingsRef);
         if (settingsSnap.exists()) {
             const s = settingsSnap.data() as UserSettings;
@@ -97,7 +104,7 @@ export default function EvolutionPage() {
         // 1b. If variable income, fetch per-month overrides.
         if (!isFixedIncome) {
           try {
-            monthlyIncomes = await getMonthlyIncomes(user.uid);
+            monthlyIncomes = await getMonthlyIncomes(user.uid, currentBudgetId);
           } catch (e) {
             logger.warn("Monthly incomes read failed, using fallback income");
           }
@@ -106,7 +113,7 @@ export default function EvolutionPage() {
         // 2. Fetch envelopes (needed for temporary-envelope budgets per month)
         const envelopes: Array<{ isTemporary?: boolean; budget: number; activeMonths?: string[] }> = [];
         try {
-          const envRef = collection(db, "users", user.uid, "envelopes");
+          const envRef = envelopesCollectionRef(user.uid, currentBudgetId);
           const envSnap = await getDocs(envRef);
           envSnap.forEach((doc) => {
             const data = doc.data();
@@ -138,7 +145,7 @@ export default function EvolutionPage() {
         const rangeEnd = budgetPeriod(monthKeys[monthKeys.length - 1], customMonthConfig).end;
 
         // 4. Get Transactions (date-filtered, last 6 months)
-        const txRef = collection(db, "users", user.uid, "transactions");
+        const txRef = transactionsCollectionRef(user.uid, currentBudgetId);
         const q = query(
           txRef,
           where("date", ">=", rangeStart),
@@ -246,7 +253,7 @@ export default function EvolutionPage() {
     };
 
     fetchData();
-  }, [user]);
+  }, [user, currentBudgetId]);
 
   // --- Graph Logic ---
   

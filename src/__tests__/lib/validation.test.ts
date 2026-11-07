@@ -19,6 +19,14 @@ import {
   validateTransactionTypeWithMessage,
   INCOME_SOURCES,
   getMonthKey,
+  BUDGET_VALIDATION_CONSTRAINTS,
+  validateBudgetName,
+  validateBudgetIcon,
+  validateBudgetColor,
+  validateBudgetId,
+  validateBudgetNameWithMessage,
+  validateBudgetIconWithMessage,
+  validateBudgetColorWithMessage,
 } from '@/lib/validation';
 
 describe('validateAmount', () => {
@@ -427,5 +435,99 @@ describe('validateTransactionTypeWithMessage', () => {
     const result = validateTransactionTypeWithMessage('bad');
     expect(result.valid).toBe(false);
     expect(result.message).toContain('type');
+  });
+});
+
+describe('BUDGET_VALIDATION_CONSTRAINTS', () => {
+  it('aligne les bornes sur isValidBudgetData dans firestore.rules', () => {
+    expect(BUDGET_VALIDATION_CONSTRAINTS.NAME_MAX_LENGTH).toBe(50);
+    expect(BUDGET_VALIDATION_CONSTRAINTS.ICON_MAX_LENGTH).toBe(100);
+    expect(BUDGET_VALIDATION_CONSTRAINTS.COLOR_MAX_LENGTH).toBe(100);
+  });
+});
+
+describe('validateBudgetName', () => {
+  it('accepte un nom valide (espaces autour tolérés au trim)', () => {
+    expect(validateBudgetName('Maison')).toBe(true);
+    expect(validateBudgetName('  Maison  ')).toBe(true);
+  });
+
+  it('accepte exactement 50 caractères', () => {
+    expect(validateBudgetName('x'.repeat(50))).toBe(true);
+  });
+
+  it('rejette vide, espaces seuls, > 50 et non-chaîne', () => {
+    expect(validateBudgetName('')).toBe(false);
+    expect(validateBudgetName('   ')).toBe(false);
+    expect(validateBudgetName('x'.repeat(51))).toBe(false);
+    expect(validateBudgetName(123)).toBe(false);
+    expect(validateBudgetName(null)).toBe(false);
+  });
+});
+
+describe('validateBudgetIcon / validateBudgetColor', () => {
+  it('accepte des chaînes de 1 à 100 caractères', () => {
+    expect(validateBudgetIcon('Wallet')).toBe(true);
+    expect(validateBudgetIcon('x'.repeat(100))).toBe(true);
+    expect(validateBudgetColor('bg-amber-500')).toBe(true);
+    expect(validateBudgetColor('x'.repeat(100))).toBe(true);
+  });
+
+  it('rejette vide, trop long et non-chaîne', () => {
+    expect(validateBudgetIcon('')).toBe(false);
+    expect(validateBudgetIcon('x'.repeat(101))).toBe(false);
+    expect(validateBudgetColor('')).toBe(false);
+    expect(validateBudgetColor('x'.repeat(101))).toBe(false);
+    expect(validateBudgetColor(42)).toBe(false);
+  });
+});
+
+describe('validateBudgetId', () => {
+  it("accepte 'default' et les 5 slots", () => {
+    expect(validateBudgetId('default')).toBe(true);
+    for (const slot of ['budget-1', 'budget-2', 'budget-3', 'budget-4', 'budget-5']) {
+      expect(validateBudgetId(slot)).toBe(true);
+    }
+  });
+
+  it('rejette les ids hors liste fermée', () => {
+    expect(validateBudgetId('budget-6')).toBe(false);
+    expect(validateBudgetId('budget-0')).toBe(false);
+    expect(validateBudgetId('')).toBe(false);
+    expect(validateBudgetId(1)).toBe(false);
+    expect(validateBudgetId(null)).toBe(false);
+    expect(validateBudgetId(undefined)).toBe(false);
+  });
+});
+
+describe('validateBudgetNameWithMessage', () => {
+  it('retourne un message français pour un nom vide', () => {
+    const result = validateBudgetNameWithMessage('   ');
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('nom');
+  });
+
+  it('retourne un message pour un nom trop long', () => {
+    const result = validateBudgetNameWithMessage('x'.repeat(51));
+    expect(result.valid).toBe(false);
+    expect(result.message).toContain('50');
+  });
+
+  it('valide sans message', () => {
+    expect(validateBudgetNameWithMessage('Maison')).toEqual({ valid: true, message: '' });
+  });
+});
+
+describe('validateBudgetIconWithMessage / validateBudgetColorWithMessage', () => {
+  it('retourne un message français pour une valeur invalide', () => {
+    expect(validateBudgetIconWithMessage('').valid).toBe(false);
+    expect(validateBudgetIconWithMessage('').message).toContain('icône');
+    expect(validateBudgetColorWithMessage(42).valid).toBe(false);
+    expect(validateBudgetColorWithMessage(42).message).toContain('couleur');
+  });
+
+  it('valide sans message', () => {
+    expect(validateBudgetIconWithMessage('Wallet')).toEqual({ valid: true, message: '' });
+    expect(validateBudgetColorWithMessage('bg-amber-500')).toEqual({ valid: true, message: '' });
   });
 });

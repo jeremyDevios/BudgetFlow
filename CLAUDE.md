@@ -13,6 +13,7 @@ npm run build            # Production build
 npm start                # Production server on 0.0.0.0:8095
 npm test                 # Full Jest suite
 npm run test:coverage    # Jest with coverage (≥80% line coverage enforced)
+npm run test:rules       # Tests des règles Firestore (émulateur — nécessite Java)
 npm test -- --runInBand src/__tests__/lib/forecasting.test.ts   # Single test file
 npm test -- --runInBand --testNamePattern="validateAmount"      # Single test by name
 npm run lint             # ESLint (currently broken on Next 16 — "Invalid project directory" error)

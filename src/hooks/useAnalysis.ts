@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { collection, doc, getDoc, getDocs, limit, query, where } from "firebase/firestore";
+import { getDoc, getDocs, limit, query, where } from "firebase/firestore";
 
 import {
   computeAnalysis,
@@ -10,8 +10,13 @@ import {
   type AnalysisResult,
   type AnalysisTransaction,
 } from "@/lib/analysisEngine";
-import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
+import {
+  budgetSettingsDocRef,
+  envelopesCollectionRef,
+  transactionsCollectionRef,
+} from "@/lib/budgetService";
+import { DEFAULT_BUDGET_ID, type BudgetId } from "@/types/budget";
 import { getMonthlyIncomes } from "@/lib/monthlyIncomeService";
 import { resolveMonthlyIncome } from "@/lib/settingsService";
 import { resolveVersionAmount } from "@/lib/budgetVersion";
@@ -27,6 +32,8 @@ interface UseAnalysisParams {
   period: AnalysisPeriod;
   /** Mois de référence quand `period === "month"` (défaut : mois courant). */
   monthDate?: Date;
+  /** Budget concerné ('default' = collections legacy). */
+  budgetId?: BudgetId;
 }
 
 interface UseAnalysisReturn {
@@ -53,7 +60,7 @@ const formatDate = (d: Date): string => {
  * moteur pur `src/lib/analysisEngine.ts`. Même pattern que
  * `useSpendingForecast`: pur → hook → UI.
  */
-export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): UseAnalysisReturn {
+export function useAnalysis({ userId, period, monthDate, budgetId = DEFAULT_BUDGET_ID }: UseAnalysisParams): UseAnalysisReturn {
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [chartData, setChartData] = useState<UseAnalysisReturn["spendByEnvelope"]>([]);
   const [monthlyIncome, setMonthlyIncome] = useState(0);
@@ -84,7 +91,7 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
       let fetchedCustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG;
 
       try {
-        const settingsRef = doc(db, "users", userId, "settings", "general");
+        const settingsRef = budgetSettingsDocRef(userId, budgetId);
         const settingsSnap = await getDoc(settingsRef);
         if (settingsSnap.exists()) {
           const data = settingsSnap.data();
@@ -98,7 +105,7 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
           // Revenus variables : override par mois (clé budgétaire).
           if (data.isFixedIncome === false) {
             try {
-              const incomes = await getMonthlyIncomes(userId);
+              const incomes = await getMonthlyIncomes(userId, budgetId);
               const referenceKey = budgetMonthKeyForDate(
                 formatDate(effectiveMonthDate),
                 fetchedCustomMonthConfig,
@@ -131,7 +138,7 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
       // ── 2. Enveloppes ──
       const envelopes: AnalysisEnvelope[] = [];
       try {
-        const envRef = collection(db, "users", userId, "envelopes");
+        const envRef = envelopesCollectionRef(userId, budgetId);
         const envSnap = await getDocs(envRef);
         envSnap.forEach((doc) => {
           const data = doc.data();
@@ -153,7 +160,7 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
 
       const transactions: AnalysisTransaction[] = [];
       try {
-        const txRef = collection(db, "users", userId, "transactions");
+        const txRef = transactionsCollectionRef(userId, budgetId);
         const q = query(txRef, where("date", ">=", start), where("date", "<=", end), limit(3000));
         const txSnap = await getDocs(q);
 
@@ -211,7 +218,7 @@ export function useAnalysis({ userId, period, monthDate }: UseAnalysisParams): U
     } finally {
       setLoading(false);
     }
-  }, [userId, period, today, effectiveMonthDate]);
+  }, [userId, period, today, effectiveMonthDate, budgetId]);
 
   useEffect(() => {
     void load();

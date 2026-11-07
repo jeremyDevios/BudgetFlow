@@ -4,8 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
+import { useBudget } from "@/context/BudgetContext";
 import { useCurrencyFormatting } from "@/hooks/useCurrencyFormatting";
 import { db } from "@/lib/firebase";
+import {
+  budgetSettingsDocRef,
+  envelopesCollectionRef,
+} from "@/lib/budgetService";
 import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { ChevronLeft, Workflow, Loader2 } from "lucide-react";
 import { Sankey, Tooltip, ResponsiveContainer, Layer } from 'recharts';
@@ -75,6 +80,7 @@ const resolveColor = (value?: string) => {
 
 export default function CashFlowPage() {
   const { user } = useAuth();
+  const { currentBudgetId } = useBudget();
   const { formatAmount, formatAmountNoDecimals, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -87,7 +93,7 @@ export default function CashFlowPage() {
       if (!user) return;
       try {
         // Fetch Settings
-        const settingsRef = doc(db, "users", user.uid, "settings", "general");
+        const settingsRef = budgetSettingsDocRef(user.uid, currentBudgetId);
         const settingsSnap = await getDoc(settingsRef);
         if (settingsSnap.exists()) {
           const data = settingsSnap.data() as UserSettings;
@@ -95,7 +101,7 @@ export default function CashFlowPage() {
           // If variable income, fetch per-month overrides for current month resolution.
           if (data.isFixedIncome === false) {
             try {
-              const incomes = await getMonthlyIncomes(user.uid);
+              const incomes = await getMonthlyIncomes(user.uid, currentBudgetId);
               setMonthlyIncomes(incomes);
             } catch (e) {
               logger.warn("Monthly incomes read failed, using fallback income");
@@ -104,7 +110,7 @@ export default function CashFlowPage() {
         }
 
         // Fetch Envelopes
-        const envCol = collection(db, "users", user.uid, "envelopes");
+        const envCol = envelopesCollectionRef(user.uid, currentBudgetId);
         const envSnap = await getDocs(envCol);
         const envList = envSnap.docs
           .map(doc => ({ id: doc.id, ...doc.data() } as Envelope))
@@ -119,7 +125,7 @@ export default function CashFlowPage() {
     };
 
     fetchData();
-  }, [user]);
+  }, [user, currentBudgetId]);
 
   // Clé du mois budgétaire courant (calendaire par défaut), partagée par les
   // résolutions ci-dessous.

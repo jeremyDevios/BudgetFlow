@@ -1,4 +1,5 @@
 // Utility functions for validation across the app
+import { BUDGET_SLOT_IDS, DEFAULT_BUDGET_ID } from "@/types/budget";
 import { INCOME_SOURCES, type IncomeSource } from "@/types/transaction";
 
 export { INCOME_SOURCES };
@@ -243,6 +244,89 @@ export function validateTransactionTypeWithMessage(
       valid: false,
       message: "Le type doit être 'expense' ou 'income'.",
     };
+  }
+  return { valid: true, message: "" };
+}
+
+// ── Validation des budgets (multi-budget) ──
+
+export const BUDGET_VALIDATION_CONSTRAINTS = {
+  NAME_MAX_LENGTH: 50,
+  ICON_MAX_LENGTH: 100,
+  COLOR_MAX_LENGTH: 100,
+} as const;
+
+/**
+ * Valide un nom de budget : non vide après trim, ≤ 50 caractères (longueur
+ * brute — aligné sur isValidBudgetData dans firestore.rules).
+ */
+export function validateBudgetName(name: unknown): name is string {
+  return (
+    typeof name === "string" &&
+    name.trim().length > 0 &&
+    name.length <= BUDGET_VALIDATION_CONSTRAINTS.NAME_MAX_LENGTH
+  );
+}
+
+/** Valide une clé d'icône de budget (Lucide web / SF Symbol iOS). */
+export function validateBudgetIcon(icon: unknown): icon is string {
+  return (
+    typeof icon === "string" &&
+    icon.length >= 1 &&
+    icon.length <= BUDGET_VALIDATION_CONSTRAINTS.ICON_MAX_LENGTH
+  );
+}
+
+/** Valide une classe de couleur de budget (palette Tailwind existante). */
+export function validateBudgetColor(color: unknown): color is string {
+  return (
+    typeof color === "string" &&
+    color.length >= 1 &&
+    color.length <= BUDGET_VALIDATION_CONSTRAINTS.COLOR_MAX_LENGTH
+  );
+}
+
+/**
+ * Valide un id de budget : 'default' ou l'un des 5 slots fixes — la même
+ * liste fermée que isValidBudgetId dans firestore.rules (limite de 5).
+ */
+export function validateBudgetId(id: unknown): boolean {
+  return (
+    id === DEFAULT_BUDGET_ID ||
+    (typeof id === "string" &&
+      (BUDGET_SLOT_IDS as readonly string[]).includes(id))
+  );
+}
+
+export function validateBudgetNameWithMessage(
+  name: unknown
+): { valid: boolean; message: string } {
+  if (typeof name !== "string" || name.trim().length === 0) {
+    return { valid: false, message: "Le nom du budget ne peut pas être vide." };
+  }
+  if (name.length > BUDGET_VALIDATION_CONSTRAINTS.NAME_MAX_LENGTH) {
+    return {
+      valid: false,
+      message: `Le nom ne peut pas dépasser ${BUDGET_VALIDATION_CONSTRAINTS.NAME_MAX_LENGTH} caractères.`,
+    };
+  }
+  return { valid: true, message: "" };
+}
+
+export function validateBudgetIconWithMessage(
+  icon: unknown
+): { valid: boolean; message: string } {
+  if (!validateBudgetIcon(icon)) {
+    return { valid: false, message: "L'icône du budget est invalide." };
+  }
+  return { valid: true, message: "" };
+}
+
+export function validateBudgetColorWithMessage(
+  color: unknown
+): { valid: boolean; message: string } {
+  if (!validateBudgetColor(color)) {
+    return { valid: false, message: "La couleur du budget est invalide." };
   }
   return { valid: true, message: "" };
 }

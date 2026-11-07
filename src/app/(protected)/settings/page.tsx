@@ -2,9 +2,15 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { useBudget } from "@/context/BudgetContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SUPPORTED_CURRENCIES, CurrencyCode, getCurrencySymbol } from "@/types/currency";
 import { db, auth } from "@/lib/firebase";
+import {
+  envelopeCountField,
+  envelopeDocRef,
+  envelopesCollectionRef,
+} from "@/lib/budgetService";
 import { signOut } from "firebase/auth";
 import {
   collection,
@@ -20,9 +26,10 @@ import {
   checkEnvelopeQuota,
 } from "@/lib/validation";
 import {
-  loadSettings,
+  loadSettingsForBudget,
   saveSettings,
-  saveBudgetOperation,
+  saveSettingsForBudget,
+  saveBudgetOperationForBudget,
   resolveDetailedEnabled,
   computeDetailedTotal,
   createEmptyBudgetSubItem,
@@ -35,6 +42,7 @@ import {
   deleteEnvelopeAndTransactions,
 } from "@/lib/envelopeService";
 import { type Transaction } from "@/types/transaction";
+import BudgetManager from "@/components/settings/BudgetManager";
 import { UserSettings, DEFAULT_USER_SETTINGS, BudgetSubItem } from "@/types/settings";
 import {
   getCustomMonthConfig,
@@ -320,6 +328,7 @@ function TemporaryEnvelopeRow({
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { currentBudgetId } = useBudget();
   const { anonymousMode, anonymousModeReady, setAnonymousMode } = useAnonymousMode();
   const { currency, setCurrency } = useCurrency();
   const symbol = getCurrencySymbol(currency);
@@ -359,7 +368,7 @@ export default function SettingsPage() {
     setSettings((current) => ({ ...current, customMonthEnabled: next }));
     setCustomMonthSaving(true);
     try {
-      await saveSettings(user.uid, { customMonthEnabled: next });
+      await saveSettingsForBudget(user.uid, currentBudgetId, { customMonthEnabled: next });
       logger.info(`settings.handleToggleCustomMonth: customMonthEnabled → ${next}`);
     } catch (error) {
       setSettings((current) => ({ ...current, customMonthEnabled: previous }));
@@ -375,7 +384,7 @@ export default function SettingsPage() {
     setSettings((current) => ({ ...current, customMonthStartDay: day }));
     setCustomMonthSaving(true);
     try {
-      await saveSettings(user.uid, { customMonthStartDay: day });
+      await saveSettingsForBudget(user.uid, currentBudgetId, { customMonthStartDay: day });
     } catch (error) {
       setSettings((current) => ({ ...current, customMonthStartDay: previous }));
       logger.sanitizedError("Erreur sauvegarde jour de paie", error);
@@ -398,7 +407,7 @@ export default function SettingsPage() {
     }));
     setCustomMonthSaving(true);
     try {
-      await saveSettings(user.uid, { customMonthStartOverrides: currentOverrides });
+      await saveSettingsForBudget(user.uid, currentBudgetId, { customMonthStartOverrides: currentOverrides });
     } catch (error) {
       setSettings((current) => ({
         ...current,
@@ -474,8 +483,8 @@ export default function SettingsPage() {
   const fetchData = async () => {
     if (!user) return;
     try {
-      // Settings — loadSettings handles defaults and new-field retrocompatibility.
-      const loaded = await loadSettings(user.uid);
+      // Settings — variante budget : le doc du budget courant (legacy pour le défaut).
+      const loaded = await loadSettingsForBudget(user.uid, currentBudgetId);
       setSettings(loaded);
 
       // Notification preference
@@ -484,7 +493,7 @@ export default function SettingsPage() {
       setDbNotifEnabled(userSnap.exists() ? userSnap.data().notificationsEnabled === true : false);
 
       // Envelopes
-      const envSnap = await getDocs(collection(db, "users", user.uid, "envelopes"));
+      const envSnap = await getDocs(envelopesCollectionRef(user.uid, currentBudgetId));
       const list: Envelope[] = [];
       envSnap.forEach((d) => list.push({ id: d.id, ...d.data() } as Envelope));
       list.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -498,7 +507,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchData();
-  }, [user]);
+  }, [user, currentBudgetId]);
 
   useEffect(() => {
     latestDetailedItemsRef.current = {
@@ -535,7 +544,7 @@ export default function SettingsPage() {
   ) => {
     if (!user) return;
     try {
-      const patch = await saveBudgetOperation(user.uid, category, operation);
+      const patch = await saveBudgetOperationForBudget(user.uid, currentBudgetId, category, operation);
       if (patch) {
         logger.info(`settings.applyDatedBudgetEdit: ${category} à partir d'aujourd'hui`);
       }
@@ -555,7 +564,7 @@ export default function SettingsPage() {
     // Revenu variable : les overrides mensuels vivent dans une sous-collection
     // dédiée — chemin plat historique, jamais versionné (contrat iOS).
     if (field === "monthlyIncome" && !settings.isFixedIncome) {
-      await saveSettings(user.uid, { monthlyIncome: numValue });
+      await saveSettingsForBudget(user.uid, currentBudgetId, { monthlyIncome: numValue });
       return;
     }
 
@@ -605,7 +614,7 @@ export default function SettingsPage() {
     setSettings((s) => ({ ...s, isFixedIncome: nextValue }));
 
     try {
-      await saveSettings(user.uid, { isFixedIncome: nextValue });
+      await saveSettingsForBudget(user.uid, currentBudgetId, { isFixedIncome: nextValue });
       logger.info(`settings.handleToggleFixedIncome: isFixedIncome → ${nextValue}`);
     } catch (error) {
       setSettings((s) => ({ ...s, isFixedIncome: !nextValue }));
@@ -770,7 +779,7 @@ export default function SettingsPage() {
     try {
       if (editingEnvelope) {
         // Update — always persist isTemporary + activeMonths explicitly.
-        await updateDoc(doc(db, "users", user.uid, "envelopes", editingEnvelope.id), {
+        await updateDoc(envelopeDocRef(user.uid, currentBudgetId, editingEnvelope.id), {
           name: values.name,
           budget: numBudget,
           icon: values.icon,
@@ -803,7 +812,7 @@ export default function SettingsPage() {
         const nowISO = new Date().toISOString();
 
         const batch = writeBatch(db);
-        const newEnvRef = doc(collection(db, "users", user.uid, "envelopes"));
+        const newEnvRef = doc(envelopesCollectionRef(user.uid, currentBudgetId));
         const counterRef = doc(db, "counters", user.uid);
 
         batch.set(newEnvRef, {
@@ -819,7 +828,7 @@ export default function SettingsPage() {
           updatedAt: nowISO,
         });
 
-        batch.set(counterRef, { envelopeCount: increment(1) }, { merge: true });
+        batch.set(counterRef, { [envelopeCountField(currentBudgetId)]: increment(1) }, { merge: true });
 
         await batch.commit();
 
@@ -853,7 +862,7 @@ export default function SettingsPage() {
     setShowDeleteEnvelopeModal(true);
 
     try {
-      const txs = await fetchLinkedTransactions(user.uid, id);
+      const txs = await fetchLinkedTransactions(user.uid, id, currentBudgetId);
       setLinkedTransactions(txs);
     } catch (error) {
       logger.sanitizedError("Erreur chargement transactions", error);
@@ -865,7 +874,7 @@ export default function SettingsPage() {
 
   const handleMigrateToExisting = async (targetEnvelopeId: string) => {
     if (!user || !deletingEnvelope) return;
-    await migrateTransactionsToExisting(user.uid, deletingEnvelope.id, targetEnvelopeId);
+    await migrateTransactionsToExisting(user.uid, deletingEnvelope.id, targetEnvelopeId, currentBudgetId);
     setEnvelopes((prev) => prev.filter((e) => e.id !== deletingEnvelope.id));
     setShowDeleteEnvelopeModal(false);
     setDeletingEnvelope(null);
@@ -878,7 +887,7 @@ export default function SettingsPage() {
       budget,
       icon: deletingEnvelope.icon,
       color: deletingEnvelope.color,
-    });
+    }, currentBudgetId);
     // Add the new envelope to local state
     setEnvelopes((prev) => {
       const filtered = prev.filter((e) => e.id !== deletingEnvelope.id);
@@ -905,6 +914,7 @@ export default function SettingsPage() {
       deletingEnvelope.id,
       linkedTransactions,
       customMonthConfig,
+      currentBudgetId,
     );
     setEnvelopes((prev) => prev.filter((e) => e.id !== deletingEnvelope.id));
     setShowDeleteEnvelopeModal(false);
@@ -968,7 +978,7 @@ export default function SettingsPage() {
       const batch = writeBatch(db);
       reordered.forEach((env) => {
         if (user) {
-          batch.update(doc(db, "users", user.uid, "envelopes", env.id), { order: env.order });
+          batch.update(envelopeDocRef(user.uid, currentBudgetId, env.id), { order: env.order });
         }
       });
       batch.commit().catch((err) => logger.sanitizedError("Erreur ordre enveloppes", err));
@@ -1068,6 +1078,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        <BudgetManager />
 
         {/* ── Soutenir le développeur ── */}
         <section className="bg-app-surface/50 border border-amber-500/30 rounded-2xl p-6 bg-gradient-to-br from-amber-50/40 to-transparent dark:from-amber-950/20 dark:to-transparent">

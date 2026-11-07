@@ -2,7 +2,13 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useAnonymousMode } from "@/context/AnonymousModeContext";
+import { useBudget } from "@/context/BudgetContext";
 import { db } from "@/lib/firebase";
+import {
+  budgetSettingsDocRef,
+  envelopesCollectionRef,
+  transactionsCollectionRef,
+} from "@/lib/budgetService";
 import { collection, doc, getDocs, orderBy, query, limit, where, getDoc } from "firebase/firestore";
 import { MoveLeft, ArrowDown, ShoppingCart, Fuel, Utensils, Plane, Heart, Gamepad2, Bus, Shirt, Music, Coffee, Briefcase, GraduationCap, Baby, PawPrint, Gift, Smartphone, Wifi, Zap, Droplets, Hammer, TrendingUp, LucideIcon, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -29,6 +35,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 export default function HistoryPage() {
   const { user } = useAuth();
+  const { currentBudgetId } = useBudget();
   const { anonymousMode } = useAnonymousMode();
   const { formatAmount, symbol, currency } = useCurrencyFormatting();
   const router = useRouter();
@@ -50,7 +57,7 @@ export default function HistoryPage() {
     try {
       // 0. Settings (config du mois budgétaire pour les séparateurs)
       try {
-        const settingsSnap = await getDoc(doc(db, "users", user.uid, "settings", "general"));
+        const settingsSnap = await getDoc(budgetSettingsDocRef(user.uid, currentBudgetId));
         if (settingsSnap.exists()) {
           setCustomMonthConfig(getCustomMonthConfig(settingsSnap.data() as Record<string, unknown>));
         }
@@ -59,7 +66,7 @@ export default function HistoryPage() {
       }
 
       // 1. Charger les enveloppes pour avoir les icônes/couleurs en cache
-      const envRef = collection(db, "users", user.uid, "envelopes");
+      const envRef = envelopesCollectionRef(user.uid, currentBudgetId);
       const envSnap = await getDocs(envRef);
       const envMap: Record<string, any> = {};
       
@@ -71,7 +78,7 @@ export default function HistoryPage() {
       setEnvelopes(envMap);
 
       // 2. Charger TOUTES les transactions (limité à 100 pour l'exemple)
-      const txRef = collection(db, "users", user.uid, "transactions");
+      const txRef = transactionsCollectionRef(user.uid, currentBudgetId);
       const q = query(
         txRef, 
         orderBy("date", "desc"),
@@ -93,7 +100,7 @@ export default function HistoryPage() {
 
   useEffect(() => {
     fetchData();
-  }, [user]);
+  }, [user, currentBudgetId]);
 
   // Normalize for accent-insensitive search
   const normalize = (str: string) =>

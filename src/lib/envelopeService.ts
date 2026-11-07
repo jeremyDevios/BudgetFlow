@@ -21,6 +21,14 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { getMonthCounterKey } from "@/lib/validation";
+import {
+  envelopeCountField,
+  envelopeDocRef,
+  transactionDocRef,
+  envelopesCollectionRef,
+  transactionsCollectionRef,
+} from "@/lib/budgetService";
+import { DEFAULT_BUDGET_ID, type BudgetId } from "@/types/budget";
 import { type Transaction } from "@/types/transaction";
 import {
   budgetMonthKeyForDate,
@@ -55,8 +63,9 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 export async function fetchLinkedTransactions(
   userId: string,
   envelopeId: string,
+  budgetId: BudgetId = DEFAULT_BUDGET_ID,
 ): Promise<Transaction[]> {
-  const txsRef = collection(db, "users", userId, "transactions");
+  const txsRef = transactionsCollectionRef(userId, budgetId);
   const q = query(txsRef, where("envelopeId", "==", envelopeId));
   const snapshot = await getDocs(q);
 
@@ -123,20 +132,22 @@ export async function migrateTransactionsToExisting(
   userId: string,
   sourceEnvelopeId: string,
   targetEnvelopeId: string,
+  budgetId: BudgetId = DEFAULT_BUDGET_ID,
 ): Promise<void> {
   const transactions = await fetchLinkedTransactions(
     userId,
     sourceEnvelopeId,
+    budgetId,
   );
 
-  const sourceRef = doc(db, "users", userId, "envelopes", sourceEnvelopeId);
+  const sourceRef = envelopeDocRef(userId, budgetId, sourceEnvelopeId);
   const counterRef = doc(db, "counters", userId);
 
   // Edge case: envelope had 0 transactions — still need to delete it
   if (transactions.length === 0) {
     const batch = writeBatch(db);
     batch.delete(sourceRef);
-    batch.update(counterRef, { envelopeCount: increment(-1) });
+    batch.update(counterRef, { [envelopeCountField(budgetId)]: increment(-1) });
     await batch.commit();
     return;
   }
@@ -148,7 +159,7 @@ export async function migrateTransactionsToExisting(
     const batch = writeBatch(db);
 
     for (const tx of chunk) {
-      const txRef = doc(db, "users", userId, "transactions", tx.id);
+      const txRef = transactionDocRef(userId, budgetId, tx.id);
       batch.update(txRef, {
         envelopeId: targetEnvelopeId,
         updatedAt: new Date().toISOString(),
@@ -158,7 +169,7 @@ export async function migrateTransactionsToExisting(
     // Only delete the source envelope in the last chunk
     if (chunk === chunks[chunks.length - 1]) {
       batch.delete(sourceRef);
-      batch.update(counterRef, { envelopeCount: increment(-1) });
+      batch.update(counterRef, { [envelopeCountField(budgetId)]: increment(-1) });
     }
 
     await batch.commit();
@@ -186,14 +197,16 @@ export async function createEnvelopeAndMigrate(
   userId: string,
   sourceEnvelopeId: string,
   newEnvelopeData: NewEnvelopeData,
+  budgetId: BudgetId = DEFAULT_BUDGET_ID,
 ): Promise<string> {
   const transactions = await fetchLinkedTransactions(
     userId,
     sourceEnvelopeId,
+    budgetId,
   );
 
   // 1. Create the new envelope
-  const envsRef = collection(db, "users", userId, "envelopes");
+  const envsRef = envelopesCollectionRef(userId, budgetId);
   const newEnvRef = await addDoc(envsRef, {
     name: newEnvelopeData.name,
     budget: newEnvelopeData.budget,
@@ -207,7 +220,7 @@ export async function createEnvelopeAndMigrate(
 
   const newEnvelopeId = newEnvRef.id;
 
-  const sourceRef = doc(db, "users", userId, "envelopes", sourceEnvelopeId);
+  const sourceRef = envelopeDocRef(userId, budgetId, sourceEnvelopeId);
 
   // Edge case: 0 transactions — just delete the source
   if (transactions.length === 0) {
@@ -224,7 +237,7 @@ export async function createEnvelopeAndMigrate(
     const batch = writeBatch(db);
 
     for (const tx of chunk) {
-      const txRef = doc(db, "users", userId, "transactions", tx.id);
+      const txRef = transactionDocRef(userId, budgetId, tx.id);
       batch.update(txRef, {
         envelopeId: newEnvelopeId,
         updatedAt: new Date().toISOString(),
@@ -255,15 +268,16 @@ export async function deleteEnvelopeAndTransactions(
   envelopeId: string,
   transactions: Transaction[],
   customMonthConfig: CustomMonthConfig = DEFAULT_CUSTOM_MONTH_CONFIG,
+  budgetId: BudgetId = DEFAULT_BUDGET_ID,
 ): Promise<void> {
-  const envelopeRef = doc(db, "users", userId, "envelopes", envelopeId);
+  const envelopeRef = envelopeDocRef(userId, budgetId, envelopeId);
   const counterRef = doc(db, "counters", userId);
 
   // Edge case: 0 transactions — just delete the envelope
   if (transactions.length === 0) {
     const batch = writeBatch(db);
     batch.delete(envelopeRef);
-    batch.update(counterRef, { envelopeCount: increment(-1) });
+    batch.update(counterRef, { [envelopeCountField(budgetId)]: increment(-1) });
     await batch.commit();
     return;
   }
@@ -280,9 +294,7 @@ export async function deleteEnvelopeAndTransactions(
 
   const allDocs = [
     envelopeRef,
-    ...transactions.map((tx) =>
-      doc(db, "users", userId, "transactions", tx.id),
-    ),
+    ...transactions.map((tx) => transactionDocRef(userId, budgetId, tx.id)),
   ];
 
   const chunks = chunkArray(allDocs, BATCH_LIMIT - 1); // room for counter
@@ -297,7 +309,7 @@ export async function deleteEnvelopeAndTransactions(
     // Update counters in the last chunk
     if (chunk === chunks[chunks.length - 1]) {
       const counterUpdates: Record<string, ReturnType<typeof increment>> = {
-        envelopeCount: increment(-1),
+        [envelopeCountField(budgetId)]: increment(-1),
       };
       for (const [monthKey, count] of Object.entries(monthlyCounts)) {
         counterUpdates[monthKey] = increment(-count);

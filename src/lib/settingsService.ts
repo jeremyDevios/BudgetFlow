@@ -8,10 +8,11 @@
  * and can be tested in isolation without a Firestore connection.
  */
 
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { getDoc, setDoc } from "firebase/firestore";
 
-import { db } from "@/lib/firebase";
 import { logger } from "@/lib/logger";
+import { budgetSettingsDocRef } from "@/lib/budgetService";
+import { DEFAULT_BUDGET_ID, type BudgetId } from "@/types/budget";
 import { sanitizeCustomMonthConfig } from "@/lib/budgetMonth";
 import {
   applyBudgetOperationToTimeline,
@@ -370,9 +371,9 @@ function sanitizeStoredSettingsDocument(raw: Record<string, unknown>): StoredSet
 // Firestore helpers
 // ---------------------------------------------------------------------------
 
-/** Returns the Firestore DocumentReference for a user's settings. */
+/** Returns the Firestore DocumentReference for the default budget's settings (legacy path). */
 function settingsDocRef(uid: string) {
-  return doc(db, "users", uid, "settings", "general");
+  return budgetSettingsDocRef(uid, DEFAULT_BUDGET_ID);
 }
 
 /**
@@ -406,21 +407,13 @@ function userSettingsFromStored(stored: StoredSettingsDocument): UserSettings {
   };
 }
 
-/**
- * Loads the user's settings from Firestore and merges defaults for any
- * missing fields.
- *
- * Retrocompatible: documents that pre-date the detailed-mode feature will
- * transparently default to `fixedCostsDetailedEnabled = false`, empty arrays,
- * etc., preserving existing aggregate-only behaviour.
- *
- * @throws Re-throws Firestore errors so callers can surface them to the user.
- */
-export async function loadSettings(uid: string): Promise<UserSettings> {
-  const snap = await getDoc(settingsDocRef(uid));
+async function loadSettingsFromRef(
+  ref: ReturnType<typeof budgetSettingsDocRef>,
+): Promise<UserSettings> {
+  const snap = await getDoc(ref);
 
   if (!snap.exists()) {
-    logger.info(`settingsService.loadSettings: document absent, returning defaults for uid ${uid}`);
+    logger.info("settingsService.loadSettings: document absent, returning defaults");
     return { ...DEFAULT_USER_SETTINGS };
   }
 
@@ -430,7 +423,55 @@ export async function loadSettings(uid: string): Promise<UserSettings> {
 }
 
 /**
- * Saves a partial settings update to Firestore using a canonical overwrite.
+ * Loads the default budget's settings from Firestore and merges defaults for
+ * any missing field (behaviour inchangé — chemin legacy).
+ *
+ * Retrocompatible: documents that pre-date the detailed-mode feature will
+ * transparently default to `fixedCostsDetailedEnabled = false`, empty arrays,
+ * etc., preserving existing aggregate-only behaviour.
+ *
+ * @throws Re-throws Firestore errors so callers can surface them to the user.
+ */
+export async function loadSettings(uid: string): Promise<UserSettings> {
+  return loadSettingsFromRef(settingsDocRef(uid));
+}
+
+/**
+ * Loads the financial settings of a specific budget.
+ * 'default' = legacy doc users/{uid}/settings/general ;
+ * sinon users/{uid}/budgets/{budgetId}/settings/general (même sanitization).
+ */
+export async function loadSettingsForBudget(
+  uid: string,
+  budgetId: BudgetId,
+): Promise<UserSettings> {
+  return loadSettingsFromRef(budgetSettingsDocRef(uid, budgetId));
+}
+
+async function saveSettingsToRef(
+  ref: ReturnType<typeof budgetSettingsDocRef>,
+  partial: Partial<UserSettings>,
+): Promise<void> {
+  // Enforce write-time invariants (empty items list → flag forced to false).
+  const normalized = normalizeSettingsPayload(partial);
+  logger.info(
+    `settingsService.saveSettings: persisting fields [${Object.keys(normalized).join(", ")}]`,
+  );
+  const snap = await getDoc(ref);
+  const existing = snap.exists()
+    ? sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>)
+    : { ...DEFAULT_USER_SETTINGS, isOnboarded: true };
+  const nextDocument: StoredSettingsDocument = {
+    ...existing,
+    ...normalized,
+  };
+
+  await setDoc(ref, nextDocument);
+}
+
+/**
+ * Saves a partial settings update to Firestore using a canonical overwrite
+ * (default budget — legacy path, behaviour inchangé).
  *
  * Before writing, the existing document is reloaded and sanitized so legacy or
  * malformed fields do not keep failing the Firestore allow-list rules. Missing
@@ -442,22 +483,16 @@ export async function saveSettings(
   uid: string,
   partial: Partial<UserSettings>,
 ): Promise<void> {
-  // Enforce write-time invariants (empty items list → flag forced to false).
-  const normalized = normalizeSettingsPayload(partial);
-  logger.info(
-    `settingsService.saveSettings: persisting fields [${Object.keys(normalized).join(", ")}] for uid ${uid}`,
-  );
-  const ref = settingsDocRef(uid);
-  const snap = await getDoc(ref);
-  const existing = snap.exists()
-    ? sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>)
-    : { ...DEFAULT_USER_SETTINGS, isOnboarded: true };
-  const nextDocument: StoredSettingsDocument = {
-    ...existing,
-    ...normalized,
-  };
+  await saveSettingsToRef(settingsDocRef(uid), partial);
+}
 
-  await setDoc(ref, nextDocument);
+/** Saves a partial settings update for a specific budget (see loadSettingsForBudget). */
+export async function saveSettingsForBudget(
+  uid: string,
+  budgetId: BudgetId,
+  partial: Partial<UserSettings>,
+): Promise<void> {
+  await saveSettingsToRef(budgetSettingsDocRef(uid, budgetId), partial);
 }
 
 /**
@@ -481,7 +516,29 @@ export async function saveBudgetOperation(
   effectiveDay: string = todayDayString(),
   today: string = todayDayString(),
 ): Promise<Partial<UserSettings> | null> {
-  const ref = settingsDocRef(uid);
+  return saveBudgetOperationForBudget(
+    uid,
+    DEFAULT_BUDGET_ID,
+    category,
+    operation,
+    effectiveDay,
+    today,
+  );
+}
+
+/**
+ * Applies a dated budget operation to a specific budget's settings.
+ * 'default' = legacy doc (same semantics as saveBudgetOperation).
+ */
+export async function saveBudgetOperationForBudget(
+  uid: string,
+  budgetId: BudgetId,
+  category: BudgetCategory,
+  operation: BudgetTimelineOperation,
+  effectiveDay: string = todayDayString(),
+  today: string = todayDayString(),
+): Promise<Partial<UserSettings> | null> {
+  const ref = budgetSettingsDocRef(uid, budgetId);
   const snap = await getDoc(ref);
   const stored = snap.exists()
     ? sanitizeStoredSettingsDocument(snap.data() as Record<string, unknown>)
@@ -506,7 +563,7 @@ export async function saveBudgetOperation(
   }
 
   const patch = settingsPatchFromMutation(mutation, category);
-  await saveSettings(uid, patch);
+  await saveSettingsToRef(ref, patch);
   logger.info(
     `settingsService.saveBudgetOperation: ${category} updated from ${effectiveDay} for uid ${uid}`,
   );

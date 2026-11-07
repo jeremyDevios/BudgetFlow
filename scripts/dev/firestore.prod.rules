@@ -285,6 +285,156 @@ service cloud.firestore {
       }
     }
 
+    // ── Budgets (multi-budget) ─────────────────────────────────────────────
+    // /users/{userId}/budgets/{budgetId}
+    //
+    // La limite de 5 budgets est imposée par la liste fermée d'IDs de slots :
+    // impossible de créer un 6e budget, sans document compteur (SEC-23).
+    // Les collections legacy (settings/general, envelopes, transactions,
+    // monthlyIncomes) restent le « budget par défaut » : aucun champ nouveau
+    // n'y est ajouté, donc les payloads des anciens clients passent toujours
+    // les validateurs hasOnly existants (zéro régression).
+
+    function isValidBudgetId(budgetId) {
+      return budgetId in ['budget-1', 'budget-2', 'budget-3', 'budget-4', 'budget-5'];
+    }
+
+    // Méta d'un budget. deletedAt = soft-delete (présent dès le départ : la
+    // collection est neuve, contrairement aux collections legacy dont les
+    // validateurs hasOnly n'acceptent pas deletedAt).
+    function isValidBudgetData(data) {
+      return data.keys().hasOnly(['name', 'icon', 'color', 'createdAt', 'updatedAt', 'deletedAt'])
+        && data.name      is string && data.name.size()  >= 1 && data.name.size()  <= 50
+        && data.icon      is string && data.icon.size()  >= 1 && data.icon.size()  <= 100
+        && data.color     is string && data.color.size() >= 1 && data.color.size() <= 100
+        && data.createdAt is string && data.createdAt.size() >= 1 && data.createdAt.size() <= 30
+        && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 30
+        && (!('deletedAt' in data) || (data.deletedAt is string && data.deletedAt.size() >= 1 && data.deletedAt.size() <= 30));
+    }
+
+    // Budget existant et non supprimé : les sous-collections restent lisibles
+    // mais ne sont plus écrivables après soft-delete.
+    function budgetIsLive(userId, budgetId) {
+      return exists(/databases/$(database)/documents/users/$(userId)/budgets/$(budgetId))
+        && !('deletedAt' in get(/databases/$(database)/documents/users/$(userId)/budgets/$(budgetId)).data);
+    }
+
+    // Doc d'état du budget courant : ne peut pointer que vers 'default' ou un
+    // budget existant et vivant.
+    function isValidCurrentBudget(data, userId) {
+      return data.keys().hasOnly(['budgetId', 'updatedAt'])
+        && data.budgetId is string
+        && data.budgetId.size() >= 1 && data.budgetId.size() <= 40
+        && (data.budgetId == 'default'
+            || (isValidBudgetId(data.budgetId) && budgetIsLive(userId, data.budgetId)))
+        && data.updatedAt is string && data.updatedAt.size() >= 1 && data.updatedAt.size() <= 30;
+    }
+
+    match /users/{userId}/budgets/{budgetId} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId)
+                       && isValidBudgetId(budgetId)
+                       && isValidBudgetData(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(userId)
+                       && isValidBudgetData(request.resource.data)
+                       // createdAt est immuable (même règle que les transactions)
+                       && request.resource.data.createdAt == resource.data.createdAt;
+      // delete volontairement absent : la suppression est DÉFINITIVE et passe
+      // par la route API admin /api/budgets/delete (recursiveDelete des
+      // sous-collections) — aucun client ne peut supprimer directement.
+
+      // ── Réglages financiers du budget ────────────────────────────────────
+      // Réutilise isValidSettingsData tel quel : les champs globaux
+      // (bentoPreset, anonymousMode, currency, isOnboarded) sont acceptés par
+      // le validateur mais jamais écrits par les clients dans ce chemin.
+      match /settings/{document} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
+                         && isValidSettingsData(request.resource.data)
+                         && budgetIsLive(userId, budgetId);
+        allow update: if isAuthenticated() && isOwner(userId)
+                         && isValidSettingsData(request.resource.data)
+                         && budgetIsLive(userId, budgetId);
+      }
+
+      // ── Revenus variables du budget ──────────────────────────────────────
+      match /monthlyIncomes/{month} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
+                         && isValidMonthlyIncomeData(request.resource.data)
+                         && budgetIsLive(userId, budgetId);
+        allow update: if isAuthenticated() && isOwner(userId)
+                         && isValidMonthlyIncomeData(request.resource.data)
+                         && budgetIsLive(userId, budgetId);
+        allow delete: if isAuthenticated() && isOwner(userId);
+      }
+
+      // ── Enveloppes du budget ─────────────────────────────────────────────
+      // Miroir du bloc legacy, plus budgetIsLive et le quota de 50 enveloppes
+      // PAR budget : compteurs par slot dans counters/{userId}.envelopeCounts
+      // (map "budget-N" → nombre), incrémentés dans le même batch que la
+      // création (pattern getAfter du legacy). SEC-23 : doc compteur ≤ 40 clés
+      // (1 + 1 map + 24 mensuelles) → aucune règle à changer sur le compteur.
+      match /envelopes/{envelopeId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
+                         && isValidEnvelopeData(request.resource.data)
+                         && budgetIsLive(userId, budgetId)
+                         && (!existsAfter(
+                               /databases/$(database)/documents/counters/$(userId)
+                             )
+                             || !('envelopeCounts' in getAfter(
+                               /databases/$(database)/documents/counters/$(userId)
+                             ).data)
+                             || !(budgetId in getAfter(
+                               /databases/$(database)/documents/counters/$(userId)
+                             ).data.envelopeCounts)
+                             || getAfter(
+                               /databases/$(database)/documents/counters/$(userId)
+                             ).data.envelopeCounts[budgetId] <= 50);
+        allow update: if isAuthenticated() && isOwner(userId)
+                         && isValidEnvelopeData(request.resource.data)
+                         && budgetIsLive(userId, budgetId);
+        allow delete: if isAuthenticated() && isOwner(userId);
+      }
+
+      // ── Transactions du budget ───────────────────────────────────────────
+      // Miroir du bloc legacy, plus :
+      //   - budgetIsLive ;
+      //   - intégrité référentielle : une dépense ne peut référencer qu'une
+      //     enveloppe du MÊME budget (le legacy ne peut pas l'exiger sans
+      //     casser les anciens clients ; la collection étant neuve, on peut
+      //     l'imposer dès le départ).
+      match /transactions/{transactionId} {
+        allow read: if isAuthenticated() && isOwner(userId);
+        allow create: if isAuthenticated() && isOwner(userId)
+                         && isValidTransactionData(request.resource.data)
+                         && budgetIsLive(userId, budgetId)
+                         && (request.resource.data.type == 'income'
+                             || exists(/databases/$(database)/documents/users/$(userId)/budgets/$(budgetId)/envelopes/$(request.resource.data.envelopeId)));
+        allow update: if isAuthenticated() && isOwner(userId)
+                         && isValidTransactionData(request.resource.data)
+                         && budgetIsLive(userId, budgetId)
+                         && request.resource.data.createdAt == resource.data.createdAt
+                         && (request.resource.data.type == 'income'
+                             || exists(/databases/$(database)/documents/users/$(userId)/budgets/$(budgetId)/envelopes/$(request.resource.data.envelopeId)));
+        allow delete: if isAuthenticated() && isOwner(userId);
+      }
+    }
+
+    // ── État du budget courant ─────────────────────────────────────────────
+    // Doc dédié (pas un champ de users/{userId} ni de settings/general) : les
+    // anciens clients réécrivent ces deux docs en entier et effaceraient un
+    // champ ajouté. Ce chemin leur est inconnu → intouchable.
+    match /users/{userId}/state/currentBudget {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() && isOwner(userId)
+                       && isValidCurrentBudget(request.resource.data, userId);
+      allow update: if isAuthenticated() && isOwner(userId)
+                       && isValidCurrentBudget(request.resource.data, userId);
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
     // Deny all unmatched paths by default
     match /{document=**} {
       allow read, write: if false;
